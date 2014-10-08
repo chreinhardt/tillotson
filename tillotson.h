@@ -10,6 +10,13 @@
 #define GRANITE 0
 #define IRON 1
 
+struct lookup
+{
+	double u;
+	double rho;
+	double dudrho; /* used for cubic spline interpolation */
+};
+
 typedef struct tillMaterial
 {
 	int iMaterial; /* What material is it? */
@@ -38,9 +45,11 @@ typedef struct tillMaterial
 	double alpha;
 	double beta;
 
+	 /* the specific heat capacity */
+	double cv;
+
 	/* The cold curve */	
-	double *ucold;
-	double *rhocold;
+	struct lookup *cold;
 	double delta;
 } TILLMATERIAL;
 

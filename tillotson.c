@@ -69,11 +69,9 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
     material->dSecUnit = sqrt(1/(material->dGmPerCcUnit*GCGS));
 
 	/* Lookup table */
-    material->ucold = malloc(material->nTableMax*sizeof(double));
-    assert(material->ucold != NULL);
-    material->rhocold = malloc(material->nTableMax*sizeof(double));
-    assert(material->rhocold != NULL);
- 
+    material->cold = malloc(material->nTableMax*sizeof(struct lookup));
+    assert(material->cold != NULL);
+
 	/*
 	** Set the Tillotson parameters for the material.
 	*/
@@ -94,7 +92,7 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
 			material->us2 = 1.8e11; /* ergs/g */
 			material->alpha = 5.0;
 			material->beta = 5.0;
-			/* material->cv = 0.79e7; */ /* ergs/g K (or 790 J/kg K) */ 
+			material->cv = 0.79e7; /* ergs/g K (or 790 J/kg K) */ 
 			break;
 		default:
 			/* Unknown material */
@@ -110,8 +108,8 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
     material->rho0 /= material->dGmPerCcUnit;
     material->A /= (material->dGmPerCcUnit*material->dErgPerGmUnit);
     material->B /= (material->dGmPerCcUnit*material->dErgPerGmUnit);
-    /* convert cv to code units here !! */
-    /* material->par.cv /= material->dErgPerGmUnit; */
+ 
+ 	material->cv /= material->dErgPerGmUnit;
     
     return(material);
 }
@@ -324,6 +322,20 @@ double dudrho(TILLMATERIAL *material, double rho, double u)
 	return(tillPressure(material,rho,u)/(rho*rho));
 }
 
+int comparerho(const void* a, const void* b)
+/*
+** This function compares two entries in the look up table
+** and returns -1 if a1.rho < a2.rho, 1 if a1.rho > a2.rho or 0 if
+** they are equal (needed to sort the particles with qsort).
+*/
+{
+	struct lookup a1 = *(const struct lookup*)(a);
+    struct lookup a2 = *(const struct lookup*)(b);
+    
+    if (a1.rho < a2.rho) return -1;
+    if (a1.rho > a2.rho) return 1;
+    return 0;
+}
 
 void tillInitColdCurve(TILLMATERIAL *material)
 {
@@ -339,8 +351,10 @@ void tillInitColdCurve(TILLMATERIAL *material)
 	h = material->delta;
 	i = 0;
 
-	material->rhocold[i] = rho;
-	material->ucold[i] = u;
+	material->cold[i].rho = rho;
+	material->cold[i].u = u;
+	material->cold[i].dudrho = dudrho(material, rho, u);
+
 	++i;
 
 	/*
@@ -356,8 +370,9 @@ void tillInitColdCurve(TILLMATERIAL *material)
 		u += k2u;
 		rho += h;
 
-	    material->ucold[i] = u;
-	    material->rhocold[i] = rho;
+	    material->cold[i].u = u;
+	    material->cold[i].rho = rho;
+		material->cold[i].dudrho = dudrho(material, rho, u);
 	    ++i;
 	}
 	
@@ -377,12 +392,17 @@ void tillInitColdCurve(TILLMATERIAL *material)
 		u += k2u;
 		rho -= h;
 
-	    material->ucold[i] = u;
-	    material->rhocold[i] = rho;
+	    material->cold[i].u = u;
+	    material->cold[i].rho = rho;
+		material->cold[i].dudrho = dudrho(material, rho, u);
+
 	    ++i;
 	}
 	
 	--i;	
    	material->nTable = i;
+
+	/* Now sort the look up table. */
+    qsort(&material->cold,material->nTable,sizeof(struct lookup),comparerho);
 }
 
