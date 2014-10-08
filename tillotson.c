@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include <assert.h>
+#include <stdio.h>
 #include "tillotson.h"
 
 /* We need:
@@ -295,7 +296,10 @@ double tillPressureRhoU(TILLMATERIAL material, double rho, double u)
 
 double tillTempRhoU(TILLMATERIAL material, double rho, double u)
 {
-	/* Calculate T(rho,u) for a material */
+	/*
+	** Calculate T(rho,u) for a material. As an approximation
+	** we use u(rho,T) = uc(rho) + cv*T.
+	*/
 }
 
 double tillTempRhoP(TILLMATERIAL *material, double rho, double P)
@@ -399,10 +403,57 @@ void tillInitColdCurve(TILLMATERIAL *material)
 	    ++i;
 	}
 	
-	--i;	
+	--i;
    	material->nTable = i;
 
 	/* Now sort the look up table. */
-    qsort(&material->cold,material->nTable,sizeof(struct lookup),comparerho);
+    qsort(material->cold,material->nTable,sizeof(struct lookup),comparerho);
 }
 
+double tillColdULookup(TILLMATERIAL *material,double rho)
+{
+    double x,xi;
+	double drho;
+    int i;
+
+    i = material->nTable-1;
+	
+	/* What do we do if rho > rhomax */
+	/* if (r >= material->r[i]) return(material->rho[i]*exp(-(r-material->r[i]))); */
+	
+	x = rho/material->delta;
+	xi = floor(x);
+	assert(xi >= 0.0);
+	x -= xi;
+
+	i = (int)xi;
+	if (i < 0)
+	{
+		fprintf(stderr,"ERROR rho:%.14g x:%.14g xi:%.14g i:%d\n",rho,x,xi,i);
+	}
+    assert(i >= 0);
+
+	if (i > material->nTable-2) fprintf(stderr,"ERROR: out of bounds rho:%.14g rhomax:%.14g i:%i nTable: %i\n",rho,material->rhomax,i,material->nTable);
+	assert(i < material->nTable-1);
+
+	if (i <= material->nTable-2)
+	{
+		/* linear interpolation for now. */
+		return(material->cold[i].u*(1.0-x) + material->cold[i+1].u*x);
+	}
+	
+	/* This would only be needed if we cut off the model between two steps.	
+	if (i == material->nTable-2)
+	{
+		dr = material->r[i+1] - material->r[i];
+		x = r/dr;
+		xi = floor(x);
+		x -= xi;
+		return(material->rho[i]*(1.0-x) + material->rho[i+1]*x);
+	*/
+	/* What do we do if i >= nTable-1
+	} else {
+		i = material->nTable - 1;
+		return(material->rho[i]*exp(-(r-material->r[i])));
+	}*/
+}

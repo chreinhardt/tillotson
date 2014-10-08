@@ -58,5 +58,6 @@ void tillFinalizeMaterial(TILLMATERIAL *material);
 double tillPressureSoundold(TILLMATERIAL *material, double rho, double u, double *pcSound);
 double tillPressureSound(TILLMATERIAL *material, double rho, double u, double *pcSound);
 double tillSoundSpeed(TILLMATERIAL *material, double rho, double u);
+double tillColdULookup(TILLMATERIAL *material,double rho);
 #endif
 
