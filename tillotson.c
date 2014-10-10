@@ -321,7 +321,7 @@ double tillDensRatio(TILLMATERIAL material1, TILLMATERIAL material2, double P, d
 	/* From Woolfson 2007 */
 }
 
-double dudrho(TILLMATERIAL *material, double rho, double u)
+double tilldudrho(TILLMATERIAL *material, double rho, double u)
 {
 	return(tillPressure(material,rho,u)/(rho*rho));
 }
