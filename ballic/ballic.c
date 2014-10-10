@@ -187,28 +187,9 @@ double Packed49[49][3] = {
 
 
 typedef struct model_ctx {
-    struct params {
-	double a;
-	double b;
-	double A;
-	double B;
-	double rho0;
-	double u0;
-	double us;
-	double us2;
-	double alpha;
-	double beta;
-    double cv; /* specific heat capacity at constant volume (assumed to be constant) */ 
-	} par;
-    /*
-    ** Some unit conversion factors.
-    */
-    double dKpcUnit;
-    double dMsolUnit;
-    double dGasConst;
-    double dErgPerGmUnit;
-    double dGmPerCcUnit;
-    double dSecUnit;
+	int nMaterial; /* How many materials do we have */
+	int *iMaterial; /* An array where we safe  which material we have at a given location */
+	int *iMaterialOrder;
     /*
     ** The lookup table for the equilibrium model.
     */
@@ -223,60 +204,14 @@ typedef struct model_ctx {
     double R;
     } MODEL;
 
-
-MODEL *modelInit(double ucore) {
-    const double KBOLTZ = 1.38e-16;      /* bolzman constant in cgs */
-    const double MHYDR = 1.67e-24;       /* mass of hydrogen atom in grams */
-    const double MSOLG = 1.99e33;        /* solar mass in grams */
-    const double GCGS = 6.67e-8;         /* G in cgs */
-    const double KPCCM = 3.085678e21;    /* kiloparsec in centimeters */
-
-    MODEL *model;
-    
+MODEL *modelInit(double ucore, int nMaterial int *iMaterialOrder) {
+	MODEL *model;
+	int i; 
     model = malloc(sizeof(MODEL));
     assert(model != NULL);
 
-    model->dKpcUnit = 2.06701e-13;
-    model->dMsolUnit = 4.80438e-08;
-    /*
-    ** Convert kboltz/mhydrogen to system units, assuming that
-    ** G == 1.
-    */
-    model->dGasConst = model->dKpcUnit*KPCCM*KBOLTZ
-	/MHYDR/GCGS/model->dMsolUnit/MSOLG;
-    /* code energy per unit mass --> erg per g */
-    model->dErgPerGmUnit = GCGS*model->dMsolUnit*MSOLG/(model->dKpcUnit*KPCCM);
-    /* code density --> g per cc */
-    model->dGmPerCcUnit = (model->dMsolUnit*MSOLG)/pow(model->dKpcUnit*KPCCM,3.0);
-    /* code time --> seconds */
-    model->dSecUnit = sqrt(1/(model->dGmPerCcUnit*GCGS));
-    /*
-    ** Just set granite at the moment.
-    */
-    model->par.a = 0.5;
-    model->par.b = 1.3;
-    model->par.u0 = 1.6e11; /* in ergs/g */
-    model->par.rho0 = 2.7; /* g/cc */
-    model->par.A = 1.8e11; /* ergs/cc */
-    model->par.B = 1.8e11; /* ergs/cc */
-    model->par.us = 3.5e10; /* ergs/g */
-    model->par.us2 = 1.8e11; /* ergs/g */
-    model->par.alpha = 5.0;
-    model->par.beta = 5.0;
-    model->par.cv = 0.79e7; /* ergs/g K (or 790 J/kg K) */ 
-    /*
-    ** Convert energies and densities to code units!
-    */
-    model->par.u0 /= model->dErgPerGmUnit;
-    model->par.us /= model->dErgPerGmUnit;
-    model->par.us2 /= model->dErgPerGmUnit;
-    model->par.rho0 /= model->dGmPerCcUnit;
-    model->par.A /= (model->dGmPerCcUnit*model->dErgPerGmUnit);
-    model->par.B /= (model->dGmPerCcUnit*model->dErgPerGmUnit);
-    /* convert cv to code units here !! */
-    model->par.cv /= model->dErgPerGmUnit;
-
-    /* model->uFixed = uFixed/model->dErgPerGmUnit; */
+	model->nMaterial = nMaterial;
+    /* The internal energy at the core (in code units) */
     model->uc = ucore;
 
     model->nTableMax = 10000; 
@@ -288,6 +223,16 @@ MODEL *modelInit(double ucore) {
     assert(model->u != NULL);
     model->r = malloc(model->nTableMax*sizeof(double));
     assert(model->r != NULL);
+    model-iMaterial> = malloc(model->nTableMax*sizeof(int));
+    assert(model->iMaterial != NULL);
+    model-iMaterialOrder> = malloc(model->nMaterial*sizeof(int));
+    assert(model->iMaterialOrder != NULL);
+
+	for (i=0;i>model->nMaterial;i++)
+	{
+		model->iMaterialOrder[i] = iMaterialOrder[i];
+	}
+
     model->dr =  0.0;
     model->nTable = 0;
     
@@ -295,46 +240,31 @@ MODEL *modelInit(double ucore) {
     }
 
 
-double Gamma(MODEL *model,double rho,double u) {
-    double eta = rho/model->par.rho0;
-    double w0 = u/(model->par.u0*eta*eta) + 1.0;
+double Gamma(MODEL *model,TILLMATERIAL *material,int iMaterial,double rho,double u) {
+    double eta = rho/material[iMaterial]->rho0;
+    double w0 = u/(material[iMaterial]->u0*eta*eta) + 1.0;
 
-    return(model->par.a + model->par.b/w0);
+    return(material[iMaterial]->a + material[iMaterial]->b/w0);
     }
+
+double drhodr(MODEL *model,TILLMATERIAL *material,int iMaterial,double r,double rho,double M,double u);
+double dudrho(MODEL *model,TILLMATERIAL *material,int iMaterial,double rho,double u);
+double dudr(MODEL *model,TILLMATERIAL *material,int iMaterial,double r,double rho,double M,double u);
 
 /*
 ** Currently for condensed states only!
 */
-double Pressure(MODEL *model,double rho,double u) {
-    double mu = rho/model->par.rho0 - 1.0;
-    return(Gamma(model,rho,u)*rho*u + model->par.A*mu + model->par.B*mu*mu);
-    }
-
-double drhodr(MODEL *model,double r,double rho,double M,double u);
-double dudrho(MODEL *model,double rho,double u);
-double dudr(MODEL *model,double r,double rho,double M,double u);
-
-/*
-** Currently for condensed states only! Changed this 8.2.13 to include a polytropic temperature profile.
-*/
-double drhodr(MODEL *model,double r,double rho,double M,double u) {
-    double eta = rho/model->par.rho0;
-    double w0 = u/(model->par.u0*eta*eta) + 1.0;
+double drhodr(MODEL *model,TILLMATERIAL *material,int iMaterial,double r,double rho,double M,double u) {
+    double eta = rho/material[iMaterial]->rho0;
+    double w0 = u/(material[iMaterial]->u0*eta*eta) + 1.0;
     double dPdrho,dPdu;
 
-//    fprintf(stderr,"u in system units: %.14g\n",u);
+    dPdrho = (material[iMaterial]->a + (material[iMaterial]->b/w0)*(3.0 - 2.0/w0))*u + 
+	(material[iMaterial]->A + 2.0*material[iMaterial]->B*(eta - 1.0))/material[iMaterial]->rho0;
 
-    dPdrho = (model->par.a + (model->par.b/w0)*(3 - 2/w0))*u + 
-	(model->par.A + 2*model->par.B*(eta - 1))/model->par.rho0;
+    dPdu = (material[iMaterial]->a + material[iMaterial]->b/(w0*w0))*rho;
 
-    dPdu = (model->par.a + model->par.b/(w0*w0))*rho;
-    /*
-    ** Here is the old version of dPdrho which assumes Gamma is constant for the derivative and
-    ** as such is not quite self consistent. This makes about a 3% difference in the final 
-    ** radius of the planet. Also u is assumed to be constant here!
-    **
-    dPdrho = Pressure(model,rho,model->uFixed)/rho + (model->par.A + model->par.B*(eta*eta - 1.0))/rho;
-    */
+
     assert(r >= 0.0);
     if (r > 0.0) {
       return(-M*rho/(r*r*(dPdrho + dPdu*dudrho(model,rho,u))));
@@ -347,12 +277,12 @@ double drhodr(MODEL *model,double r,double rho,double M,double u) {
 /*
 ** We assume an isentropic internal energy profile!
 */
-double dudrho(MODEL *model,double rho,double u) {
-  return(Pressure(model,rho,u)/(rho*rho));
+double dudrho(MODEL *model,TILLMATERIAL *material, int iMaterial,double rho,double u) {
+  return(tillPressure(material[iMaterial],rho,u)/(rho*rho));
 }
 
-double dudr(MODEL *model,double r,double rho,double M,double u) {
-  return(dudrho(model,rho,u)*drhodr(model,r,rho,M,u));
+double dudr(MODEL *model,TILLMATERIAL *material, int iMaterial,double r,double rho,double M,double u) {
+  return(dudrho(modelmaterial,iMaterial,rho,u)*drhodr(model,material,iMaterial,r,rho,M,u));
 }
 
 
@@ -369,7 +299,7 @@ const double fact = 1.0;
 
 /*
 ** This function solves the model as an initial value problem with rho_initial = rho and 
-** M_initial = 0 at r = 0. This function returns the mass when rho == model->par.rho0.
+** M_initial = 0 at r = 0. This function returns the mass when rho == material[iMaterial]->rho0.
 */
 double midPtRK(MODEL *model,int bSetModel,double rho,double h,double *pR) {
     FILE *fp;
@@ -387,11 +317,10 @@ double midPtRK(MODEL *model,int bSetModel,double rho,double h,double *pR) {
 	model->r[i] = r;
 	fp = fopen("ballic.model","w");
 	assert(fp != NULL);
-	/* Output in temperature! */
    	fprintf(fp,"%g %g %g %g\n",r,rho,M,u);
 	++i;
 	}
-    while (rho > fact*model->par.rho0) {
+    while (rho > fact*material[iMaterial]->.rho0) {
 	/*
 	** Midpoint Runga-Kutta (2nd order).
 	*/
@@ -420,7 +349,7 @@ double midPtRK(MODEL *model,int bSetModel,double rho,double h,double *pR) {
     /*
     ** Now do a linear interpolation to rho == fact*rho0.
     */
-    x = (fact*model->par.rho0 - rho)/k2rho;
+    x = (fact*material[iMaterial]->rho0 - rho)/k2rho;
     assert(x <= 0.0);
     r += h*x;
     M += k2M*x;
@@ -455,9 +384,9 @@ double modelSolve(MODEL *model,double M) {
     /*
     ** First estimate the maximum possible radius.
     */
-    R = cbrt(3.0*M/(4.0*M_PI*model->par.rho0));
+    R = cbrt(3.0*M/(4.0*M_PI*material[iMaterial]->.rho0));
     dr = R/nStepsMax;
-    a = 1.01*model->par.rho0; /* starts with 1% larger central density */
+    a = 1.01*material[iMaterial]->rho0; /* starts with 1% larger central density */
     Ma = midPtRK(model,bSetModel=0,a,dr,&R);
     fprintf(stderr,"first Ma:%g R:%g\n",Ma,R);
     b = a;
@@ -465,7 +394,7 @@ double modelSolve(MODEL *model,double M) {
     while (Ma > M) {
 	b = a;
 	Mb = Ma;
-	a = 0.5*(model->par.rho0 + a);
+	a = 0.5*(material[iMaterial]->rho0 + a);
 	Ma = midPtRK(model,bSetModel=0,a,dr,&R);
 	}
     while (Mb < M) {
@@ -487,12 +416,12 @@ double modelSolve(MODEL *model,double M) {
 	    b = c;
 	    Mb = Mc;
 	    }
-//	fprintf(stderr,"c:%.10g Mc:%.10g R:%.10g\n",c/model->par.rho0,Mc,R);
+//	fprintf(stderr,"c:%.10g Mc:%.10g R:%.10g\n",c/material[iMaterial]->.rho0,Mc,R);
 	}
     /*
     ** Solve it once more setting up the lookup table.
     */
-    fprintf(stderr,"rho_core: %g cv: %g uc: %g (in system units)\n",c,model->par.cv,model->uc);
+    fprintf(stderr,"rho_core: %g cv: %g uc: %g (in system units)\n",c,material[iMaterial]->cv,model->uc);
     Mc = midPtRK(model,bSetModel=1,c,dr,&R);
     model->R = R;
     return c;
@@ -865,17 +794,17 @@ void main(int argc, char **argv) {
 
     u = uLookup(model,rs); /* We also have to look up u from a table */
 
-	eta = rho/model->par.rho0;
+	eta = rho/material[iMaterial]->.rho0;
 	    /* This was the old code using a constant internal energy uFixed.
-	    w0 = model->uFixed/(model->par.u0*eta*eta) + 1.0;
-		dPdrho = (model->par.a + (model->par.b/w0)*(3 - 2/w0))*model->uFixed + 
-		(model->par.A + 2*model->par.B*(eta - 1))/model->par.rho0;
+	    w0 = model->uFixed/(material[iMaterial]->.u0*eta*eta) + 1.0;
+		dPdrho = (material[iMaterial]->.a + (material[iMaterial]->.b/w0)*(3 - 2/w0))*model->uFixed + 
+		(material[iMaterial]->.A + 2*material[iMaterial]->.B*(eta - 1))/material[iMaterial]->.rho0;
 
 		fprintf(stderr,"iShell:%d r:%g M:%g rho:%g ns:%d radial/tangential:%g dr:%g <? Jeans:%g Gamma:%g\n",iShell,rs,MLookup(model,rs),rho,ns,rts,ro-ri,sqrt(dPdrho/rho),Gamma(model,rho,model->uFixed));
         */	
-    	w0 = u/(model->par.u0*eta*eta) + 1.0;
-        dPdrho = (model->par.a + (model->par.b/w0)*(3 - 2/w0))*u + 
-        (model->par.A + 2*model->par.B*(eta - 1))/model->par.rho0;
+    	w0 = u/(material[iMaterial]->.u0*eta*eta) + 1.0;
+        dPdrho = (material[iMaterial]->.a + (material[iMaterial]->.b/w0)*(3.0 - 2.0/w0))*u + 
+        (material[iMaterial]->.A + 2.0*material[iMaterial]->.B*(eta - 1.0))/material[iMaterial]->.rho0;
 
         fprintf(stderr,"iShell:%d r:%g M:%g rho:%g u:%g ns:%d radial/tangential:%g dr:%g <? Jeans:%g Gamma:%g\n",iShell,rs,MLookup(model,rs),rho,u,ns,rts,ro-ri,sqrt(dPdrho/rho),Gamma(model,rho,u));
         }
