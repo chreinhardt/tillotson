@@ -1,5 +1,5 @@
 
-objects = ballic.o tipsy.o
+objects = ballic.o tipsy.o ../tillotson.o
 fortran_objects = icosahedron.o
 
 CFLAGS ?= -O3
