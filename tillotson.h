@@ -7,8 +7,8 @@
 #include <sys/time.h>
 */
 
-#define GRANITE 0
-#define IRON 1
+#define GRANITE 1
+#define IRON 2
 
 struct lookup
 {
@@ -57,7 +57,10 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
 void tillFinalizeMaterial(TILLMATERIAL *material);
 double tillPressureSoundold(TILLMATERIAL *material, double rho, double u, double *pcSound);
 double tillPressureSound(TILLMATERIAL *material, double rho, double u, double *pcSound);
+double tillPressure(TILLMATERIAL *material, double rho, double u);
+double tillTempRhoU(TILLMATERIAL *material, double rho, double u);
 double tillSoundSpeed(TILLMATERIAL *material, double rho, double u);
+void tillInitColdCurve(TILLMATERIAL *material);
 double tillColdULookup(TILLMATERIAL *material,double rho);
 #endif
 

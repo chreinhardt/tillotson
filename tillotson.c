@@ -311,12 +311,13 @@ double tillPressureRhoU(TILLMATERIAL material, double rho, double u)
 
 }
 
-double tillTempRhoU(TILLMATERIAL material, double rho, double u)
+double tillTempRhoU(TILLMATERIAL *material, double rho, double u)
 {
 	/*
 	** Calculate T(rho,u) for a material. As an approximation
 	** we use u(rho,T) = uc(rho) + cv*T.
 	*/
+	return ((u-tillColdULookup(material,rho))/material->cv);
 }
 
 double tillTempRhoP(TILLMATERIAL *material, double rho, double P)
@@ -374,7 +375,7 @@ void tillInitColdCurve(TILLMATERIAL *material)
 
 	material->cold[i].rho = rho;
 	material->cold[i].u = u;
-	material->cold[i].dudrho = dudrho(material, rho, u);
+	material->cold[i].dudrho = tilldudrho(material, rho, u);
 
 	++i;
 
@@ -385,15 +386,15 @@ void tillInitColdCurve(TILLMATERIAL *material)
 		/*
 		** Midpoint Runga-Kutta (2nd order).
 		*/
-		k1u = h*dudrho(material,rho,u);
-		k2u = h*dudrho(material,rho+0.5*h,u+0.5*k1u);
+		k1u = h*tilldudrho(material,rho,u);
+		k2u = h*tilldudrho(material,rho+0.5*h,u+0.5*k1u);
 
 		u += k2u;
 		rho += h;
 
 	    material->cold[i].u = u;
 	    material->cold[i].rho = rho;
-		material->cold[i].dudrho = dudrho(material, rho, u);
+		material->cold[i].dudrho = tilldudrho(material, rho, u);
 	    ++i;
 	}
 	
@@ -407,15 +408,15 @@ void tillInitColdCurve(TILLMATERIAL *material)
 		/*
 		** Midpoint Runga-Kutta (2nd order).
 		*/
-		k1u = h*-dudrho(material,rho,u);
-		k2u = h*-dudrho(material,rho+0.5*h,u+0.5*k1u);
+		k1u = h*-tilldudrho(material,rho,u);
+		k2u = h*-tilldudrho(material,rho+0.5*h,u+0.5*k1u);
 
 		u += k2u;
 		rho -= h;
 
 	    material->cold[i].u = u;
 	    material->cold[i].rho = rho;
-		material->cold[i].dudrho = dudrho(material, rho, u);
+		material->cold[i].dudrho = tilldudrho(material, rho, u);
 
 	    ++i;
 	}
