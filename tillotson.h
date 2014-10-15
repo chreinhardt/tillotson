@@ -55,6 +55,8 @@ typedef struct tillMaterial
 
 TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit, double rhomax);
 void tillFinalizeMaterial(TILLMATERIAL *material);
+double tilldPdrho(TILLMATERIAL *material, double rho, double u);
+double tillSoundSpeed2old(TILLMATERIAL *material, double rho, double u);
 double tillPressureSoundold(TILLMATERIAL *material, double rho, double u, double *pcSound);
 double tillPressureSound(TILLMATERIAL *material, double rho, double u, double *pcSound);
 double tillPressure(TILLMATERIAL *material, double rho, double u);

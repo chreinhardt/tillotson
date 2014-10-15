@@ -150,6 +150,86 @@ double tillGamma(TILLMATERIAL *material,double rho,double u) {
 
 */
 
+double tilldPdrho(TILLMATERIAL *material, double rho, double u)
+{
+	/*
+	** Calculate dP/drho at constant entropy.
+	*/
+
+	return (1.0/(rho*rho)*(tillSoundSpeed2old(material,rho, u)-2.0*tillPressure(material,rho,u)/rho));
+}
+
+double tillSoundSpeed2old(TILLMATERIAL *material, double rho, double u)
+{
+	/*
+	** Calculate the sound speed for the Tillotson EOS like we did in
+	** Gasoline. In the intermediate states its better however to do a
+	** linear interpolation in the sound speed because we have no
+	** discontinuity when we change from expanded hot to condensed states.
+	*/
+
+	double eta, mu;
+	double Pc, Pe;
+	double c2c, c2e;
+	double Gammac, Gammae, w0, y, z;
+
+	eta = rho/material->rho0;
+	mu = eta - 1.0;
+	z = (1.0 - eta)/eta;
+	w0 = u/(material->u0*eta*eta)+1.0;
+	
+	/*
+	**  Here we evaluate, which part of the equation of state we need.
+	*/
+	if (rho >= material->rho0) {
+		/*
+		**  condensed states (rho > rho0)
+		*/
+		Gammac = material->a + material->b/w0;
+		Pc = Gammac*u*rho + material->A*mu + material->B*mu*mu;
+
+		return ((Gammac+1.0)*Pc/rho + (material->A+material->B*(eta*eta-1.0))/rho + material->b/(w0*w0)*(w0-1.0)*(2*u-Pc/rho);
+);
+	} else if (u < material->us) {
+		/* 
+		** cold expanded states (rho < rho0 and u < us)
+		** P is like for the condensed states
+		*/
+		Gammac = material->a + material->b/w0;
+		Pc = Gammac*u*rho + material->A*mu + material->B*mu*mu;
+		
+		return ((Gammac+1.0)*Pc/rho + (material->A+material->B*(eta*eta-1.0))/rho + material->b/(w0*w0)*(w0-1.0)*(2*u-Pc/rho));
+	} else if (u > material->us2) {
+		/*
+		** expanded hot states (rho < rho0 and u > us2)
+		*/
+		Gammae = material->a + material->b/w0*exp(-material->beta*z*z);
+		Pe = Gammae*u*rho + material->A*mu*exp(-(material->alpha*z+material->beta*z*z));
+
+		if (pcSound != NULL)
+		{
+			/* calculate the sound speed */
+			c2e = (Gammae+1.0)*Pe/rho + material->A/material->rho0*exp(-(material->alpha*z+material->beta*z*z))*(1.0+mu/(eta*eta)*(material->alpha+2.0*material->beta*z-eta)) + material->b*rho*u/(w0*w0*eta*eta)*exp(-material->beta*z*z)*(2.0*material->beta*z*w0/material->rho0+1.0/(material->u0*rho)*(2.0*u-Pe/rho));
+			*pcSound = sqrt(c2e);
+		}
+		
+		return ((Gammae+1.0)*Pe/rho + material->A/material->rho0*exp(-(material->alpha*z+material->beta*z*z))*(1.0+mu/(eta*eta)*(material->alpha+2.0*material->beta*z-eta)) + material->b*rho*u/(w0*w0*eta*eta)*exp(-material->beta*z*z)*(2.0*material->beta*z*w0/material->rho0+1.0/(material->u0*rho)*(2.0*u-Pe/rho)));
+	} else {
+		/*
+		**  intermediate states (rho < rho0 and us < u < us2)
+		*/
+		y = (u - material->us)/(material->us2 - material->us);
+
+		Gammac = material->a + material->b/w0;
+		Pc = Gammac*u*rho + material->A*mu + material->B*mu*mu;
+		Gammae = material->a + material->b/w0*exp(-material->beta*z*z);
+		Pe = Gammae*u*rho + material->A*mu*exp(-(material->alpha*z+material->beta*z*z));
+	
+		return ((Gammac*(1.0-y)+Gammae*y+1.0)*(Pc*(1.0-y)+Pe*y)/rho+((material->A+material->B*(eta*eta-1.0))/rho + material->b/(w0*w0)*(w0-1.0)*(2*u-Pc/rho))*(1.0-y)+(material->A/material->rho0*exp(-(material->alpha*z+material->beta*z*z))*(1.0+mu/(eta*eta)*(material->alpha+2.0*material->beta*z-eta)) + material->b*rho*u/(w0*w0*eta*eta)*exp(-material->beta*z*z)*(2.0*material->beta*z*w0/material->rho0+1.0/(material->u0*rho)*(2.0*u-Pe/rho)))*y;
+);
+	}
+}
+
 double tillPressureSoundold(TILLMATERIAL *material, double rho, double u, double *pcSound)
 {
 	/*
