@@ -14,7 +14,7 @@ struct lookup
 {
 	double u;
 	double rho;
-	double dudrho; /* used for cubic spline interpolation */
+	double d2udrho2; /* used for cubic spline interpolation */
 };
 
 typedef struct tillMaterial
@@ -60,6 +60,10 @@ double tillSoundSpeed2old(TILLMATERIAL *material, double rho, double u);
 double tillPressureSoundold(TILLMATERIAL *material, double rho, double u, double *pcSound);
 double tillPressureSound(TILLMATERIAL *material, double rho, double u, double *pcSound);
 double tillPressure(TILLMATERIAL *material, double rho, double u);
+double tilldPdrho(TILLMATERIAL *material, double rho, double u);
+double tilldPdu(TILLMATERIAL *material, double rho, double u);
+double tilldTdrho(TILLMATERIAL *material, double rho, double u);
+double tilldTdu(TILLMATERIAL *material, double rho, double u);
 double tillTempRhoU(TILLMATERIAL *material, double rho, double u);
 double tillSoundSpeed(TILLMATERIAL *material, double rho, double u);
 void tillInitColdCurve(TILLMATERIAL *material);

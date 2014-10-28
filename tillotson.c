@@ -111,7 +111,6 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
 			material->beta = 5.0;
 			material->cv = 0.449e7; /* ergs/g K */ 
 			break;
-
 		default:
 			/* Unknown material */
 			assert(0);
@@ -150,7 +149,7 @@ double tillGamma(TILLMATERIAL *material,double rho,double u) {
 
 */
 
-double tilldPdrho(TILLMATERIAL *material, double rho, double u)
+double tilldPdrho_s(TILLMATERIAL *material, double rho, double u)
 {
 	/*
 	** Calculate dP/drho at constant entropy.
@@ -188,8 +187,7 @@ double tillSoundSpeed2old(TILLMATERIAL *material, double rho, double u)
 		Gammac = material->a + material->b/w0;
 		Pc = Gammac*u*rho + material->A*mu + material->B*mu*mu;
 
-		return ((Gammac+1.0)*Pc/rho + (material->A+material->B*(eta*eta-1.0))/rho + material->b/(w0*w0)*(w0-1.0)*(2*u-Pc/rho);
-);
+		return ((Gammac+1.0)*Pc/rho + (material->A+material->B*(eta*eta-1.0))/rho + material->b/(w0*w0)*(w0-1.0)*(2*u-Pc/rho));
 	} else if (u < material->us) {
 		/* 
 		** cold expanded states (rho < rho0 and u < us)
@@ -206,13 +204,6 @@ double tillSoundSpeed2old(TILLMATERIAL *material, double rho, double u)
 		Gammae = material->a + material->b/w0*exp(-material->beta*z*z);
 		Pe = Gammae*u*rho + material->A*mu*exp(-(material->alpha*z+material->beta*z*z));
 
-		if (pcSound != NULL)
-		{
-			/* calculate the sound speed */
-			c2e = (Gammae+1.0)*Pe/rho + material->A/material->rho0*exp(-(material->alpha*z+material->beta*z*z))*(1.0+mu/(eta*eta)*(material->alpha+2.0*material->beta*z-eta)) + material->b*rho*u/(w0*w0*eta*eta)*exp(-material->beta*z*z)*(2.0*material->beta*z*w0/material->rho0+1.0/(material->u0*rho)*(2.0*u-Pe/rho));
-			*pcSound = sqrt(c2e);
-		}
-		
 		return ((Gammae+1.0)*Pe/rho + material->A/material->rho0*exp(-(material->alpha*z+material->beta*z*z))*(1.0+mu/(eta*eta)*(material->alpha+2.0*material->beta*z-eta)) + material->b*rho*u/(w0*w0*eta*eta)*exp(-material->beta*z*z)*(2.0*material->beta*z*w0/material->rho0+1.0/(material->u0*rho)*(2.0*u-Pe/rho)));
 	} else {
 		/*
@@ -225,8 +216,7 @@ double tillSoundSpeed2old(TILLMATERIAL *material, double rho, double u)
 		Gammae = material->a + material->b/w0*exp(-material->beta*z*z);
 		Pe = Gammae*u*rho + material->A*mu*exp(-(material->alpha*z+material->beta*z*z));
 	
-		return ((Gammac*(1.0-y)+Gammae*y+1.0)*(Pc*(1.0-y)+Pe*y)/rho+((material->A+material->B*(eta*eta-1.0))/rho + material->b/(w0*w0)*(w0-1.0)*(2*u-Pc/rho))*(1.0-y)+(material->A/material->rho0*exp(-(material->alpha*z+material->beta*z*z))*(1.0+mu/(eta*eta)*(material->alpha+2.0*material->beta*z-eta)) + material->b*rho*u/(w0*w0*eta*eta)*exp(-material->beta*z*z)*(2.0*material->beta*z*w0/material->rho0+1.0/(material->u0*rho)*(2.0*u-Pe/rho)))*y;
-);
+		return ((Gammac*(1.0-y)+Gammae*y+1.0)*(Pc*(1.0-y)+Pe*y)/rho+((material->A+material->B*(eta*eta-1.0))/rho + material->b/(w0*w0)*(w0-1.0)*(2*u-Pc/rho))*(1.0-y)+(material->A/material->rho0*exp(-(material->alpha*z+material->beta*z*z))*(1.0+mu/(eta*eta)*(material->alpha+2.0*material->beta*z-eta)) + material->b*rho*u/(w0*w0*eta*eta)*exp(-material->beta*z*z)*(2.0*material->beta*z*w0/material->rho0+1.0/(material->u0*rho)*(2.0*u-Pe/rho)))*y);
 	}
 }
 
@@ -385,6 +375,124 @@ double tillPressure(TILLMATERIAL *material, double rho, double u)
 	return (tillPressureSound(material, rho, u, NULL));
 }
 
+double tilldPdrho(TILLMATERIAL *material, double rho, double u)
+{
+	/*
+	** Calculate dP/drho at u=const.
+	*/
+
+	double eta, mu;
+	double dPcdrho, dPedrho;
+	double w0, y, z;
+
+	eta = rho/material->rho0;
+	mu = eta - 1.0;
+	z = (1.0 - eta)/eta;
+	w0 = u/(material->u0*eta*eta)+1.0;
+	
+	/*
+	**  Here we evaluate, which part of the equation of state we need.
+	*/
+	if (rho >= material->rho0) {
+		/*
+		**  condensed states (rho > rho0)
+		*/
+		dPcdrho = (material->a+material->b/w0*(3.0-2.0/w0))*u + (material->A+2.0*material->B*mu)/material->rho0;
+		
+		return (dPcdrho);
+	} else if (u < material->us) {
+		/* 
+		** cold expanded states (rho < rho0 and u < us)
+		** P is like for the condensed states
+		*/
+		dPcdrho = (material->a+material->b/w0*(3.0-2.0/w0))*u + (material->A+2.0*material->B*mu)/material->rho0;
+
+		return (dPcdrho);
+	} else if (u > material->us2) {
+		/*
+		** expanded hot states (rho < rho0 and u > us2)
+		*/
+		dPedrho = (material->a + material->b/w0*exp(-material->beta*z*z)*(2.0*material->beta*z/eta+3.0-2.0/w0))*u+material->A/material->rho0*exp(-(material->alpha*z+material->beta*z*z))*(1.0+mu/(eta*eta)*(material->alpha+2.0*material->beta*z-eta));		
+		return (dPedrho);
+	} else {
+		/*
+		**  intermediate states (rho < rho0 and us < u < us2)
+		*/
+		y = (u - material->us)/(material->us2 - material->us);
+
+		dPcdrho = (material->a+material->b/(w0*w0)*(3.0-2.0/w0))*u + (material->A+2.0*material->B*mu)/material->rho0;
+		dPedrho = (material->a + material->b/w0*exp(-material->beta*z*z)*(2.0*material->beta*z/eta+3.0-2.0/w0))*u+material->A/material->rho0*exp(-(material->alpha*z+material->beta*z*z))*(1.0+mu/(eta*eta)*(material->alpha+2.0*material->beta*z-eta));		
+		return (dPcdrho*(1.0-y)+dPedrho*y);
+	}
+}
+
+double tilldPdu(TILLMATERIAL *material, double rho, double u)
+{
+	/*
+	** Calculate dP/du at rho=const.
+	*/
+
+	double eta, mu;
+	double dPcdu, dPedu;
+	double w0, y, z;
+
+	eta = rho/material->rho0;
+	mu = eta - 1.0;
+	z = (1.0 - eta)/eta;
+	w0 = u/(material->u0*eta*eta)+1.0;
+	
+	/*
+	**  Here we evaluate, which part of the equation of state we need.
+	*/
+	if (rho >= material->rho0) {
+		/*
+		**  condensed states (rho > rho0)
+		*/
+		dPcdu = (material->a+material->b/(w0*w0))*rho;
+		
+		return (dPcdu);
+	} else if (u < material->us) {
+		/* 
+		** cold expanded states (rho < rho0 and u < us)
+		** P is like for the condensed states
+		*/
+		dPcdu = (material->a+material->b/(w0*w0))*rho;
+		return (dPcdu);
+	} else if (u > material->us2) {
+		/*
+		** expanded hot states (rho < rho0 and u > us2)
+		*/
+		dPedu = (material->a + material->b/(w0*w0)*exp(-material->beta*z*z))*rho;		
+		return (dPedu);
+	} else {
+		/*
+		**  intermediate states (rho < rho0 and us < u < us2)
+		*/
+		y = (u - material->us)/(material->us2 - material->us);
+
+		dPcdu = (material->a+material->b/(w0*w0))*rho;
+		dPedu = (material->a + material->b/(w0*w0)*exp(-material->beta*z*z))*rho;		
+
+		return (dPcdu*(1.0-y)+dPedu*y);
+	}
+}
+
+double tilldTdrho(TILLMATERIAL *material, double rho, double u)
+{
+	/*
+	** Calculate dT/drho at u=const.
+	*/
+	return (-1.0/material->cv*tillPressure(material,rho,tillColdULookup(material,rho))*(rho*rho));
+}
+
+double tilldTdu(TILLMATERIAL *material, double rho, double u)
+{
+	/*
+	** Calculate dT/du at rho=const.
+	*/
+	return (-1.0/material->cv);
+}
+
 double tillPressureRhoU(TILLMATERIAL material, double rho, double u)
 {
 	/* Calculate the pressure from the Tillotson EOS for a material */
@@ -455,7 +563,7 @@ void tillInitColdCurve(TILLMATERIAL *material)
 
 	material->cold[i].rho = rho;
 	material->cold[i].u = u;
-	material->cold[i].dudrho = tilldudrho(material, rho, u);
+//	material->cold[i].dudrho = tilldudrho(material, rho, u);
 
 	++i;
 
@@ -474,7 +582,7 @@ void tillInitColdCurve(TILLMATERIAL *material)
 
 	    material->cold[i].u = u;
 	    material->cold[i].rho = rho;
-		material->cold[i].dudrho = tilldudrho(material, rho, u);
+//		material->cold[i].dudrho = tilldudrho(material, rho, u);
 	    ++i;
 	}
 	
@@ -496,7 +604,7 @@ void tillInitColdCurve(TILLMATERIAL *material)
 
 	    material->cold[i].u = u;
 	    material->cold[i].rho = rho;
-		material->cold[i].dudrho = tilldudrho(material, rho, u);
+//		material->cold[i].dudrho = tilldudrho(material, rho, u);
 
 	    ++i;
 	}
@@ -540,7 +648,7 @@ double tillColdULookup(TILLMATERIAL *material,double rho)
 		return(material->cold[i].u*(1.0-x) + material->cold[i+1].u*x);
 	}
 	
-	/* This would only be needed if we cut off the model between two steps.	
+	/* This would only be needed if we cut off the model between the last two steps.	
 	if (i == material->nTable-2)
 	{
 		dr = material->r[i+1] - material->r[i];
