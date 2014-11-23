@@ -23,6 +23,7 @@ typedef struct tillMaterial
 	int nTableMax; /* Max. number of entries in the look up table */
 	int nTable; /* number of entries in the look up table */
 	double rhomax; /* Max value for the lookup table */
+	double vmax; /* Max value for the lookup table */
 
 	/* Unit convertion factors */
 	double dKpcUnit;
@@ -51,6 +52,9 @@ typedef struct tillMaterial
 	/* The cold curve */	
 	struct lookup *cold;
 	double delta;
+
+	/* A look up table for u(rho) along an isentrope */
+	double **Lookup;
 } TILLMATERIAL;
 
 TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit, double rhomax);
@@ -67,6 +71,8 @@ double tilldTdu(TILLMATERIAL *material, double rho, double u);
 double tillTempRhoU(TILLMATERIAL *material, double rho, double u);
 double tillSoundSpeed(TILLMATERIAL *material, double rho, double u);
 void tillInitColdCurve(TILLMATERIAL *material);
+void tillInitLookup(TILLMATERIAL *material);
+struct lookup *tillSolveIsentrope(TILLMATERIAL *material, double v);
 double tillColdULookup(TILLMATERIAL *material,double rho);
 #endif
 

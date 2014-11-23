@@ -31,7 +31,7 @@ void main(int argc, char **argv) {
 	for (i=0; i < granite->nTable; i++)
 	{
 		/*fprintf(stderr,"nTable: %i, i: %i\n",granite->nTable,i);*/
-		printf("%.30f %.30f\n", granite->rhocold[i], granite->ucold[i]);
+		printf("%.30f %.30f\n", granite->cold[i].rho, granite->cold[i].u);
 	}
 
 	tillFinalizeMaterial(granite);

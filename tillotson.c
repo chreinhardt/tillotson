@@ -28,7 +28,8 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
 	 * We do:
 	 * Initialize variables
 	 * Convert quantities to code units
-	 * Initialize lookup table for the cold curve
+	 * Allocate memory for the lookup tables
+	 * Initialize lookup table and the cold curve
 	 */
 
     const double KBOLTZ = 1.38e-16;      /* bolzman constant in cgs */
@@ -38,7 +39,8 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
     const double KPCCM = 3.085678e21;    /* kiloparsec in centimeters */
 
     TILLMATERIAL *material;
-    
+	int i;
+	 
     material = malloc(sizeof(TILLMATERIAL));
     assert(material != NULL);
 
@@ -51,8 +53,12 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
     material->dKpcUnit = dKpcUnit;
     material->dMsolUnit = dMsolUnit;
 	material->rhomax = rhomax;
+	
+	/* Just as a first step we have equal steps in rho and v. */
+	material->vmax = material->rhomax;
 
 	material->nTableMax = 10000;
+	material->nTableMax = 100;
 	material->nTable = 0;
 	material->delta =  material->rhomax/(material->nTableMax-2.0);
 
@@ -73,10 +79,18 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
     material->cold = malloc(material->nTableMax*sizeof(struct lookup));
     assert(material->cold != NULL);
 
+    material->Lookup = malloc(material->nTableMax*sizeof(double*));
+    assert(material->Lookup != NULL);
+	
+	for (i=0;i<material->nTableMax;i++)
+	{
+		material->Lookup[i] = malloc(material->nTableMax*sizeof(double));
+	    assert(material->Lookup[i] != NULL);
+	}
+
 	/*
 	** Set the Tillotson parameters for the material.
 	*/
-
 	switch(iMaterial)
 	{
 		case GRANITE:
@@ -615,6 +629,119 @@ void tillInitColdCurve(TILLMATERIAL *material)
 	/* Now sort the look up table. */
     qsort(material->cold,material->nTable,sizeof(struct lookup),comparerho);
 }
+
+void tillInitLookup(TILLMATERIAL *material)
+{
+	/*
+	** Generate the look up table for the isentropic evolution of
+	** the internal energy.
+	*/
+
+	struct lookup *isentrope;
+	double v;
+    int i,j;
+
+	v = 0.0;
+	fprintf(stderr, "Starting integration...\n");
+
+	/*
+	** Integrate the isentropes for different v.
+	*/
+	for (i=0; i<material->nTableMax; i++)
+	{
+
+		fprintf(stderr, "i: %i\n",i);
+		isentrope = tillSolveIsentrope(material,v);
+		
+		/* Copy one row to the look up table. This is of course not effictent at all. */
+		for (j=0; j<material->nTableMax; j++)
+		{
+			material->Lookup[i][j] = isentrope[j].u;		
+		}
+		
+		free(isentrope);
+		v += material->delta;
+	}
+}
+
+struct lookup *tillSolveIsentrope(TILLMATERIAL *material, double v)
+{
+	/*
+	** Integrate one isentrope for the look up table. The parameter v corresponds to
+	** u(rho=rho0) so v=0 gives the cold curve.
+	*/
+    double rho;
+    double u;
+    double k1u,k2u;
+	double h;
+    int i;
+
+	/* Use this as a temporary data structure because it is easy to sort with qsort. */
+	struct lookup *isentrope;
+    isentrope = malloc(material->nTableMax*sizeof(struct lookup));
+
+	rho = material->rho0;
+	u = v;
+	h = material->delta;
+	i = 0;
+
+	isentrope[i].rho = rho;
+	isentrope[i].u = u;
+//	isentrope[i].dudrho = tilldudrho(material, rho, u);
+
+	++i;
+
+	/*
+	** Integrate the condensed and expanded states separately.
+	*/
+    while (rho <= material->rhomax) {
+		/*
+		** Midpoint Runga-Kutta (2nd order).
+		*/
+		k1u = h*tilldudrho(material,rho,u);
+		k2u = h*tilldudrho(material,rho+0.5*h,u+0.5*k1u);
+
+		u += k2u;
+		rho += h;
+
+	    isentrope[i].u = u;
+	    isentrope[i].rho = rho;
+//		isentrope[i].dudrho = tilldudrho(material, rho, u);
+	    ++i;
+	}
+	
+	/*
+	** Now the expanded states. Careful about the negative sign.
+	*/
+	rho = material->rho0;
+	u = v;
+
+    while (rho > 0.0) {
+		/*
+		** Midpoint Runga-Kutta (2nd order).
+		*/
+		k1u = h*-tilldudrho(material,rho,u);
+		k2u = h*-tilldudrho(material,rho+0.5*h,u+0.5*k1u);
+
+		u += k2u;
+		rho -= h;
+	
+		isentrope[i].u = u;
+	    isentrope[i].rho = rho;
+//		isentrope[i].dudrho = tilldudrho(material, rho, u);
+
+	    ++i;
+	}
+	
+	--i;
+   	material->nTable = i;
+
+	/* Now sort the look up table. */
+    qsort(isentrope,material->nTable,sizeof(struct lookup),comparerho);
+	return isentrope;
+}
+
+
 
 double tillColdULookup(TILLMATERIAL *material,double rho)
 {
