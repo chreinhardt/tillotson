@@ -58,7 +58,7 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
 	material->vmax = material->rhomax;
 
 	material->nTableMax = 10000;
-	material->nTableMax = 100;
+	material->nTableMax = 1000;
 	material->nTable = 0;
 	material->delta =  material->rhomax/(material->nTableMax-2.0);
 
@@ -653,7 +653,7 @@ void tillInitLookup(TILLMATERIAL *material)
 		fprintf(stderr, "i: %i\n",i);
 		isentrope = tillSolveIsentrope(material,v);
 		
-		/* Copy one row to the look up table. This is of course not effictent at all. */
+		/* Copy one row to the look up table. This is of course not efficitent at all. */
 		for (j=0; j<material->nTableMax; j++)
 		{
 			material->Lookup[i][j] = isentrope[j].u;		

@@ -37,7 +37,7 @@ void main(int argc, char **argv) {
 
 	fprintf(stderr,"nTable: %i, nTableMax: %i\n",granite->nTable, granite->nTableMax);
 
-	/* Print the lookup table to a file.
+	/* Print the lookup table to a file. */
 	for (i=0;i<granite->nTable;i++)
 	{
 		for (j=0;j<granite->nTable;j++)
@@ -45,22 +45,21 @@ void main(int argc, char **argv) {
 			printf("%.30f %.30f\n",j*granite->delta,granite->Lookup[i][j]);
 		}
 	}
-	*/
+	
 
 	/* Print the lookup table to a file. */
+	/*
 	for (i=0;i<granite->nTable;i++)
 	{
-		/* Print rho */
 		printf("%.30f",j*granite->delta);
 	
-		/* Now print all the isentropes in a separate column. */	
 		for (j=0;j<granite->nTable;j++)
 		{
 			printf(" %.30f",j*granite->delta,granite->Lookup[j][i]);
 		}
 		printf("\n");
 	}
-
+	*/
 	/*
 	for (j=0;j<granite->nTable;j++)
 	{
