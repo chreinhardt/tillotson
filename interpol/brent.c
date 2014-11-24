@@ -1,8 +1,12 @@
-double zbrent(double (*func)(double,double), double a, double b, double rho, double tol)
+#include <stdio.h>
+#include <stdlib.h>
+#include <math.h>
+
+float brent(float (*func)(float,float,float), float a, float b, float rho, float u, float tol)
 { int iter;
-  double c,d,e,min1,min2,eps=1e-7;
-  double fa,fb,fc,p,q,r,s,tol1,xm;
-  fa = (*func)(a,rho);  fb = (*func)(b,rho);
+  float c,d,e,min1,min2,eps=1e-7;
+  float fa,fb,fc,p,q,r,s,tol1,xm;
+  fa = (*func)(a,rho,u);  fb = (*func)(b,rho,u);
   if (fa*fb > 0)
     { fprintf(stderr,"Root must be bracketed in zbrent\n");  exit(3);
     }
@@ -12,7 +16,7 @@ double zbrent(double (*func)(double,double), double a, double b, double rho, dou
         { c=a; fc=fa; e=d=b-a;
         }
       if (fabs(fc) < fabs(fb))
-        { a=b; b=c; c=a;       @/
+        { a=b; b=c; c=a;
           fa=fb; fb=fc; fc=fa;
         }
       tol1=2*eps*fabs(b)+0.5*tol;
@@ -46,7 +50,7 @@ double zbrent(double (*func)(double,double), double a, double b, double rho, dou
       a=b; fa=fb;
       if (fabs(d) > tol1) b += d;
       else b += (xm >= 0.0 ? fabs(tol1) : -fabs(tol1));
-      fb=(*func)(b,rho);
+      fb=(*func)(b,rho,u);
     }
   fprintf(stderr,"Maximum number of iterations exceeded in zbrent\n"); exit(0);
 }
