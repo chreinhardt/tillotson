@@ -1,8 +1,8 @@
-double zbrent(double (*func)(double,double), double v, double a, double b, double tol)
+double zbrent(double (*func)(double,double), double a, double b, double rho, double tol)
 { int iter;
   double c,d,e,min1,min2,eps=1e-16;
   double fa,fb,fc,p,q,r,s,tol1,xm;
-  fa = (*func)(v,a);  fb = (*func)(v,b);
+  fa = (*func)(a,rho);  fb = (*func)(b,rho);
   if (fa*fb > 0)
     { fprintf(stderr,"Root must be bracketed in zbrent\n");  exit(3);
     }
@@ -46,7 +46,7 @@ double zbrent(double (*func)(double,double), double v, double a, double b, doubl
       a=b; fa=fb;
       if (fabs(d) > tol1) b += d;
       else b += (xm >= 0.0 ? fabs(tol1) : -fabs(tol1));
-      fb=(*func)(v,b);
+      fb=(*func)(b,rho);
     }
   fprintf(stderr,"Maximum number of iterations exceeded in zbrent\n"); exit(0);
 }
