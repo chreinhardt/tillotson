@@ -58,9 +58,8 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
 	material->vmax = material->rhomax;
 
 	material->nTableMax = 10000;
-	material->nTableMax = 100;
+	material->nTableMax = 30;
 	material->nTable = 0;
-	material->delta =  material->rhomax/(material->nTableMax-2.0);
 
     /*
     ** Convert kboltz/mhydrogen to system units, assuming that
@@ -141,7 +140,14 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
     material->B /= (material->dGmPerCcUnit*material->dErgPerGmUnit);
  
  	material->cv /= material->dErgPerGmUnit;
-    
+    	
+	material->n = floor(material->rho0/rhomax*material->nTableMax);
+	float nf = material->rho0/rhomax*material->nTableMax;
+	material->delta = material->rho0/material->n;
+
+
+	fprintf(stderr,"delta: %g, n: %i, nf: %f",material->delta,material->n,nf);
+
     return(material);
 }
 
@@ -653,7 +659,7 @@ void tillInitLookup(TILLMATERIAL *material)
 		fprintf(stderr, "i: %i\n",i);
 		isentrope = tillSolveIsentrope(material,v);
 		
-		/* Copy one row to the look up table. This is of course not effictent at all. */
+		/* Copy one row to the look up table. This is of course not efficitent at all. */
 		for (j=0; j<material->nTableMax; j++)
 		{
 			material->Lookup[i][j] = isentrope[j].u;		
@@ -674,7 +680,7 @@ struct lookup *tillSolveIsentrope(TILLMATERIAL *material, double v)
     double u;
     double k1u,k2u;
 	double h;
-    int i;
+    int i,s;
 
 	/* Use this as a temporary data structure because it is easy to sort with qsort. */
 	struct lookup *isentrope;
@@ -683,31 +689,37 @@ struct lookup *tillSolveIsentrope(TILLMATERIAL *material, double v)
 	rho = material->rho0;
 	u = v;
 	h = material->delta;
-	i = 0;
+	i = material->n;
 
 	isentrope[i].rho = rho;
 	isentrope[i].u = u;
 //	isentrope[i].dudrho = tilldudrho(material, rho, u);
+	fprintf(stderr,"%.30f %.30f %i\n",rho,u,i);
 
 	++i;
 
 	/*
 	** Integrate the condensed and expanded states separately.
 	*/
-    while (rho <= material->rhomax) {
+	for (i = material->n+1; i < material->nTableMax; i++)
+	{
 		/*
 		** Midpoint Runga-Kutta (2nd order).
 		*/
-		k1u = h*tilldudrho(material,rho,u);
-		k2u = h*tilldudrho(material,rho+0.5*h,u+0.5*k1u);
-
-		u += k2u;
-		rho += h;
+		float hs = h/10;
+		for (s=0;s<10;s++)
+		{
+			k1u = hs*tilldudrho(material,rho,u);
+			k2u = hs*tilldudrho(material,rho+0.5*hs,u+0.5*k1u);
+			u += k2u;
+			rho += hs;
+		}
 
 	    isentrope[i].u = u;
 	    isentrope[i].rho = rho;
 //		isentrope[i].dudrho = tilldudrho(material, rho, u);
-	    ++i;
+
+		fprintf(stderr,"%.30f %.30f %i\n",rho,u,i);
 	}
 	
 	/*
@@ -716,28 +728,32 @@ struct lookup *tillSolveIsentrope(TILLMATERIAL *material, double v)
 	rho = material->rho0;
 	u = v;
 
-    while (rho > 0.0) {
+	for (i=material->n-1; i >= 0; i--)
+	{
 		/*
 		** Midpoint Runga-Kutta (2nd order).
 		*/
-		k1u = h*-tilldudrho(material,rho,u);
-		k2u = h*-tilldudrho(material,rho+0.5*h,u+0.5*k1u);
-
-		u += k2u;
-		rho -= h;
+		float hs = -h/10;
+		for (s=0;s<10;s++)
+		{
+			k1u = hs*tilldudrho(material,rho,u);
+			k2u = hs*tilldudrho(material,rho+0.5*hs,u+0.5*k1u);
 	
+			u += k2u;
+			rho += hs;
+		}
 		isentrope[i].u = u;
 	    isentrope[i].rho = rho;
+		fprintf(stderr,"%.30f %.30f %i\n",rho,u,i);
+
 //		isentrope[i].dudrho = tilldudrho(material, rho, u);
 
-	    ++i;
 	}
 	
-	--i;
    	material->nTable = i;
 
 	/* Now sort the look up table. */
-    qsort(isentrope,material->nTable,sizeof(struct lookup),comparerho);
+//    qsort(isentrope,material->nTable,sizeof(struct lookup),comparerho);
 	return isentrope;
 }
 

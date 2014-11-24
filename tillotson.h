@@ -24,7 +24,7 @@ typedef struct tillMaterial
 	int nTable; /* number of entries in the look up table */
 	double rhomax; /* Max value for the lookup table */
 	double vmax; /* Max value for the lookup table */
-
+	int n; /* Number steps from rho0 to zero. */
 	/* Unit convertion factors */
 	double dKpcUnit;
 	double dMsolUnit;

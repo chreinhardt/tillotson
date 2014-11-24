@@ -37,8 +37,8 @@ void main(int argc, char **argv) {
 
 	fprintf(stderr,"nTable: %i, nTableMax: %i\n",granite->nTable, granite->nTableMax);
 
-	/* Print the lookup table to a file.
-	for (i=0;i<granite->nTable;i++)
+	/* Print the lookup table to a file. */
+/*	for (i=0;i<granite->nTable;i++)
 	{
 		for (j=0;j<granite->nTable;j++)
 		{
@@ -47,16 +47,17 @@ void main(int argc, char **argv) {
 	}
 	*/
 
+	printf("%i %22.15e %22.15e\n",granite->nTableMax,granite->rhomax,granite->vmax);
+
 	/* Print the lookup table to a file. */
-	for (i=0;i<granite->nTable;i++)
+
+	for (i=0;i<granite->nTableMax;i++)
 	{
-		/* Print rho */
-		printf("%.30f",j*granite->delta);
+		//printf("%.30f",j*granite->delta);
 	
-		/* Now print all the isentropes in a separate column. */	
-		for (j=0;j<granite->nTable;j++)
+		for (j=0;j<granite->nTableMax;j++)
 		{
-			printf(" %.30f",j*granite->delta,granite->Lookup[j][i]);
+			printf("%22.15e ",granite->Lookup[i][j]);
 		}
 		printf("\n");
 	}
@@ -70,7 +71,7 @@ void main(int argc, char **argv) {
 
 	/* Solve for the cold curve.
 	isentrope = tillSolveIsentrope(granite,0);
-	for (j=0;j<granite->nTable;j++)
+	for (j=0;j<granite->nTableMax;j++)
 	{
 		printf("%.30f %.30f %.30f\n",j*granite->delta,isentrope[j].u,isentrope[j].rho);
 	}
