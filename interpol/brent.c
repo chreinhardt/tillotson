@@ -1,6 +1,6 @@
 double zbrent(double (*func)(double,double), double a, double b, double rho, double tol)
 { int iter;
-  double c,d,e,min1,min2,eps=1e-16;
+  double c,d,e,min1,min2,eps=1e-7;
   double fa,fb,fc,p,q,r,s,tol1,xm;
   fa = (*func)(a,rho);  fb = (*func)(b,rho);
   if (fa*fb > 0)
