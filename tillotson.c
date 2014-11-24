@@ -58,7 +58,11 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
 	material->vmax = material->rhomax;
 
 	material->nTableMax = 10000;
+<<<<<<< HEAD
 	material->nTableMax = 30;
+=======
+	material->nTableMax = 1000;
+>>>>>>> 25f3bf541369f1b64cae0ea0f7bc86e4df95a72b
 	material->nTable = 0;
 
     /*

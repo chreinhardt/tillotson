@@ -38,30 +38,43 @@ void main(int argc, char **argv) {
 	fprintf(stderr,"nTable: %i, nTableMax: %i\n",granite->nTable, granite->nTableMax);
 
 	/* Print the lookup table to a file. */
+<<<<<<< HEAD
 /*	for (i=0;i<granite->nTable;i++)
+=======
+	for (i=0;i<granite->nTable;i++)
+>>>>>>> 25f3bf541369f1b64cae0ea0f7bc86e4df95a72b
 	{
 		for (j=0;j<granite->nTable;j++)
 		{
 			printf("%.30f %.30f\n",j*granite->delta,granite->Lookup[i][j]);
 		}
 	}
-	*/
+	
 
 	printf("%i %22.15e %22.15e\n",granite->nTableMax,granite->rhomax,granite->vmax);
 
 	/* Print the lookup table to a file. */
+<<<<<<< HEAD
 
 	for (i=0;i<granite->nTableMax;i++)
 	{
 		//printf("%.30f",j*granite->delta);
 	
 		for (j=0;j<granite->nTableMax;j++)
+=======
+	/*
+	for (i=0;i<granite->nTable;i++)
+	{
+		printf("%.30f",j*granite->delta);
+	
+		for (j=0;j<granite->nTable;j++)
+>>>>>>> 25f3bf541369f1b64cae0ea0f7bc86e4df95a72b
 		{
 			printf("%22.15e ",granite->Lookup[i][j]);
 		}
 		printf("\n");
 	}
-
+	*/
 	/*
 	for (j=0;j<granite->nTable;j++)
 	{
