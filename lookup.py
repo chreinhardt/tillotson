@@ -16,11 +16,16 @@ data = loadtxt('lookup.txt')
 #ui = isentrope[:,1]
 rhocold = coldcurve[:,0]
 ucold = coldcurve[:,1]
+
+# Cold curve
 rho = data[:,0]
 u = data[:,1]
 
-rho2 = data[:,2]
-u = data[:,1]
+#rho = data[:,0]
+#u = data[:,1]
+
+#rho2 = data[:,2]
+#u = data[:,1]
 
 # Values for granite
 us = 3.5
@@ -37,11 +42,12 @@ xlabel('Density')
 ylabel('Internal energy')
 
 #plot(rho,u,'.',color='green',markersize=0.1,label='Lookup table')
-plot(rhocold,ucold,'-',color='red',linewidth=2,label='Cold curve (T=0)')
-#plot(rho,u,'.',color='green',markersize=1,label='Lookup table')
-plot(rho,u,'-',color='green',linewidth=1,label='Lookup table')
+#plot(rhocold,ucold,'-',color='red',linewidth=2,label='Cold curve (T=0)')
+scatter(rhocold,ucold,s=1,color='red',label='Cold curve (T=0)')
+plot(rho,u,'.',color='green',markersize=1,label='Lookup table')
+#plot(rho,u,'-',color='green',linewidth=1,label='Lookup table')
 
-plot(rho,u,'-',color='blue',linewidth=1,label='Lookup table')
+#plot(rho,u,'-',color='blue',linewidth=1,label='Lookup table')
 
 #fill_between(rhocold,ucold,color='orange')
 
