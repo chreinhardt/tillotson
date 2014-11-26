@@ -36,13 +36,30 @@ void main(int argc, char **argv) {
 	fprintf(stderr,"nTable: %i, nTableMax: %i\n",granite->nTable, granite->nTableMax);
 
 	/* Print the lookup table to a file. */
-	for (i=0;i<granite->nTable;i++)
+/*	for (i=0;i<granite->nTable;i++)
 	{
 		printf("%.30f",j*granite->delta);
 	
 		for (j=0;j<granite->nTable;j++)
 		{
 			printf(" %.30f",j*granite->delta,granite->Lookup[j*granite->nTableMax+i]);
+		}
+		printf("\n");
+	}*/
+/*	for (i=0;i<granite->nTable;i++)
+	{
+		for (j=0;j<granite->nTable;j++)
+		{
+			printf("%g ",granite->Lookup[i*granite->nTableMax+j]);
+		}
+		printf("\n");
+	}*/
+
+	for (i=0;i<granite->nTable;i++)
+	{
+		for (j=0;j<granite->nTable;j++)
+		{
+			printf("%g %g\n",j*granite->delta,granite->Lookup[i*granite->nTableMax+j]);
 		}
 		printf("\n");
 	}

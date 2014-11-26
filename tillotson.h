@@ -3,12 +3,16 @@
  */
 #ifndef TILLOTSON_HINCLUDED
 #define TILLOTSON_HINCLUDED
-/*
-#include <sys/time.h>
-*/
+
+#include "interpol/coeff.h"
+#include "interpol/interpol.h"
 
 #define GRANITE 1
 #define IRON 2
+
+#define TILL_N_MATERIAL_MAX 2
+/* Degree of the spline function we use for interpolation. */
+#define TILL_SPLINE_DEGREE 3
 
 struct lookup
 {
@@ -19,12 +23,13 @@ struct lookup
 
 typedef struct tillMaterial
 {
-	int iMaterial; /* What material is it? */
-	int nTableMax; /* Max. number of entries in the look up table */
-	int nTable; /* number of entries in the look up table */
-	double rhomax; /* Max value for the lookup table */
-	double vmax; /* Max value for the lookup table */
-	int n; /* Number steps from rho0 to zero. */
+	int iMaterial;	/* What material is it? */
+	int nTableMax;	/* Max. number of entries in the look up table */
+	int nTable;		/* Number of entries in the look up table */
+	int n;			/* number of steps from rho to zero */
+	double rhomax;	/* Max value for the lookup table */
+	double vmax;	/* Max value for the lookup table */
+
 	/* Unit convertion factors */
 	double dKpcUnit;
 	double dMsolUnit;
@@ -54,7 +59,7 @@ typedef struct tillMaterial
 	double delta;
 
 	/* A look up table for u(rho) along an isentrope */
-	double **Lookup;
+	float *Lookup;
 } TILLMATERIAL;
 
 TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit, double rhomax);
@@ -73,6 +78,11 @@ double tillSoundSpeed(TILLMATERIAL *material, double rho, double u);
 void tillInitColdCurve(TILLMATERIAL *material);
 void tillInitLookup(TILLMATERIAL *material);
 struct lookup *tillSolveIsentrope(TILLMATERIAL *material, double v);
+float tillFindUonIsentrope(TILLMATERIAL *material,float v,float rho);
+/* Used for the root finder */
+float denergy(TILLMATERIAL *material,float v,float rho,float u);
+float tillFindEntropyCurve(TILLMATERIAL *material,float rho,float u);
+double tillLookupU(TILLMATERIAL *material,double rho1,double u1,double rho2);
 double tillColdULookup(TILLMATERIAL *material,double rho);
 #endif
 

@@ -19,6 +19,10 @@ void main(int argc, char **argv) {
 	double dKpcUnit = 2.06701e-13;
 	double dMsolUnit = 4.80438e-08;
 	double rhomax = 25.0;
+	double rho1 = 10.0;
+	double u1 = 15.0;
+	double rho2 = 10.0;
+
 	int i = 0;
 	int j = 0;
 
@@ -33,27 +37,12 @@ void main(int argc, char **argv) {
 	tillInitLookup(granite);
 	fprintf(stderr, "Done.\n");
 
+	rho1 = granite->rho0;
+	u1 = granite->delta*5;
+	rho2 = granite->rho0+5*granite->delta;
 	fprintf(stderr,"nTable: %i, nTableMax: %i\n",granite->nTable, granite->nTableMax);
 
-	/* Print the lookup table to a file. */
-	for (i=0;i<granite->nTable;i++)
-	{
-		printf("%.30f",j*granite->delta);
-	
-		for (j=0;j<granite->nTable;j++)
-		{
-			printf(" %.30f",j*granite->delta,granite->Lookup[j*granite->nTableMax+i]);
-		}
-		printf("\n");
-	}
-
-	/* Solve for the cold curve.
-	isentrope = tillSolveIsentrope(granite,0);
-	for (j=0;j<granite->nTable;j++)
-	{
-		printf("%.30f %.30f %.30f\n",j*granite->delta,isentrope[j].u,isentrope[j].rho);
-	}
-	*/
+	fprintf(stderr,"rho1: %g u1: %g rho2: %g u2: %g\n",rho1,u1,rho2,tillLookupU(granite,rho1,u1,rho2));
 
 	/* Debug the function tillColdULookup().
 	u = tillColdULookup(granite,rho);

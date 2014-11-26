@@ -1,12 +1,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include "../tillotson.h"
 
-float brent(float (*func)(float,float,float), float a, float b, float rho, float u, float tol)
+float brent(float (*func)(TILLMATERIAL *,float,float,float), TILLMATERIAL *material, float a, float b, float rho, float u, float tol)
 { int iter;
   float c,d,e,min1,min2,eps=1e-7;
   float fa,fb,fc,p,q,r,s,tol1,xm;
-  fa = (*func)(a,rho,u);  fb = (*func)(b,rho,u);
+  fa = (*func)(material,a,rho,u);  fb = (*func)(material,b,rho,u);
   if (fa*fb > 0)
     { fprintf(stderr,"Root must be bracketed in zbrent\n");  exit(3);
     }
@@ -50,7 +51,7 @@ float brent(float (*func)(float,float,float), float a, float b, float rho, float
       a=b; fa=fb;
       if (fabs(d) > tol1) b += d;
       else b += (xm >= 0.0 ? fabs(tol1) : -fabs(tol1));
-      fb=(*func)(b,rho,u);
+      fb=(*func)(material,b,rho,u);
     }
   fprintf(stderr,"Maximum number of iterations exceeded in zbrent\n"); exit(0);
 }

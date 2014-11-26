@@ -36,7 +36,8 @@ ylabel('Internal energy')
 
 #plot(rhoi,ui,'.',color='green',markersize=0.1)
 plot(rhocold,ucold,'-',color='red',linewidth=2,label='Cold curve (T=0)')
-scatter(rho,u,s=1,color='blue',label='Tillotson.c')
+#scatter(rho,u,s=5,color='blue',label='Tillotson.c')
+plot(rho,u,'-',color='blue',linewidth=1,label='Tillotson.c')
 
 plot([0,rho0],[us,us],'r--')
 plot([0,rho0],[us2,us2],'r--')
