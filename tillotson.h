@@ -84,6 +84,6 @@ float denergy(TILLMATERIAL *material,float v,float rho,float u);
 float tillFindEntropyCurve(TILLMATERIAL *material,float rho,float u);
 double tillLookupU(TILLMATERIAL *material,double rho1,double u1,double rho2);
 double tillColdULookup(TILLMATERIAL *material,double rho);
-void tillCalcU(TILLMATERIAL *material,double rho1,double u1,double rho2);
+double tillCalcU(TILLMATERIAL *material,double rho1,double u1,double rho2);
 #endif
 

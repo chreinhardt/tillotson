@@ -61,7 +61,7 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
 	material->vmax = material->rhomax;
 
 	material->nTableMax = 10000;
-	material->nTableMax = 30;
+	material->nTableMax = 1000;
 	material->nTable = 0;
 
     /*
@@ -664,7 +664,7 @@ void tillInitLookup(TILLMATERIAL *material)
 	}
 
 	/* Initialize the coefficients for the interpolation. */
-	SamplesToCoefficients(material->Lookup,material->nTableMax,material->nTableMax, TILL_SPLINE_DEGREE);
+//	SamplesToCoefficients(material->Lookup,material->nTableMax,material->nTableMax, TILL_SPLINE_DEGREE);
 }
 
 struct lookup *tillSolveIsentrope(TILLMATERIAL *material, double v)
@@ -834,7 +834,7 @@ double tillColdULookup(TILLMATERIAL *material,double rho)
 		return(material->rho[i]*exp(-(r-material->r[i])));
 	}*/
 }
-void tillCalcU(TILLMATERIAL *material,double rho1,double u1,double rho2)
+double tillCalcU(TILLMATERIAL *material,double rho1,double u1,double rho2)
 {
 	/* Calculate u2 by solving the ODE */
     double rho;
@@ -843,7 +843,7 @@ void tillCalcU(TILLMATERIAL *material,double rho1,double u1,double rho2)
 	double h;
 
 	rho = rho1;
-	u = u2;
+	u = u1;
 	h = material->delta/10.0;
 
 	if (rho1 < rho2)
