@@ -834,3 +834,43 @@ double tillColdULookup(TILLMATERIAL *material,double rho)
 		return(material->rho[i]*exp(-(r-material->r[i])));
 	}*/
 }
+void tillCalcU(TILLMATERIAL *material,double rho1,double u1,double rho2)
+{
+	/* Calculate u2 by solving the ODE */
+    double rho;
+    double u;
+    double k1u,k2u;
+	double h;
+
+	rho = rho1;
+	u = u2;
+	h = material->delta/10.0;
+
+	if (rho1 < rho2)
+	{
+		while (rho < rho2) {
+			/*
+			** Midpoint Runga-Kutta (2nd order).
+			*/
+			k1u = h*tilldudrho(material,rho,u);
+			k2u = h*tilldudrho(material,rho+0.5*h,u+0.5*k1u);
+	
+			u += k2u;
+			rho += h;
+		}
+	} else if (rho1 > rho2) {
+		while (rho > rho2) {
+			/*
+			** Midpoint Runga-Kutta (2nd order).
+			*/
+			k1u = h*-tilldudrho(material,rho,u);
+			k2u = h*-tilldudrho(material,rho+0.5*h,u+0.5*k1u);
+
+			u += k2u;
+			rho -= h;
+		}
+	}
+	return u;
+}
+
+
