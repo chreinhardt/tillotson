@@ -40,9 +40,9 @@ void main(int argc, char **argv) {
 	rho1 = granite->rho0;
 	u1 = granite->delta*5;
 	rho2 = granite->rho0+5*granite->delta;
-	fprintf(stderr,"nTable: %i, nTableMax: %i\n",granite->nTable, granite->nTableMax);
+	fprintf(stderr,"nTableMax: %i\n",granite->nTableMax);
 
-	fprintf(stderr,"rho1: %g u1: %g rho2: %g u2: %g\n",rho1,u1,rho2,tillLookupU(granite,rho1,u1,rho2));
+	fprintf(stderr,"rho1: %g u1: %g rho2: %g u2: %g\n",rho1,u1,rho2,tillLookupU(granite,rho1,u1,rho2,0));
 
 	/* Debug the function tillColdULookup().
 	u = tillColdULookup(granite,rho);

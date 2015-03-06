@@ -1,0 +1,10 @@
+28d27
+< 	int nTable;		/* Number of entries in the look up table */
+77a77
+> double tilldudrho(TILLMATERIAL *material, double rho, double u);
+84,85c84,85
+< float tillFindEntropyCurve(TILLMATERIAL *material,float rho,float u);
+< double tillLookupU(TILLMATERIAL *material,double rho1,double u1,double rho2);
+---
+> float tillFindEntropyCurve(TILLMATERIAL *material,float rho,float u,int iOrder);
+> double tillLookupU(TILLMATERIAL *material,double rho1,double u1,double rho2,int iOrder);

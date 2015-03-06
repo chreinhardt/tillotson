@@ -25,7 +25,6 @@ typedef struct tillMaterial
 {
 	int iMaterial;	/* What material is it? */
 	int nTableMax;	/* Max. number of entries in the look up table */
-	int nTable;		/* Number of entries in the look up table */
 	int n;			/* number of steps from rho to zero */
 	double rhomax;	/* Max value for the lookup table */
 	double vmax;	/* Max value for the lookup table */
@@ -75,15 +74,16 @@ double tilldTdrho(TILLMATERIAL *material, double rho, double u);
 double tilldTdu(TILLMATERIAL *material, double rho, double u);
 double tillTempRhoU(TILLMATERIAL *material, double rho, double u);
 double tillSoundSpeed(TILLMATERIAL *material, double rho, double u);
+double tilldudrho(TILLMATERIAL *material, double rho, double u);
 void tillInitColdCurve(TILLMATERIAL *material);
 void tillInitLookup(TILLMATERIAL *material);
 struct lookup *tillSolveIsentrope(TILLMATERIAL *material, double v);
 float tillFindUonIsentrope(TILLMATERIAL *material,float v,float rho);
 /* Used for the root finder */
 float denergy(TILLMATERIAL *material,float v,float rho,float u);
-float tillFindEntropyCurve(TILLMATERIAL *material,float rho,float u);
-double tillLookupU(TILLMATERIAL *material,double rho1,double u1,double rho2);
+float tillFindEntropyCurve(TILLMATERIAL *material,float rho,float u,int iOrder);
+double tillLookupU(TILLMATERIAL *material,double rho1,double u1,double rho2,int iOrder);
 double tillColdULookup(TILLMATERIAL *material,double rho);
-void tillCalcU(TILLMATERIAL *material,double rho1,double u1,double rho2);
+double tillCalcU(TILLMATERIAL *material,double rho1,double u1,double rho2);
 #endif
 
