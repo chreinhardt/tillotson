@@ -61,9 +61,15 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
 	material->vmax = material->rhomax;
 
 	material->nTableMax = 10000;
-	material->nTableMax = 1000;
-	material->nTable = 0;
+	/* Needs about 800M memory. */
+	material->nTableMax = 10000;
 
+	/* For debugging purpose. */
+#ifdef TILL_USE_RK4
+	material->nTableMax = 100;
+#else
+	material->nTableMax = 1000;
+#endif
     /*
     ** Convert kboltz/mhydrogen to system units, assuming that
     ** G == 1.
@@ -142,7 +148,10 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
 	/* Set delta so that rho0 lies on the grid. */
 	material->n = floor(material->rho0/material->rhomax*material->nTableMax);
  	material->delta =  material->rho0/material->n;
-   
+	
+	/* Set the actual rhomax. */ 
+  	material->rhomax = material->delta*(material->nTableMax-1);
+  
     return(material);
 }
 
@@ -565,70 +574,14 @@ int comparerho(const void* a, const void* b)
 void tillInitColdCurve(TILLMATERIAL *material)
 {
 	/* Generate the look up table for the cold curve */
-    double rho;
-    double u;
-    double k1u,k2u;
-	double h;
-    int i;
+	struct lookup *isentrope;
 
-	rho = material->rho0;
-	u = 0.0;
-	h = material->delta;
-	i = 0;
+	/* v = u(rho=rho0) */
+	isentrope = tillSolveIsentrope(material,0.0);
 
-	material->cold[i].rho = rho;
-	material->cold[i].u = u;
-//	material->cold[i].dudrho = tilldudrho(material, rho, u);
-
-	++i;
-
-	/*
-	** Integrate the condensed and expanded states separately.
-	*/
-    while (rho <= material->rhomax) {
-		/*
-		** Midpoint Runga-Kutta (2nd order).
-		*/
-		k1u = h*tilldudrho(material,rho,u);
-		k2u = h*tilldudrho(material,rho+0.5*h,u+0.5*k1u);
-
-		u += k2u;
-		rho += h;
-
-	    material->cold[i].u = u;
-	    material->cold[i].rho = rho;
-//		material->cold[i].dudrho = tilldudrho(material, rho, u);
-	    ++i;
-	}
-	
-	/*
-	** Now the expanded states. Careful about the negative sign.
-	*/
-	rho = material->rho0;
-	u = 0.0;
-
-    while (rho > 0.0) {
-		/*
-		** Midpoint Runga-Kutta (2nd order).
-		*/
-		k1u = h*-tilldudrho(material,rho,u);
-		k2u = h*-tilldudrho(material,rho+0.5*h,u+0.5*k1u);
-
-		u += k2u;
-		rho -= h;
-
-	    material->cold[i].u = u;
-	    material->cold[i].rho = rho;
-//		material->cold[i].dudrho = tilldudrho(material, rho, u);
-
-	    ++i;
-	}
-	
-	--i;
-   	material->nTable = i;
-
+	material->cold = isentrope;
 	/* Now sort the look up table. */
-    qsort(material->cold,material->nTable,sizeof(struct lookup),comparerho);
+	// qsort(material->cold,material->nTable,sizeof(struct lookup),comparerho);
 }
 
 void tillInitLookup(TILLMATERIAL *material)
@@ -643,20 +596,20 @@ void tillInitLookup(TILLMATERIAL *material)
     int i,j;
 
 	v = 0.0;
-	fprintf(stderr, "Starting integration...\n");
+	//fprintf(stderr, "Starting integration...\n");
 
 	/*
 	** Integrate the isentropes for different v.
 	*/
 	for (i=0; i<material->nTableMax; i++)
 	{
-		fprintf(stderr, "i: %i\n",i);
 		isentrope = tillSolveIsentrope(material,v);
 		
 		/* Copy one row to the look up table. This is of course not efficitent at all. */
 		for (j=0; j<material->nTableMax; j++)
 		{
-			material->Lookup[material->nTableMax*i+j] = isentrope[j].u;		
+			/* Careful with the indices! */
+			material->Lookup[material->nTableMax*j+i] = isentrope[j].u;		
 		}
 		
 		free(isentrope);
@@ -664,9 +617,95 @@ void tillInitLookup(TILLMATERIAL *material)
 	}
 
 	/* Initialize the coefficients for the interpolation. */
-//	SamplesToCoefficients(material->Lookup,material->nTableMax,material->nTableMax, TILL_SPLINE_DEGREE);
+	SamplesToCoefficients(material->Lookup,material->nTableMax,material->nTableMax, TILL_SPLINE_DEGREE);
 }
+#ifdef TILL_USE_RK4
+struct lookup *tillSolveIsentrope(TILLMATERIAL *material, double v)
+{
+	/*
+	** Integrate one isentrope for the look up table. The parameter v corresponds to
+	** u(rho=rho0) so v=0 gives the cold curve.
+	*/
+    double rho;
+    double u;
+    double k1u,k2u,k3u,k4u;
+	double h;
+    int i,s;
 
+	/* Use this as a temporary data structure because it is easy to sort with qsort. */
+	struct lookup *isentrope;
+    isentrope = malloc(material->nTableMax*sizeof(struct lookup));
+
+	rho = material->rho0;
+	u = v;
+	h = material->delta;
+
+	i = material->n;
+
+	isentrope[i].rho = rho;
+	isentrope[i].u = u;
+//	isentrope[i].dudrho = tilldudrho(material, rho, u);
+
+	/*
+	** Integrate the condensed and expanded states separately.
+	*/
+	for (i=material->n+1;i<material->nTableMax;i++)
+	{
+		float hs = h/10.0;
+		
+		/* We do substeps that saved to increase the accuracy. */
+		for (s=0;s<10;s++)
+		{
+			/*
+			** Midpoint Runga-Kutta (4nd order).
+			*/
+			k1u = hs*tilldudrho(material,rho,u);
+			k2u = hs*tilldudrho(material,rho+0.5*hs,u+0.5*k1u);
+			k3u = hs*tilldudrho(material,rho+0.5*hs,u+0.5*k2u);
+			k4u = hs*tilldudrho(material,rho+hs,u+k3u);
+
+			u += k1u/6.0+k2u/3.0+k3u/3.0+k4u/6.0;
+			rho += hs;
+		}
+
+	    isentrope[i].u = u;
+	    isentrope[i].rho = rho;
+//		isentrope[i].dudrho = tilldudrho(material, rho, u);
+	}
+	
+	/*
+	** Now the expanded states. Careful about the negative sign.
+	*/
+	rho = material->rho0;
+	u = v;
+
+	for (i=material->n-1;i>=0;i--)
+	{
+		float hs = h/10.0;
+		
+		/* We do substeps that saved to increase the accuracy. */
+		for (s=0;s<10;s++)
+		{
+			/*
+			** Midpoint Runga-Kutta (4nd order).
+			*/
+			k1u = hs*-tilldudrho(material,rho,u);
+			k2u = hs*-tilldudrho(material,rho+0.5*hs,u+0.5*k1u);
+			k3u = hs*-tilldudrho(material,rho+0.5*hs,u+0.5*k2u);
+			k4u = hs*-tilldudrho(material,rho+hs,u+k3u);
+
+			u += k1u/6.0+k2u/3.0+k3u/3.0+k4u/6.0;
+			rho -= hs;
+		}
+	
+		isentrope[i].u = u;
+	    isentrope[i].rho = rho;
+//		isentrope[i].dudrho = tilldudrho(material, rho, u);
+	}
+
+	return isentrope;
+}
+#else
 struct lookup *tillSolveIsentrope(TILLMATERIAL *material, double v)
 {
 	/*
@@ -746,20 +785,19 @@ struct lookup *tillSolveIsentrope(TILLMATERIAL *material, double v)
 //		isentrope[i].dudrho = tilldudrho(material, rho, u);
 	}
 	
-   	material->nTable = material->nTableMax;
-
 	return isentrope;
 }
+#endif
 
 /* Prasenjits root finder */
-float brent(float (*func)(TILLMATERIAL *,float,float,float),TILLMATERIAL *material,float a,float b,float rho,float u,float tol);
+float brent(float (*func)(TILLMATERIAL *,float,float,float),TILLMATERIAL *material,float a,float b,float rho,float u,float tol,int iOrder);
 
 float tillFindUonIsentrope(TILLMATERIAL *material,float v,float rho)
 {
 	float iv,irho,u;
 	/* Needed for the interpolation function. */
-	iv = material->nTableMax*v/material->vmax;
-	irho = material->nTableMax*rho/material->rhomax;
+	iv = (material->nTableMax-1)*v/material->vmax;
+	irho = (material->nTableMax-1)*rho/material->rhomax;
 
 	return InterpolatedValue(material->Lookup,material->nTableMax,material->nTableMax,iv,irho,TILL_SPLINE_DEGREE);
 }
@@ -770,19 +808,18 @@ float denergy(TILLMATERIAL *material,float v,float rho,float u)
 }
 
 /* Find isentrope for a given rho and u */
-float tillFindEntropyCurve(TILLMATERIAL *material,float rho,float u)
+float tillFindEntropyCurve(TILLMATERIAL *material,float rho,float u,int iOrder)
 {
 	float tol=1e-6;
-	fprintf(stderr,"rho: %g, rhomax: %g, u: %g\n",rho,material->rhomax,u);
-	return brent(denergy,material,0,material->vmax,rho,u,tol);
+	return brent(denergy,material,0,material->vmax,rho,u,tol,iOrder);
 }
 
-double tillLookupU(TILLMATERIAL *material,double rho1,double u1,double rho2)
+double tillLookupU(TILLMATERIAL *material,double rho1,double u1,double rho2,int iOrder)
 {
 	/* Calculates u2 for a given rho1,u2,rho2. */
 	double v;
 
-	v = tillFindEntropyCurve(material,rho1,u1);
+	v = tillFindEntropyCurve(material,rho1,u1,iOrder);
 
 	return tillFindUonIsentrope(material,v,rho2);
 }
@@ -793,7 +830,7 @@ double tillColdULookup(TILLMATERIAL *material,double rho)
 	double drho;
     int i;
 
-    i = material->nTable-1;
+    i = material->nTableMax-1;
 	
 	/* What do we do if rho > rhomax */
 	/* if (r >= material->r[i]) return(material->rho[i]*exp(-(r-material->r[i]))); */
@@ -810,10 +847,10 @@ double tillColdULookup(TILLMATERIAL *material,double rho)
 	}
     assert(i >= 0);
 
-	if (i > material->nTable-2) fprintf(stderr,"ERROR: out of bounds rho:%.14g rhomax:%.14g i:%i nTable: %i\n",rho,material->rhomax,i,material->nTable);
-	assert(i < material->nTable-1);
+	if (i > material->nTableMax-2) fprintf(stderr,"ERROR: out of bounds rho:%.14g rhomax:%.14g i:%i nTableMax: %i\n",rho,material->rhomax,i,material->nTableMax);
+	assert(i < material->nTableMax-1);
 
-	if (i <= material->nTable-2)
+	if (i <= material->nTableMax-2)
 	{
 		/* linear interpolation for now. */
 		return(material->cold[i].u*(1.0-x) + material->cold[i+1].u*x);
@@ -844,7 +881,8 @@ double tillCalcU(TILLMATERIAL *material,double rho1,double u1,double rho2)
 
 	rho = rho1;
 	u = u1;
-	h = material->delta/10.0;
+	/* Make smaller steps than we used for look up table. */
+	h = material->delta/100.0;
 
 	if (rho1 < rho2)
 	{

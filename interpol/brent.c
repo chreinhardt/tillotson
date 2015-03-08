@@ -3,13 +3,15 @@
 #include <math.h>
 #include "../tillotson.h"
 
-float brent(float (*func)(TILLMATERIAL *,float,float,float), TILLMATERIAL *material, float a, float b, float rho, float u, float tol)
+float brent(float (*func)(TILLMATERIAL *,float,float,float), TILLMATERIAL *material, float a, float b, float rho, float u, float tol,int iOrder)
 { int iter;
   float c,d,e,min1,min2,eps=1e-7;
   float fa,fb,fc,p,q,r,s,tol1,xm;
   fa = (*func)(material,a,rho,u);  fb = (*func)(material,b,rho,u);
   if (fa*fb > 0)
-    { fprintf(stderr,"Root must be bracketed in zbrent\n");  exit(3);
+    {
+		fprintf(stderr,"Particle: %i\n",iOrder);
+		fprintf(stderr,"Root must be bracketed in zbrent\n");  exit(3);
     }
   c = b; fc = fb;
   for (iter=1; iter<=100; iter++)
