@@ -1,4 +1,6 @@
 /*
+ ** Copyright (c) 2014-2015 Christian Reinhardt and Joachim Stadel.
+ **
  ** This file provides all the functions for the Tillotson EOS library.
  ** The Tillotson EOS (e.g. Benz 1986) is a relatively simple but reliable
  ** and convenient to use equation of state that can describe matter over
@@ -23,7 +25,7 @@
  *  (also needed for the look up table)
  */
 
-TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit, double rhomax)
+TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit, int nTableMax, double rhomax, double vmax)
 {
 	/*
 	 * Initialise a material from the Tillotson library
@@ -56,9 +58,13 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
     material->dKpcUnit = dKpcUnit;
     material->dMsolUnit = dMsolUnit;
 	material->rhomax = rhomax;
-	
-	/* Just as a first step we have equal steps in rho and v. */
-	material->vmax = material->rhomax;
+	material->vmax = vmax;
+
+	if (material->vmax == 0)
+	{
+		/* Just as a first step we have equal steps in rho and v. */
+		material->vmax = material->rhomax;
+	}
 
 	material->nTableMax = 10000;
 	/* Needs about 800M memory. */
@@ -66,10 +72,11 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
 
 	/* For debugging purpose. */
 #ifdef TILL_USE_RK4
-	material->nTableMax = 100;
+	material->nTableMax = 10000;
 #else
-	material->nTableMax = 1000;
+	material->nTableMax = 10000;
 #endif
+	material->nTableMax = nTableMax;
     /*
     ** Convert kboltz/mhydrogen to system units, assuming that
     ** G == 1.
@@ -592,11 +599,12 @@ void tillInitLookup(TILLMATERIAL *material)
 	*/
 
 	struct lookup *isentrope;
-	double v;
+	double v, dv;
     int i,j;
 
 	v = 0.0;
 	//fprintf(stderr, "Starting integration...\n");
+	dv = material->vmax/material->nTableMax;
 
 	/*
 	** Integrate the isentropes for different v.
@@ -605,7 +613,7 @@ void tillInitLookup(TILLMATERIAL *material)
 	{
 		isentrope = tillSolveIsentrope(material,v);
 		
-		/* Copy one row to the look up table. This is of course not efficitent at all. */
+		/* Copy one row to the look up table. This is of course not efficient at all. */
 		for (j=0; j<material->nTableMax; j++)
 		{
 			/* Careful with the indices! */
@@ -613,7 +621,7 @@ void tillInitLookup(TILLMATERIAL *material)
 		}
 		
 		free(isentrope);
-		v += material->delta;
+		v += dv;
 	}
 
 	/* Initialize the coefficients for the interpolation. */

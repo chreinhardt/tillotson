@@ -61,7 +61,7 @@ typedef struct tillMaterial
 	float *Lookup;
 } TILLMATERIAL;
 
-TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit, double rhomax);
+TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit, int nTableMax, double rhomax, double vmax);
 void tillFinalizeMaterial(TILLMATERIAL *material);
 double tilldPdrho(TILLMATERIAL *material, double rho, double u);
 double tillSoundSpeed2old(TILLMATERIAL *material, double rho, double u);
