@@ -32,6 +32,17 @@ void main(int argc, char **argv) {
 	TILLMATERIAL *granite;
 	struct lookup *isentrope;
 
+	if (argc != 4) {
+		fprintf(stderr,"Usage: table <rho1> <u1> <rho2>\n");
+		exit(1);
+	}
+
+    rho1 = atof(argv[1]);
+    u1 = atof(argv[2]);
+    rho2 = atof(argv[3]);
+
+	assert(rho1 < rhomax && rho2 < rhomax);
+
 	fprintf(stderr, "Initializing material...\n");
 
 	granite = tillInitMaterial(GRANITE, dKpcUnit, dMsolUnit, nTableMax, rhomax, vmax);
@@ -40,10 +51,13 @@ void main(int argc, char **argv) {
 	tillInitLookup(granite);
 	fprintf(stderr, "Done.\n");
 
+	/* Check if we get the same result for a very small difference. */
+/*
 	rho1 = granite->rho0;
 	u1 = granite->delta*5;
 	rho2 = granite->rho0+5*granite->delta;
 	fprintf(stderr,"nTableMax: %i\n",granite->nTableMax);
+*/
 
 	fprintf(stderr,"rho1: %g u1: %g rho2: %g u2: %g (interpol) %g (integrated)\n",rho1,u1,rho2,tillLookupU(granite,rho1,u1,rho2,0),tillCalcU(granite,rho1,u1,rho2));
 
