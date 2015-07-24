@@ -12,10 +12,17 @@
 #define min(A,B) ((A) > (B) ? (B) : (A))
 
 void main(int argc, char **argv) {
+	/*
+	** Compare the two functions that calculate the pressure.
+	*/
 	double dKpcUnit = 2.06701e-13;
 	double dMsolUnit = 4.80438e-08;
-	double rho, u, Pold, Pnew;
 	double rhomax = 1000.0;
+	double vmax = 1000.0;
+	int nTableMax = 1000;
+
+	double rho, u, Pold, Pnew;
+
 	double umax = 1000.0;
 	double delta = 0.01;
 
@@ -33,7 +40,7 @@ void main(int argc, char **argv) {
 */
     //gamma = 2.0; /* Choose a gamma between 0.2 and 0.6 */
 
-	granite = tillInitMaterial(GRANITE, dKpcUnit, dMsolUnit, rhomax);
+	granite = tillInitMaterial(GRANITE, dKpcUnit, dMsolUnit, nTableMax, rhomax, vmax);
 
 	rho = 0.0;
 	u = 0.0;

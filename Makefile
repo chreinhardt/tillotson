@@ -17,6 +17,10 @@ cold: cold.o $(objects)
 
 coldlookup: coldlookup.o $(objects)
 	cc -o coldlookup coldlookup.o $(objects) -lm
+
+pressureoldnew: pressureoldnew.o $(objects)
+	cc -o pressureoldnew pressureoldnew.o $(objects) -lm
+
 clean:
 	rm $(objects)
 
