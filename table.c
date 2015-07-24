@@ -45,7 +45,7 @@ void main(int argc, char **argv) {
 	rho2 = granite->rho0+5*granite->delta;
 	fprintf(stderr,"nTableMax: %i\n",granite->nTableMax);
 
-	fprintf(stderr,"rho1: %g u1: %g rho2: %g u2: %g\n",rho1,u1,rho2,tillLookupU(granite,rho1,u1,rho2,0));
+	fprintf(stderr,"rho1: %g u1: %g rho2: %g u2: %g (interpol) %g (integrated)\n",rho1,u1,rho2,tillLookupU(granite,rho1,u1,rho2,0),tillCalcU(granite,rho1,u1,rho2));
 
 	/* Debug the function tillColdULookup().
 	u = tillColdULookup(granite,rho);
