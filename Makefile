@@ -15,6 +15,8 @@ table: table.o $(objects)
 cold: cold.o $(objects)
 	cc -o cold cold.o $(objects) -lm
 
+coldlookup: coldlookup.o $(objects)
+	cc -o coldlookup coldlookup.o $(objects) -lm
 clean:
 	rm $(objects)
 

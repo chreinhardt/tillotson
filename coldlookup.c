@@ -18,19 +18,22 @@ void main(int argc, char **argv) {
 	double dKpcUnit = 2.06701e-13;
 	double dMsolUnit = 4.80438e-08;
 	double rhomax = 25.0;
+	double vmax = 25.0;
+	int nTableMax = 1000;
+
 	double rho = 2.33453465465676756;
 	double u = 0.0;
 	int i = 0;
 
 	TILLMATERIAL *granite;
 
-	granite = tillInitMaterial(GRANITE, dKpcUnit, dMsolUnit, rhomax);
+	granite = tillInitMaterial(GRANITE, dKpcUnit, dMsolUnit, nTableMax, rhomax, vmax);
 	
 	fprintf(stderr, "Init cold curve...\n");
 	tillInitColdCurve(granite);
 	fprintf(stderr, "Done.\n");
 
-	fprintf(stderr,"nTable: %i, nTableMax: %i\n",granite->nTable, granite->nTableMax);
+	fprintf(stderr,"nTableMax: %i\n", granite->nTableMax);
 /*
 	for (i=0; i < granite->nTable; i++)
 	{
