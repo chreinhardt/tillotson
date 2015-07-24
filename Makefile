@@ -1,12 +1,19 @@
 
-objects = table.o tillotson.o interpol/coeff.o interpol/interpol.o interpol/brent.o
+objects = tillotson.o interpol/coeff.o interpol/interpol.o interpol/brent.o
 
 CFLAGS ?= -O3
 
-table: $(objects)
-	cc -o table $(objects) -lm
+default:
+	@echo "Please specify which tool you want to make."
 
-all: table
+all:
+	default
+
+table: table.o $(objects)
+	cc -o table table.o $(objects) -lm
+
+cold: cold.o $(objects)
+	cc -o cold cold.o $(objects) -lm
 
 clean:
 	rm $(objects)
