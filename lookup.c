@@ -19,6 +19,9 @@ void main(int argc, char **argv) {
 	double dKpcUnit = 2.06701e-13;
 	double dMsolUnit = 4.80438e-08;
 	double rhomax = 25.0;
+	double vmax = 25.0;
+	int nTableMax = 1000;
+
 	int i = 0;
 	int j = 0;
 
@@ -27,20 +30,20 @@ void main(int argc, char **argv) {
 
 	fprintf(stderr, "Initializing material...\n");
 
-	granite = tillInitMaterial(GRANITE, dKpcUnit, dMsolUnit, rhomax);
+	granite = tillInitMaterial(GRANITE, dKpcUnit, dMsolUnit, nTableMax, rhomax, vmax);
 	
 	fprintf(stderr, "Initializing the look up table...\n");
 	tillInitLookup(granite);
 	fprintf(stderr, "Done.\n");
 
-	fprintf(stderr,"nTable: %i, nTableMax: %i\n",granite->nTable, granite->nTableMax);
+	fprintf(stderr,"nTableMax: %i\n", granite->nTableMax);
 
 	/* Print the lookup table to a file. */
-	for (i=0;i<granite->nTable;i++)
+	for (i=0;i<granite->nTableMax;i++)
 	{
 		printf("%.30f",j*granite->delta);
 	
-		for (j=0;j<granite->nTable;j++)
+		for (j=0;j<granite->nTableMax;j++)
 		{
 			printf(" %.30f",j*granite->delta,granite->Lookup[j*granite->nTableMax+i]);
 		}
