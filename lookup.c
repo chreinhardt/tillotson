@@ -11,6 +11,8 @@
 #define max(A,B) ((A) > (B) ? (A) : (B))
 #define min(A,B) ((A) > (B) ? (B) : (A))
 
+#define INDEX(i, j) ((i*granite->nTableV) + (j))
+
 void main(int argc, char **argv) {
 	/*
 	** Debug the look up table for the isentropic evolution
@@ -19,8 +21,11 @@ void main(int argc, char **argv) {
 	double dKpcUnit = 2.06701e-13;
 	double dMsolUnit = 4.80438e-08;
 	double rhomax = 25.0;
-	double vmax = 25.0;
-	int nTableMax = 1000;
+	double vmax = 26.32;
+//	double vmax = 28.0;
+	double rho, u;
+	int nTableRho = 1000;
+	int nTableV = 1000;
 
 	int i = 0;
 	int j = 0;
@@ -30,22 +35,52 @@ void main(int argc, char **argv) {
 
 	fprintf(stderr, "Initializing material...\n");
 
-	granite = tillInitMaterial(GRANITE, dKpcUnit, dMsolUnit, nTableMax, rhomax, vmax);
+	granite = tillInitMaterial(GRANITE, dKpcUnit, dMsolUnit, nTableRho, nTableV, rhomax, vmax, 1);
 	
 	fprintf(stderr, "Initializing the look up table...\n");
 	tillInitLookup(granite);
 	fprintf(stderr, "Done.\n");
 
-	fprintf(stderr,"nTableMax: %i\n", granite->nTableMax);
+	fprintf(stderr,"\n");
+	fprintf(stderr,"rhomax: %g, vmax: %g \n", granite->rhomax, granite->vmax);
+	fprintf(stderr,"nTableRho: %i, nTableV: %i \n", granite->nTableRho, granite->nTableV);
+	fprintf(stderr,"drho: %g, dv: %g \n", granite->drho, granite->dv);
+	fprintf(stderr,"\n");
+
+//#if 0
+	/* Create an output file for the look up table */
+	FILE *fp = NULL;
+
+	/*
+	** Print the look up table to a file first.
+	*/	
+	//sprintf(achFile,"%s.log",msrOutName(msr));
+	fp = fopen("lookup.txt","w");
+	assert(fp != NULL);
 
 	/* Print the lookup table to a file. */
-	for (i=0;i<granite->nTableMax;i++)
+	for (i=0;i<granite->nTableRho;i+=1)
 	{
-		printf("%.30f",j*granite->delta);
-	
-		for (j=0;j<granite->nTableMax;j++)
+		rho = i*granite->drho;
+		fprintf(fp,"%g",rho);
+		for (j=0;j<granite->nTableV;j+=1)
 		{
-			printf(" %.30f",j*granite->delta,granite->Lookup[j*granite->nTableMax+i]);
+			// v = j*granite->dv
+			u = granite->Lookup[INDEX(i, j)].u;
+			fprintf(fp,"  %g", u);
+		}
+		fprintf(fp,"\n");
+	}
+	fclose(fp);
+//#endif
+	for (i=0;i<granite->nTableRho;i++)
+	{
+		// Lookup(i, j) = Lookup(rho, v)
+		printf("%.30f",granite->Lookup[INDEX(i, 0)].rho);
+	
+		for (j=0;j<granite->nTableV;j++)
+		{
+			printf(" %.30f",granite->Lookup[INDEX(i,j)].u);
 		}
 		printf("\n");
 	}

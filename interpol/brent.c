@@ -3,10 +3,10 @@
 #include <math.h>
 #include "../tillotson.h"
 
-float brent(float (*func)(TILLMATERIAL *,float,float,float), TILLMATERIAL *material, float a, float b, float rho, float u, float tol,int iOrder)
+double brent(double (*func)(TILLMATERIAL *,double,double,double), TILLMATERIAL *material, double a, double b, double rho, double u, double tol,int iOrder)
 { int iter;
-  float c,d,e,min1,min2,eps=1e-7;
-  float fa,fb,fc,p,q,r,s,tol1,xm;
+  double c,d,e,min1,min2,eps=1e-7;
+  double fa,fb,fc,p,q,r,s,tol1,xm;
   fa = (*func)(material,a,rho,u);  fb = (*func)(material,b,rho,u);
   if (fa*fb > 0)
     {

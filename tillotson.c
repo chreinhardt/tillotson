@@ -11,21 +11,26 @@
 #include <assert.h>
 #include <stdio.h>
 #include "tillotson.h"
+//#include "tillinitlookup.h"
+//#include "tillsplint.h"
 
-#include "interpol/coeff.h"
-#include "interpol/interpol.h"
+/* This will cut the pressure in the cold expanded states for rho/rho0 < 0.8 as suggested in Melosh1989. */
+//#define TILL_PRESS_MELOSH
 
-/* We need:
+/* Basic functions:
  *
- * tillInit: initialise the library
+ * tillInit: initialise the library (contains all materials and converts to a given unit system).
  *
- * tillInitTable: make the look up table for a) the cold curve and b) the isentropes
+ * tillPressureSound: calculate the pressure and soundspeed for a given density and internal enegry using the Tillotson EOS.
  *
- * tillPress: calculate the pressure for a given rho and u from the Tillotson EOS
- *  (also needed for the look up table)
+ * tillPressure: calculate the pressure for a given rho and u from the Tillotson EOS (uses tillPressureSound).
+ *
+ * tillSoundSpeed: calculate the sound speed for a given rho and u from the Tillotson EOS (uses tillPressureSound).
+ *
+ * tillFinalize: free memory.
  */
 
-TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit, int nTableMax, double rhomax, double vmax)
+TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit, int nTableRho, int nTableV, double rhomax, double vmax, int iExpV)
 {
 	/*
 	 * Initialise a material from the Tillotson library
@@ -33,8 +38,7 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
 	 * We do:
 	 * Initialize variables
 	 * Convert quantities to code units
-	 * Allocate memory for the lookup tables
-	 * Initialize lookup table and the cold curve
+	 * The memory for the look up table is allocated in tillInitLookup()
 	 */
 
     const double KBOLTZ = 1.38e-16;      /* bolzman constant in cgs */
@@ -66,17 +70,11 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
 		material->vmax = material->rhomax;
 	}
 
-	material->nTableMax = 10000;
 	/* Needs about 800M memory. */
-	material->nTableMax = 10000;
-
-	/* For debugging purpose. */
-#ifdef TILL_USE_RK4
-	material->nTableMax = 10000;
-#else
-	material->nTableMax = 10000;
-#endif
-	material->nTableMax = nTableMax;
+//	material->nTableMax = 10000;
+	/* Number of grid points for the look up table */
+	material->nTableRho = nTableRho;
+	material->nTableV = nTableV;
     /*
     ** Convert kboltz/mhydrogen to system units, assuming that
     ** G == 1.
@@ -90,14 +88,9 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
     /* code time --> seconds */
     material->dSecUnit = sqrt(1/(material->dGmPerCcUnit*GCGS));
 
-	/* Lookup table */
-    material->cold = malloc(material->nTableMax*sizeof(struct lookup));
-    assert(material->cold != NULL);
-	
-	/* We arrange the look up table as a 1D array with Lookup[i][j] = Lookup[i*Ntable+j] */
-    material->Lookup = malloc(material->nTableMax*material->nTableMax*sizeof(double));
-    assert(material->Lookup != NULL);
 
+	/* The memory for the lookup table is allocated when tillInitLookup is called. */
+		
 	/*
 	** Set the Tillotson parameters for the material.
 	*/
@@ -135,6 +128,22 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
 			material->beta = 5.0;
 			material->cv = 0.449e7; /* ergs/g K */ 
 			break;
+		case BASALT:
+			/*
+			** Material parameters from Benz 1999.
+			*/
+			material->a = 0.5;
+			material->b = 1.5;
+			material->u0 = 4.87e12; /* in ergs/g */
+			material->rho0 = 2.7; /* g/cc */
+			material->A = 2.67e11; /* ergs/cc */
+			material->B = 2.67e11; /* ergs/cc */
+			material->us = 4.72e10; /* ergs/g */
+			material->us2 = 1.82e11; /* ergs/g */
+			material->alpha = 5.0;
+			material->beta = 5.0;
+			material->cv = 0.84e7; /* ergs/g K */ 
+			break;
 		default:
 			/* Unknown material */
 			assert(0);
@@ -152,33 +161,37 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
  
  	material->cv /= material->dErgPerGmUnit;
 
-	/* Set delta so that rho0 lies on the grid. */
-	material->n = floor(material->rho0/material->rhomax*material->nTableMax);
- 	material->delta =  material->rho0/material->n;
+	/* Set rhomin */
+	material->rhomin = TILL_RHO_MIN;
 	
+	/* Set drho so that rho0 lies on the grid. */
+	//material->n = floor(material->rho0/material->rhomax*material->nTableRho);
+ 	//material->drho =  material->rho0/material->n;
+	material->n = floor((material->rho0-material->rhomin)/(material->rhomax-material->rhomin)*material->nTableRho);
+ 	material->drho =  (material->rho0-material->rhomin)/material->n;
+
 	/* Set the actual rhomax. */ 
-  	material->rhomax = material->delta*(material->nTableMax-1);
-  
+  	material->rhomax = material->drho*(material->nTableRho-1);
+	material->dv = material->vmax/(material->nTableV-1);
+ 	// (CR) set vmax to rhomax just to check if dv = drho = delta works. */
+	// material->vmax = material->rhomax;
+
+	// (CR) 15.11.15: try non uniform steps in v
+	// But careful: material->n is used to integrate the isentropes
+	//	material->n = 5;
+	material->iExpV = iExpV;
+	// (CR) 15.11.15: Change this back later
     return(material);
 }
 
 void tillFinalizeMaterial(TILLMATERIAL *material)
 {
 	/* Free the memory */
+	if (material->Lookup != NULL) free(material->Lookup);
+//	if (material->cold != NULL) free(material->cold);
+
 	free(material);
 }
-
-/*
- * This is not implemented yet. Maybe I will not implement it at all.
-
-double tillGamma(TILLMATERIAL *material,double rho,double u) {
-    double eta = rho/material->rho0;
-    double w0 = u/(material->u0*eta*eta) + 1.0;
-
-    return(material->a + material->b/w0);
-    }
-
-*/
 
 double tilldPdrho_s(TILLMATERIAL *material, double rho, double u)
 {
@@ -343,7 +356,8 @@ double tillPressureSound(TILLMATERIAL *material, double rho, double u, double *p
 		{
 			/* calculate the sound speed */
 			c2c = (Gammac+1.0)*Pc/rho + (material->A+material->B*(eta*eta-1.0))/rho + material->b/(w0*w0)*(w0-1.0)*(2*u-Pc/rho);
-			*pcSound = sqrt(c2c);
+			//*pcSound = sqrt(c2c);
+			*pcSound = c2c;
 		}
 		return (Pc);
 	} else if (u < material->us) {
@@ -358,8 +372,17 @@ double tillPressureSound(TILLMATERIAL *material, double rho, double u, double *p
 		{
 			/* calculate the sound speed */
 			c2c = (Gammac+1.0)*Pc/rho + (material->A+material->B*(eta*eta-1.0))/rho + material->b/(w0*w0)*(w0-1.0)*(2*u-Pc/rho);
-			*pcSound = sqrt(c2c);
+			//*pcSound = sqrt(c2c);
+			*pcSound = c2c;
 		}
+#ifdef TILL_PRESS_MELOSH
+		/* Melosh 1989 suggests to cut the pressure in the expanded cold states for rho/rho < 0.8 */
+		if (eta < 0.8)
+		{
+			fprintf(stderr,"Setting pressure to zero for eta=%g\n",eta);
+			Pc = 0.0;
+		}
+#endif
 		return (Pc);
 	} else if (u > material->us2) {
 		/*
@@ -372,7 +395,8 @@ double tillPressureSound(TILLMATERIAL *material, double rho, double u, double *p
 		{
 			/* calculate the sound speed */
 			c2e = (Gammae+1.0)*Pe/rho + material->A/material->rho0*exp(-(material->alpha*z+material->beta*z*z))*(1.0+mu/(eta*eta)*(material->alpha+2.0*material->beta*z-eta)) + material->b*rho*u/(w0*w0*eta*eta)*exp(-material->beta*z*z)*(2.0*material->beta*z*w0/material->rho0+1.0/(material->u0*rho)*(2.0*u-Pe/rho));
-			*pcSound = sqrt(c2e);
+			//*pcSound = sqrt(c2e);
+			*pcSound = c2e;
 		}
 		
 		return (Pe);
@@ -393,9 +417,18 @@ double tillPressureSound(TILLMATERIAL *material, double rho, double u, double *p
 			c2c = (Gammac+1.0)*Pc/rho + (material->A+material->B*(eta*eta-1.0))/rho + material->b/(w0*w0)*(w0-1.0)*(2*u-Pc/rho);
 			c2e = (Gammae+1.0)*Pe/rho + material->A/material->rho0*exp(-(material->alpha*z+material->beta*z*z))*(1.0+mu/(eta*eta)*(material->alpha+2.0*material->beta*z-eta)) + material->b*rho*u/(w0*w0*eta*eta)*exp(-material->beta*z*z)*(2.0*material->beta*z*w0/material->rho0+1.0/(material->u0*rho)*(2.0*u-Pe/rho));
 
-			*pcSound = sqrt(c2c*(1.0-y)+c2e*y);
+			//*pcSound = sqrt(c2c*(1.0-y)+c2e*y);
+			*pcSound = c2c*(1.0-y)+c2e*y;
 		}
 	
+#ifdef TILL_PRESS_MELOSH
+		/* Melosh 1989 suggests to cut the pressure in the expanded cold states for rho/rho < 0.8 */
+		if (eta < 0.8)
+		{
+			fprintf(stderr,"Setting pressure to zero for eta=%g\n",eta);
+			Pc = 0.0;
+		}
+#endif
 		return (Pc*(1.0-y)+Pe*y);
 	}
 }
@@ -403,7 +436,18 @@ double tillPressureSound(TILLMATERIAL *material, double rho, double u, double *p
 double tillPressure(TILLMATERIAL *material, double rho, double u)
 {
 	/* Calculate the pressure from the Tillotson EOS for a material */
-	return (tillPressureSound(material, rho, u, NULL));
+	double P = tillPressureSound(material, rho, u, NULL);
+
+	if (P < 0.0 ) P = 0.0;
+	return (P);
+}
+
+double tillPressureNP(TILLMATERIAL *material, double rho, double u)
+{
+	/* Calculate the pressure from the Tillotson EOS for a material */
+	double P = tillPressureSound(material, rho, u, NULL);
+
+	return (P);
 }
 
 double tilldPdrho(TILLMATERIAL *material, double rho, double u)
@@ -513,6 +557,7 @@ double tilldTdrho(TILLMATERIAL *material, double rho, double u)
 	/*
 	** Calculate dT/drho at u=const.
 	*/
+	assert(material->cv > 0.0);
 	return (-1.0/material->cv*tillPressure(material,rho,tillColdULookup(material,rho))*(rho*rho));
 }
 
@@ -521,6 +566,8 @@ double tilldTdu(TILLMATERIAL *material, double rho, double u)
 	/*
 	** Calculate dT/du at rho=const.
 	*/
+
+	assert(material->cv > 0.0);
 	return (-1.0/material->cv);
 }
 
@@ -536,12 +583,20 @@ double tillTempRhoU(TILLMATERIAL *material, double rho, double u)
 	** Calculate T(rho,u) for a material. As an approximation
 	** we use u(rho,T) = uc(rho) + cv*T.
 	*/
+	assert(material->cv > 0.0);
 	return ((u-tillColdULookup(material,rho))/material->cv);
 }
 
 double tillTempRhoP(TILLMATERIAL *material, double rho, double P)
 {
 	/* Calculate T(rho,P) for a material */
+	assert(0);
+}
+
+double tillURhoTemp(TILLMATERIAL *material, double rho, double T)
+{
+	/* Calculate u(rho,T) for a material */
+	return(tillColdULookup(material,rho) + material->cv*T);
 }
 
 double tillSoundSpeed(TILLMATERIAL *material, double rho, double u)
@@ -563,360 +618,66 @@ double tilldudrho(TILLMATERIAL *material, double rho, double u)
 	return(tillPressure(material,rho,u)/(rho*rho));
 }
 
-int comparerho(const void* a, const void* b)
-/*
-** This function compares two entries in the look up table
-** and returns -1 if a1.rho < a2.rho, 1 if a1.rho > a2.rho or 0 if
-** they are equal (needed to sort the particles with qsort).
-*/
-{
-	struct lookup a1 = *(const struct lookup*)(a);
-    struct lookup a2 = *(const struct lookup*)(b);
-    
-    if (a1.rho < a2.rho) return -1;
-    if (a1.rho > a2.rho) return 1;
-    return 0;
-}
-
-void tillInitColdCurve(TILLMATERIAL *material)
-{
-	/* Generate the look up table for the cold curve */
-	struct lookup *isentrope;
-
-	/* v = u(rho=rho0) */
-	isentrope = tillSolveIsentrope(material,0.0);
-
-	material->cold = isentrope;
-	/* Now sort the look up table. */
-	// qsort(material->cold,material->nTable,sizeof(struct lookup),comparerho);
-}
-
-void tillInitLookup(TILLMATERIAL *material)
+void tillSolveBC(TILLMATERIAL *mat1, TILLMATERIAL *mat2, double rho1, double u1, double *prho2, double *pu2)
 {
 	/*
-	** Generate the look up table for the isentropic evolution of
-	** the internal energy.
+	** Given rho1, u1 (material 1) solve for rho2, u2 (material 2) at the interface between two material.
+	** The b.c. are P1(rho1,u1)=P2(rho2,u2) and T1(rho1,u1)=T2(rho2,u2). We solve for P2(rho2)-P1=0.
 	*/
+	double P, T;
+	double a, ua, Pa, b, ub, Pb, c, uc, Pc;
 
-	struct lookup *isentrope;
-	double v, dv;
-    int i,j;
+	Pc = 0.0;
 
-	v = 0.0;
-	//fprintf(stderr, "Starting integration...\n");
-	dv = material->vmax/material->nTableMax;
+	/* Calculate P and T in material 1. */
+	P = tillPressure(mat1, rho1, u1);
+	T = tillTempRhoU(mat1, rho1, u1);
 
 	/*
-	** Integrate the isentropes for different v.
+	** We use rho1 as an upper limit for rho2 assuming that the denser component is in the inner shell.
 	*/
-	for (i=0; i<material->nTableMax; i++)
-	{
-		isentrope = tillSolveIsentrope(material,v);
+	a = rho1;
+	ua = tillURhoTemp(mat2, a, T);
+	Pa = tillPressure(mat2, a, ua);
+
+	b = 0.0;
+	ub = tillURhoTemp(mat2, b, T);
+	Pb = tillPressure(mat2, b, ub);
+	
+	assert (Pa > P && Pb < P);	
+	fprintf(stderr,"modelSolveBC: starting with a=%g ua=%g Pa=%g b=%g ub=%g Pb=%g\n",a,ua,Pa,b,ub,Pb);
+
+    /*
+    ** Root bracketed by (a,b).
+    */
+    while (Pa-Pb > 1e-10) {
+		c = 0.5*(a + b);
+		uc = tillURhoTemp(mat2,c,T);
+		Pc = tillPressure(mat2,c, uc);
 		
-		/* Copy one row to the look up table. This is of course not efficient at all. */
-		for (j=0; j<material->nTableMax; j++)
-		{
-			/* Careful with the indices! */
-			material->Lookup[material->nTableMax*j+i] = isentrope[j].u;		
+		if (Pc < P) {
+			b = c;
+			Pb = Pc;
 		}
-		
-		free(isentrope);
-		v += dv;
+		else {
+			a = c;
+			Pa = Pc;
+		}
+//		fprintf(stderr,"c:%.10g Pc:%.10g\n",c,Pc);
 	}
 
-	/* Initialize the coefficients for the interpolation. */
-	SamplesToCoefficients(material->Lookup,material->nTableMax,material->nTableMax, TILL_SPLINE_DEGREE);
-}
-#ifdef TILL_USE_RK4
-struct lookup *tillSolveIsentrope(TILLMATERIAL *material, double v)
-{
+//	fprintf(stderr,"modelSolveBC: rho1: %g, u1: %g, rho2:%g, u2:%g\n",rho1,u1,c,uc);
+//	fprintf(stderr,"modelSolveBC: P1: %g, T1: %g, P2:%g, T2:%g\n",P,T,tillPressure(mat2,c,uc),tillTempRhoU(mat2,c,uc));
 	/*
-	** Integrate one isentrope for the look up table. The parameter v corresponds to
-	** u(rho=rho0) so v=0 gives the cold curve.
+	** Return values.
 	*/
-    double rho;
-    double u;
-    double k1u,k2u,k3u,k4u;
-	double h;
-    int i,s;
+	*prho2 = c;
+	*pu2 = uc; 
 
-	/* Use this as a temporary data structure because it is easy to sort with qsort. */
-	struct lookup *isentrope;
-    isentrope = malloc(material->nTableMax*sizeof(struct lookup));
+//	float brent(float ax, float bx, float cx, float (*f)(float), float tol,
+//	float *xmin)
 
-	rho = material->rho0;
-	u = v;
-	h = material->delta;
 
-	i = material->n;
 
-	isentrope[i].rho = rho;
-	isentrope[i].u = u;
-//	isentrope[i].dudrho = tilldudrho(material, rho, u);
-
-	/*
-	** Integrate the condensed and expanded states separately.
-	*/
-	for (i=material->n+1;i<material->nTableMax;i++)
-	{
-		float hs = h/10.0;
-		
-		/* We do substeps that saved to increase the accuracy. */
-		for (s=0;s<10;s++)
-		{
-			/*
-			** Midpoint Runga-Kutta (4nd order).
-			*/
-			k1u = hs*tilldudrho(material,rho,u);
-			k2u = hs*tilldudrho(material,rho+0.5*hs,u+0.5*k1u);
-			k3u = hs*tilldudrho(material,rho+0.5*hs,u+0.5*k2u);
-			k4u = hs*tilldudrho(material,rho+hs,u+k3u);
-
-			u += k1u/6.0+k2u/3.0+k3u/3.0+k4u/6.0;
-			rho += hs;
-		}
-
-	    isentrope[i].u = u;
-	    isentrope[i].rho = rho;
-//		isentrope[i].dudrho = tilldudrho(material, rho, u);
-	}
-	
-	/*
-	** Now the expanded states. Careful about the negative sign.
-	*/
-	rho = material->rho0;
-	u = v;
-
-	for (i=material->n-1;i>=0;i--)
-	{
-		float hs = h/10.0;
-		
-		/* We do substeps that saved to increase the accuracy. */
-		for (s=0;s<10;s++)
-		{
-			/*
-			** Midpoint Runga-Kutta (4nd order).
-			*/
-			k1u = hs*-tilldudrho(material,rho,u);
-			k2u = hs*-tilldudrho(material,rho+0.5*hs,u+0.5*k1u);
-			k3u = hs*-tilldudrho(material,rho+0.5*hs,u+0.5*k2u);
-			k4u = hs*-tilldudrho(material,rho+hs,u+k3u);
-
-			u += k1u/6.0+k2u/3.0+k3u/3.0+k4u/6.0;
-			rho -= hs;
-		}
-	
-		isentrope[i].u = u;
-	    isentrope[i].rho = rho;
-//		isentrope[i].dudrho = tilldudrho(material, rho, u);
-	}
-
-	return isentrope;
 }
-#else
-struct lookup *tillSolveIsentrope(TILLMATERIAL *material, double v)
-{
-	/*
-	** Integrate one isentrope for the look up table. The parameter v corresponds to
-	** u(rho=rho0) so v=0 gives the cold curve.
-	*/
-    double rho;
-    double u;
-    double k1u,k2u;
-	double h;
-    int i,s;
-
-	/* Use this as a temporary data structure because it is easy to sort with qsort. */
-	struct lookup *isentrope;
-    isentrope = malloc(material->nTableMax*sizeof(struct lookup));
-
-	rho = material->rho0;
-	u = v;
-	h = material->delta;
-
-	i = material->n;
-
-	isentrope[i].rho = rho;
-	isentrope[i].u = u;
-//	isentrope[i].dudrho = tilldudrho(material, rho, u);
-
-	/*
-	** Integrate the condensed and expanded states separately.
-	*/
-	for (i=material->n+1;i<material->nTableMax;i++)
-	{
-		float hs = h/10.0;
-		
-		/* We do substeps that saved to increase the accuracy. */
-		for (s=0;s<10;s++)
-		{
-			/*
-			** Midpoint Runga-Kutta (2nd order).
-			*/
-			k1u = hs*tilldudrho(material,rho,u);
-			k2u = hs*tilldudrho(material,rho+0.5*hs,u+0.5*k1u);
-
-			u += k2u;
-			rho += hs;
-		}
-
-	    isentrope[i].u = u;
-	    isentrope[i].rho = rho;
-//		isentrope[i].dudrho = tilldudrho(material, rho, u);
-	}
-	
-	/*
-	** Now the expanded states. Careful about the negative sign.
-	*/
-	rho = material->rho0;
-	u = v;
-
-	for (i=material->n-1;i>=0;i--)
-	{
-		float hs = h/10.0;
-		
-		/* We do substeps that saved to increase the accuracy. */
-		for (s=0;s<10;s++)
-		{
-			/*
-			** Midpoint Runga-Kutta (2nd order).
-			*/
-			k1u = hs*-tilldudrho(material,rho,u);
-			k2u = hs*-tilldudrho(material,rho+0.5*hs,u+0.5*k1u);
-
-			u += k2u;
-			rho -= hs;
-		}
-	
-		isentrope[i].u = u;
-	    isentrope[i].rho = rho;
-//		isentrope[i].dudrho = tilldudrho(material, rho, u);
-	}
-	
-	return isentrope;
-}
-#endif
-
-/* Prasenjits root finder */
-float brent(float (*func)(TILLMATERIAL *,float,float,float),TILLMATERIAL *material,float a,float b,float rho,float u,float tol,int iOrder);
-
-float tillFindUonIsentrope(TILLMATERIAL *material,float v,float rho)
-{
-	float iv,irho,u;
-	/* Needed for the interpolation function. */
-	iv = (material->nTableMax-1)*v/material->vmax;
-	irho = (material->nTableMax-1)*rho/material->rhomax;
-
-	return InterpolatedValue(material->Lookup,material->nTableMax,material->nTableMax,iv,irho,TILL_SPLINE_DEGREE);
-}
-
-float denergy(TILLMATERIAL *material,float v,float rho,float u)
-{
-	return (tillFindUonIsentrope(material,v,rho)-u);
-}
-
-/* Find isentrope for a given rho and u */
-float tillFindEntropyCurve(TILLMATERIAL *material,float rho,float u,int iOrder)
-{
-	float tol=1e-6;
-	return brent(denergy,material,0,material->vmax,rho,u,tol,iOrder);
-}
-
-double tillLookupU(TILLMATERIAL *material,double rho1,double u1,double rho2,int iOrder)
-{
-	/* Calculates u2 for a given rho1,u2,rho2. */
-	double v;
-
-	v = tillFindEntropyCurve(material,rho1,u1,iOrder);
-
-	return tillFindUonIsentrope(material,v,rho2);
-}
-	 
-double tillColdULookup(TILLMATERIAL *material,double rho)
-{
-    double x,xi;
-	double drho;
-    int i;
-
-    i = material->nTableMax-1;
-	
-	/* What do we do if rho > rhomax */
-	/* if (r >= material->r[i]) return(material->rho[i]*exp(-(r-material->r[i]))); */
-	
-	x = rho/material->delta;
-	xi = floor(x);
-	assert(xi >= 0.0);
-	x -= xi;
-
-	i = (int)xi;
-	if (i < 0)
-	{
-		fprintf(stderr,"ERROR rho:%.14g x:%.14g xi:%.14g i:%d\n",rho,x,xi,i);
-	}
-    assert(i >= 0);
-
-	if (i > material->nTableMax-2) fprintf(stderr,"ERROR: out of bounds rho:%.14g rhomax:%.14g i:%i nTableMax: %i\n",rho,material->rhomax,i,material->nTableMax);
-	assert(i < material->nTableMax-1);
-
-	if (i <= material->nTableMax-2)
-	{
-		/* linear interpolation for now. */
-		return(material->cold[i].u*(1.0-x) + material->cold[i+1].u*x);
-	}
-	
-	/* This would only be needed if we cut off the model between the last two steps.	
-	if (i == material->nTable-2)
-	{
-		dr = material->r[i+1] - material->r[i];
-		x = r/dr;
-		xi = floor(x);
-		x -= xi;
-		return(material->rho[i]*(1.0-x) + material->rho[i+1]*x);
-	*/
-	/* What do we do if i >= nTable-1
-	} else {
-		i = material->nTable - 1;
-		return(material->rho[i]*exp(-(r-material->r[i])));
-	}*/
-}
-double tillCalcU(TILLMATERIAL *material,double rho1,double u1,double rho2)
-{
-	/* Calculate u2 by solving the ODE */
-    double rho;
-    double u;
-    double k1u,k2u;
-	double h;
-
-	rho = rho1;
-	u = u1;
-	/* Make smaller steps than we used for look up table. */
-	h = material->delta/100.0;
-
-	if (rho1 < rho2)
-	{
-		while (rho < rho2) {
-			/*
-			** Midpoint Runga-Kutta (2nd order).
-			*/
-			k1u = h*tilldudrho(material,rho,u);
-			k2u = h*tilldudrho(material,rho+0.5*h,u+0.5*k1u);
-	
-			u += k2u;
-			rho += h;
-		}
-	} else if (rho1 > rho2) {
-		while (rho > rho2) {
-			/*
-			** Midpoint Runga-Kutta (2nd order).
-			*/
-			k1u = h*-tilldudrho(material,rho,u);
-			k2u = h*-tilldudrho(material,rho+0.5*h,u+0.5*k1u);
-
-			u += k2u;
-			rho -= h;
-		}
-	}
-	return u;
-}
-
 
