@@ -3,7 +3,7 @@
 
 objects = tillotson.o tillinitlookup.o tillsplint.o interpol/coeff.o interpol/interpol.o interpol/brent.o nr/nrcubicspline.o nr/nrutil.o
 
-exe = table cold coldlookup pressureoldnew lookup lookup_cold testu1 testspline testsplint testsplint2 testsplinerho testsplintrho testsplinev testsplintv testcubicintrho testlookupucold testudrho testudv testgrid testpolyv printderiv printpress pressneg testisintable testrhomin testoutofbounds testsolvebc calcisentrope
+exe = table cold coldlookup pressureoldnew lookup lookup_cold testu1 testspline testsplint testnewsplint testsplint2 testsplinerho testsplintrho testsplinev testsplintv testcubicintrho testlookupucold testudrho testudv testgrid testpolyv printderiv printpress pressneg testisintable testrhomin testoutofbounds testsolvebc calcisentrope
 
 CFLAGS ?= -O3
 
@@ -37,8 +37,13 @@ testu1: testu1.o $(objects)
 testspline: testspline.o $(objects)
 	cc -o testspline testspline.o $(objects) -lm
 
+# Code for debugging the interpolation function tillCubicInt()
 testsplint: testsplint.o $(objects)
 	cc -o testsplint testsplint.o $(objects) -lm
+
+# Pretty much the same but it compares the old with the new interpolator 
+testnewsplint: testnewsplint.o $(objects)
+	cc -o testnewsplint testnewsplint.o $(objects) -lm
 
 testsplint2: testsplint2.o $(objects)
 	cc -o testsplint2 testsplint2.o $(objects) -lm

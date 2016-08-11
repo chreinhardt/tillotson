@@ -17,6 +17,7 @@
 #include "nr/nrcubicspline.h"
 
 #if 0
+/* Code for the old interpolator */
 #include "interpol/coeff.h"
 #include "interpol/interpol.h"
 #endif
@@ -114,6 +115,9 @@ void tillInitSplineRho(TILLMATERIAL *material)
 	free(y2);
 }
 
+/*
+** Old function that uses standard Numerical Recipes functions.
+*/
 void tillInitSplinev(TILLMATERIAL *material)
 {
 	/*
@@ -174,6 +178,68 @@ void tillInitSplinev(TILLMATERIAL *material)
 	free(y2);
 }
 
+#if 0
+/*
+** (CR) 10.08.16: Adapting the lookup algorithm to our data structure.
+*/
+void tillInitSplinev(TILLMATERIAL *material)
+{
+	/*
+	** Calculate the second derivatives for u in v.For this we use
+	** routines from Numerical Recipes that are adapted to the
+	** our Lookup data structure.
+	*/
+	int i,j,n;
+	double yp1, ypn;
+	
+	/* Temporarily store data in an array to use spline() */
+	n = material->nTableV;
+	x = malloc(material->nTableV*sizeof(double));
+	y = malloc(material->nTableV*sizeof(double));
+	y2 = malloc(material->nTableV*sizeof(double));
+
+	/* Set b.c. for natural cubic spline */
+	yp1 = 1e30;
+	ypn = 1e30;
+
+	for (i=0; i<material->nTableRho; i++)
+	{
+		/* Copy one row of the look up table to the temporary array. */
+		for (j=0; j<material->nTableV; j++)
+		{
+			/*
+			** Careful with the indices!
+			** Lookup[i][j] = Lookup(rho,v)
+			** v = u(rho0)
+			*/
+			x[j] = 	j*material->dv;
+			// (CR) 15.11.15: Try non uniform steps in v
+			// x[j] =  material->vmax/pow(material->nTableV-1,material->iExpV)*pow(j,material->iExpV);
+			// (CR) 15.11.15: Done
+			y[j] = 	material->Lookup[TILL_INDEX(i,j)].u;
+			//printf("j: %i % g %g\n",j, x[j], y[j]);
+		}
+		
+		// Careful nr expects unit offset
+		spline(x-1, y-1, n, yp1, ypn, y2-1);
+	
+		/* Copy the second dervative back to the look up table. */
+		for (j=0; j<material->nTableV; j++)
+		{
+			/* Careful with the indices!
+			** Lookup[i][j] = Lookup(rho,v)
+			*/
+			material->Lookup[TILL_INDEX(i,j)].udv2 = y2[j];
+			//printf("i: %i j: %i %g\n",i,j, y2[j]);
+		}
+	}
+
+	/* Free memory */
+	free(x);
+	free(y);
+	free(y2);
+}
+#endif
 void tillInitSplineU(TILLMATERIAL *material)
 {
 	tillInitSplinev(material);
@@ -339,6 +405,11 @@ double tillSplineIntv(TILLMATERIAL *material, double v, int irho)
 	return y;
 }
 
+#if 0
+/*
+** This is an old version that has to copy all data to an extra array for each lookup
+** in order to be compatible with the standard Numerical Recipes routines.
+*/
 double tillSplineIntU(TILLMATERIAL *material, double v, int irho)
 {
 	/*
@@ -383,6 +454,53 @@ double tillSplineIntU(TILLMATERIAL *material, double v, int irho)
 	free(y2a);
 
 	return y;
+}
+#endif
+
+/*
+** (CR) 10.08.2016: Integrated splint() into the function, allowing to use the
+** data structure of the lookup table for the interpolation.
+*/
+double tillSplineIntU(TILLMATERIAL *material, double v, int irho)
+{
+	/*
+	** Do a cubic spline interpolation of u in v.
+	*/
+	void nrerror(char error_text[]);
+	int klo,khi,k;
+	double h,b,a;
+	double u;
+/*
+	klo=1;
+	khi=material->nTableV;
+	
+	while (khi-klo > 1) {
+		k=(khi+klo) >> 1;
+		if (material->Lookup[TILL_INDEX(irho,k)].v > v) khi=k;
+		else klo=k;
+	}
+	
+	h=material->Lookup[TILL_INDEX(irho,khi)].v-material->Lookup[TILL_INDEX(irho,klo)].v;
+//	if (h == 0.0) nrerror("Bad xa input to routine splint");
+	assert(h != 0.0);
+	a=(material->Lookup[TILL_INDEX(irho,khi)].v-v)/h;
+	b=(v-material->Lookup[TILL_INDEX(irho,klo)])/h;
+*/
+	/* Use v=k*material->dv */
+	
+	klo = floor(v/material->dv);
+	khi = klo+1;
+
+	h = (khi-klo)*material->dv;
+	assert(h != 0.0);
+	assert(h == material->dv);
+
+	a=(khi*material->dv-v)/h;
+	b=(v-klo*material->dv)/h;
+
+	u=a*material->Lookup[TILL_INDEX(irho,klo)].u+b*material->Lookup[TILL_INDEX(irho,khi)].u+((a*a*a-a)*material->Lookup[TILL_INDEX(irho,klo)].udv2+(b*b*b-b)*material->Lookup[TILL_INDEX(irho,khi)].udv2)*(h*h)/6.0;
+
+	return u;
 }
 
 double tillSplineIntU1(TILLMATERIAL *material, double v, int irho)
