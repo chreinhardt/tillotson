@@ -3,25 +3,20 @@ This script produces a plot of the cold curve for the Tillotson EOS.
 """
 from matplotlib import *
 rcParams['font.family'] = 'serif'
-from matplotlib.patches import *
 from numpy import *
 from matplotlib.pyplot import *
 
 # Load the whole lookup table
-data = loadtxt('lookup.txt')
+data1 = loadtxt('lookup.old.txt')
 # Load interpolated values
-data2 = loadtxt('testsplint.txt')
+data2 = loadtxt('testnewsplint.old.txt')
 
+# Load the whole lookup table
+data3 = loadtxt('lookup.txt')
+# Load interpolated values
+data4 = loadtxt('testnewsplint.txt')
 #v = data[:,0]
 #u = data[:,1]
-
-# Plot the lookup table
-for i in range(1,size(data[:,0]),1):
-		plot(data[:,0],data[:,i],'-',color='red',markersize=1,label='Table')
-
-for i in range(1,size(data2[0,:]),1):
-		plot(data2[:,0],data2[:,i],'-',color='green',markersize=1,label='Lookup')
-
 
 xmax = 25
 ymax = 25
@@ -32,20 +27,22 @@ ylim(0,ymax)
 xlabel('Density')
 ylabel('Internal energy')
 
-#plot(rho,u,'.',color='blue',markersize=1,label='Lookup')
 
-#plot(rho,u,'-',color='blue',linewidth=1,label='Lookup table')
+# Plot the lookup table for the old interpolator
+for i in range(1,size(data1[:,0]),1):
+		plot(data1[:,0],data1[:,i],'-',color='red',markersize=1,label='Table')
 
-#fill_between(rhocold,ucold,color='orange')
+for i in range(1,size(data2[0,:]),1):
+		plot(data2[:,0],data2[:,i],'-',color='green',markersize=1,label='Lookup (old)')
 
-#plot([0,rho0],[us,us],'r--')
-#plot([0,rho0],[us2,us2],'r--')
-#plot([rho0,rho0],[0,25],'r--')
+# Plot the lookup table for the new interpolator
+for i in range(1,size(data3[:,0]),1):
+		plot(data3[:,0],data3[:,i],'-',color='red',markersize=1,label='Table')
 
-#xticks([0,rho0,2*rho0,3*rho0],[r'$0$',r'$\rho_0$',r'$2\rho_0$',r'$3\rho_0$'])
-#xticks([0,rho0],[r'$0$',r'$\rho_0$'],size='large')
-#yticks([0,us,us2],[r'$0$',r'$u_{IV}$',r'$u_{CV}$'],size='large')
+for i in range(1,size(data2[0,:]),1):
+		plot(data4[:,0],data4[:,i],'--',color='blue',markersize=1,label='Lookup (new)')
 
-#savefig('lookup.pdf')
-savefig('testsplint.png')
+show()
+
+savefig('testnewsplint.png')
 
