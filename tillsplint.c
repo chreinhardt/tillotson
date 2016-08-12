@@ -303,6 +303,12 @@ void tillInitSplineU1(TILLMATERIAL *material)
 	free(y2);
 }
 
+#if 0
+/*
+** This is an old version that has to copy all data to an extra array for each lookup
+** in order to be compatible with the standard Numerical Recipes routines.
+*/
+
 /*
 ** Just to debug the code we do an interpolation in u of rho.
 */
@@ -405,11 +411,6 @@ double tillSplineIntv(TILLMATERIAL *material, double v, int irho)
 	return y;
 }
 
-#if 0
-/*
-** This is an old version that has to copy all data to an extra array for each lookup
-** in order to be compatible with the standard Numerical Recipes routines.
-*/
 double tillSplineIntU(TILLMATERIAL *material, double v, int irho)
 {
 	/*
@@ -454,53 +455,6 @@ double tillSplineIntU(TILLMATERIAL *material, double v, int irho)
 	free(y2a);
 
 	return y;
-}
-#endif
-
-/*
-** (CR) 10.08.2016: Integrated splint() into the function, allowing to use the
-** data structure of the lookup table for the interpolation.
-*/
-double tillSplineIntU(TILLMATERIAL *material, double v, int irho)
-{
-	/*
-	** Do a cubic spline interpolation of u in v.
-	*/
-	void nrerror(char error_text[]);
-	int klo,khi,k;
-	double h,b,a;
-	double u;
-/*
-	klo=1;
-	khi=material->nTableV;
-	
-	while (khi-klo > 1) {
-		k=(khi+klo) >> 1;
-		if (material->Lookup[TILL_INDEX(irho,k)].v > v) khi=k;
-		else klo=k;
-	}
-	
-	h=material->Lookup[TILL_INDEX(irho,khi)].v-material->Lookup[TILL_INDEX(irho,klo)].v;
-//	if (h == 0.0) nrerror("Bad xa input to routine splint");
-	assert(h != 0.0);
-	a=(material->Lookup[TILL_INDEX(irho,khi)].v-v)/h;
-	b=(v-material->Lookup[TILL_INDEX(irho,klo)])/h;
-*/
-	/* Use v=k*material->dv */
-	
-	klo = floor(v/material->dv);
-	khi = klo+1;
-
-	h = (khi-klo)*material->dv;
-	assert(h != 0.0);
-	assert(h == material->dv);
-
-	a=(khi*material->dv-v)/h;
-	b=(v-klo*material->dv)/h;
-
-	u=a*material->Lookup[TILL_INDEX(irho,klo)].u+b*material->Lookup[TILL_INDEX(irho,khi)].u+((a*a*a-a)*material->Lookup[TILL_INDEX(irho,klo)].udv2+(b*b*b-b)*material->Lookup[TILL_INDEX(irho,khi)].udv2)*(h*h)/6.0;
-
-	return u;
 }
 
 double tillSplineIntU1(TILLMATERIAL *material, double v, int irho)
@@ -547,6 +501,76 @@ double tillSplineIntU1(TILLMATERIAL *material, double v, int irho)
 	free(y2a);
 
 	return y;
+}
+#endif
+
+/*
+** (CR) 10.08.2016: Integrated splint() into the function, allowing to use the
+** TILL_LOOKUP_ENTRY structure for the interpolation.
+*/
+double tillSplineIntU(TILLMATERIAL *material, double v, int irho)
+{
+	/*
+	** Do a cubic spline interpolation of u in v.
+	*/
+	int klo,khi,k;
+	double h,b,a;
+	double u;
+/*
+	klo=1;
+	khi=material->nTableV;
+	
+	while (khi-klo > 1) {
+		k=(khi+klo) >> 1;
+		if (material->Lookup[TILL_INDEX(irho,k)].v > v) khi=k;
+		else klo=k;
+	}
+	
+	h=material->Lookup[TILL_INDEX(irho,khi)].v-material->Lookup[TILL_INDEX(irho,klo)].v;
+//	if (h == 0.0) nrerror("Bad xa input to routine splint");
+	assert(h != 0.0);
+	a=(material->Lookup[TILL_INDEX(irho,khi)].v-v)/h;
+	b=(v-material->Lookup[TILL_INDEX(irho,klo)])/h;
+*/
+	/* Use v=k*material->dv */
+	
+	klo = floor(v/material->dv);
+	khi = klo+1;
+
+	h = (khi-klo)*material->dv;
+	assert(h != 0.0);
+	assert(h == material->dv);
+
+	a=(khi*material->dv-v)/h;
+	b=(v-klo*material->dv)/h;
+
+	u=a*material->Lookup[TILL_INDEX(irho,klo)].u+b*material->Lookup[TILL_INDEX(irho,khi)].u+((a*a*a-a)*material->Lookup[TILL_INDEX(irho,klo)].udv2+(b*b*b-b)*material->Lookup[TILL_INDEX(irho,khi)].udv2)*(h*h)/6.0;
+
+	return u;
+}
+
+double tillSplineIntU1(TILLMATERIAL *material, double v, int irho)
+{
+	/*
+	** Do a cubic spline interpolation of u1 in v.
+	*/
+	int klo,khi,k;
+	double h,b,a;
+	double u1;
+	
+	klo = floor(v/material->dv);
+	khi = klo+1;
+
+	h = (khi-klo)*material->dv;
+	assert(h != 0.0);
+	assert(h == material->dv);
+
+	a=(khi*material->dv-v)/h;
+	b=(v-klo*material->dv)/h;
+	
+	u1=a*material->Lookup[TILL_INDEX(irho,klo)].u1+b*material->Lookup[TILL_INDEX(irho,khi)].u1+((a*a*a-a)*material->Lookup[TILL_INDEX(irho,klo)].u1dv2+(b*b*b-b)*material->Lookup[TILL_INDEX(irho,khi)].u1dv2)*(h*h)/6.0;
+
+	return u1;
 }
 
 /*

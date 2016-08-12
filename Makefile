@@ -3,7 +3,7 @@
 
 objects = tillotson.o tillinitlookup.o tillsplint.o interpol/coeff.o interpol/interpol.o interpol/brent.o nr/nrcubicspline.o nr/nrutil.o
 
-exe = table cold coldlookup pressureoldnew lookup lookup_cold testu1 testspline testsplint testnewsplint testsplint2 testsplinerho testsplintrho testsplinev testsplintv testcubicintrho testlookupucold testudrho testudv testgrid testpolyv printderiv printpress pressneg testisintable testrhomin testoutofbounds testsolvebc calcisentrope
+exe = table pressureoldnew lookup lookup_cold testu1 testspline testsplint testnewsplint testsplint2 testsplinerho testsplintrho testsplinev testsplintv testcubicintrho testlookupucold testudrho testudv testgrid testpolyv printderiv printpress pressneg testisintable testrhomin testoutofbounds testsolvebc calcisentrope
 
 CFLAGS ?= -O3
 
@@ -13,21 +13,22 @@ default:
 all:
 	default
 
+# Debug the function tillLookupU() by comparing the results of the lookup to a
+# direct calculation using tillCalcU() which simply solves the ODE using a RK4
+# integrator.
 table: table.o $(objects)
 	cc -o table table.o $(objects) -lm
 
-cold: cold.o $(objects)
-	cc -o cold cold.o $(objects) -lm
-
-coldlookup: coldlookup.o $(objects)
-	cc -o coldlookup coldlookup.o $(objects) -lm
-
+# Compare the results of tillPressureSoundold() that contains the old code we used in
+# Gasoline and tillPressureSound()
 pressureoldnew: pressureoldnew.o $(objects)
 	cc -o pressureoldnew pressureoldnew.o $(objects) -lm
 
+# Generate a lookup table for a given material
 lookup: lookup.o $(objects)
 	cc -o lookup lookup.o $(objects) -lm
 
+# Make a lookup table for the cold curve
 lookup_cold: lookup_cold.o $(objects)
 	cc -o lookup_cold lookup_cold.o $(objects) -lm
 
