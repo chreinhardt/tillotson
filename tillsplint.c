@@ -39,7 +39,6 @@ void tillInitSplines(TILLMATERIAL *material)
 	** Calculate the second derivatives for u and u1 in v.
 	** For this we use routines from Numerical Recipes.
 	*/
-//	tillInitSplineRho(material);
 	tillInitSplineU1(material);
 	tillInitSplineU(material);
 }
@@ -573,6 +572,28 @@ double tillSplineIntU1(TILLMATERIAL *material, double v, int irho)
 	return u1;
 }
 
+double tillSplineIntrho(TILLMATERIAL *material, double rho, int iv)
+{
+	/*
+	** Do a cubic spline interpolation in rho.
+	*/
+	int klo,khi,k;
+	double h,b,a;
+	double u;
+	
+	klo = floor(rho/material->drho);
+	khi = klo+1;
+
+	h = (khi-klo)*material->drho;
+	assert(h != 0.0);
+	assert(h == material->drho);
+
+	a=(khi*material->drho-rho)/h;
+	b=(rho-klo*material->drho)/h;
+	
+	return a*material->Lookup[TILL_INDEX(irho,klo)].u+b*material->Lookup[TILL_INDEX(irho,khi)].u+((a*a*a-a)*material->Lookup[TILL_INDEX(irho,klo)].udrho2+(b*b*b-b)*material->Lookup[TILL_INDEX(irho,khi)].udrho2)*(h*h)/6.0;
+}
+
 /*
 ** u[0] = u(v,0)
 ** u[1] = u(v,1)
@@ -617,14 +638,6 @@ void cubicint(double u[2],double dudrho[2], double dudv[2], double dudvdrho[2], 
 //	return(ce[0]*u[0] + ce[1]*dudrho[0]*dx + ce[2]*u[1] + ce[3]*dudrho[1]*dx);
 //	return(ce[0]*dudv[0] + ce[1]*dudvdrho[0]*dx + ce[2]*dudv[1] + ce[3]*dudvdrho[1]*dx);
 }
-
-#if 0
-double u(rho,v) {
-}
-double tilldudv(rho,v) {
-}
-void uandudv(rho,v,double *u,double *dudv);
-#endif
 
 double tillCubicInt(TILLMATERIAL *material, double rhoint, double vint) {
 	/*
@@ -699,7 +712,6 @@ double tillCubicInt(TILLMATERIAL *material, double rhoint, double vint) {
 	cubicint(u, dudrho, dudv, dudvdrho, rho, rhoint, intvalues);
 	
 	uint = intvalues[0];
-//	return(intvalues[0]);
 
 	/* Free memory */
 	free(u);
@@ -749,7 +761,9 @@ double tillLookupU(TILLMATERIAL *material,double rho1,double u1,double rho2,int 
 	if (tillIsInTable(material, rho1, u1) != 0 || rho2 < material->rhomin || rho2 > material->rhomax)
 	{
 //		fprintf(stderr,"tillLookupU: values outside of look up table, doing direct integration.\n");
+#ifdef TILL_OUTPUT_ALL_WARNINGS
 		printf("tillLookupU: values outside of look up table, doing direct integration.\n");
+#endif
 		/* In this case we either about with an error or do a direct integration using tillCalcU(). */
 		u = tillCalcU(material, rho1, u1, rho2);
 	} else {
