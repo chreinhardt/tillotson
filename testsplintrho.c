@@ -22,9 +22,11 @@ void main(int argc, char **argv) {
 	*/
 	double dKpcUnit = 2.06701e-13;
 	double dMsolUnit = 4.80438e-08;
-	double rhomax = 25.0;
-	double vmax = 25.0;
-	int nTableMax = 1000;
+	double rhomax = 100.0;
+	double vmax = 1200.0;
+	int nTableRho = 1000;
+	int nTableV = 1000;
+
 	double rho, u;
 
 	int i = 0;
@@ -40,17 +42,17 @@ void main(int argc, char **argv) {
 	fprintf(stderr, "Initializing the look up table...\n");
 	/* Solve ODE and splines */
 	tillInitLookup(granite);
-	fprintf(stderr, "Done.\n");
+	tillInitSplineRho(granite);
 
-	fprintf(stderr,"nTableMax: %i\n", granite->nTableMax);
+	fprintf(stderr, "Done.\n");
 
 	rho = 0.0;
 	u = 0.0;
 
 	j = 51;
 	 	
-//	for (j=0;j<granite->nTableMax;j++)
-//	{
+	for (j=0;j<granite->nTableMax;j++)
+	{
 		for (i=0;i<granite->nTableMax;i++)
 		{
 			//rho = granite->Lookup[INDEX(i,j)].rho;
@@ -61,7 +63,7 @@ void main(int argc, char **argv) {
 			printf("%g %g\n", rho, u);
 		}
 		printf("\n");
-//	}
+	}
 
 	tillFinalizeMaterial(granite);
 }
