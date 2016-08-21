@@ -1,5 +1,5 @@
 /*
- ** Copyright (c) 2014-2015 Christian Reinhardt and Joachim Stadel.
+ ** Copyright (c) 2014-2016 Christian Reinhardt and Joachim Stadel.
  **
  ** This file provides all the functions for the Tillotson EOS library.
  ** The Tillotson EOS (e.g. Benz 1986) is a relatively simple but reliable
