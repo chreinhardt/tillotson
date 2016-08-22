@@ -37,10 +37,10 @@ for i in range(1,size(data2[0,:]),1):
 
 # Plot the lookup table for the new interpolator
 for i in range(1,size(data3[:,0]),1):
-		plot(data3[:,0],data3[:,i],'-',color='red',markersize=1,label='Table')
+		plot(data3[:,0],data3[:,i],'-',color='black',markersize=1,label='Table')
 
-for i in range(1,size(data2[0,:]),1):
-		plot(data4[:,0],data4[:,i],'--',color='blue',markersize=1,label='Lookup (new)')
+for i in range(1,size(data4[0,:]),1):
+		plot(data4[:,0],data4[:,i],'--',color='orange',markersize=1,label='Lookup (new)')
 
 show()
 

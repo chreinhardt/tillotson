@@ -29,6 +29,7 @@ typedef struct till_lookup_entry
 {
 	double u;
 	double rho;
+	double v;
     double u1;		// du/drho
     /*
     ** The following 2 variables are the second derivatives of the above
@@ -38,8 +39,10 @@ typedef struct till_lookup_entry
     */
     double udv2; 	// d2u/dv2
     double u1dv2;	// d2/dv2(du/drho)
+#ifdef TILL_DEBUG_SPLINT
 	// Only for debugging
 	double udrho2;
+#endif
 } TILL_LOOKUP_ENTRY;
 
 typedef TILL_LOOKUP_ENTRY* TILL_LOOKUP;

@@ -336,6 +336,10 @@ void tillInitSplinev(TILLMATERIAL *material)
 
 	for (i=0; i<material->nTableRho; i++)
 	{
+		/*
+		** Set up splines in u(v) for a given rho.
+		*/
+
 		/* Set b.c */	
 		if (yp1 > 0.99e30)
 			material->Lookup[TILL_INDEX(i,0)].udv2=u[0]=0.0;
@@ -374,36 +378,6 @@ void tillInitSplinev(TILLMATERIAL *material)
 		material->Lookup[TILL_INDEX(i,n-1)].udv2=(un-qn*u[n-2])/(qn*material->Lookup[TILL_INDEX(i,n-2)].udv2+1.0);
 		for (k=n-2;k>=0;k--)
 			material->Lookup[TILL_INDEX(i,k)].udv2=material->Lookup[TILL_INDEX(i,k)].udv2*material->Lookup[TILL_INDEX(i,k+1)].udv2+u[k];
-
-
-
-		/* Copy one row of the look up table to the temporary array. */
-		for (j=0; j<material->nTableV; j++)
-		{
-			/*
-			** Careful with the indices!
-			** Lookup[i][j] = Lookup(rho,v)
-			** v = u(rho0)
-			*/
-			x[j] = 	j*material->dv;
-
-			y[j] = 	material->Lookup[TILL_INDEX(i,j)].u;
-			//printf("j: %i % g %g\n",j, x[j], y[j]);
-			
-		}
-		
-		// Careful nr expects unit offset
-		spline(x-1, y-1, n, yp1, ypn, y2-1);
-	
-		/* Copy the second dervative back to the look up table. */
-		for (j=0; j<material->nTableV; j++)
-		{
-			/* Careful with the indices!
-			** Lookup[i][j] = Lookup(rho,v)
-			*/
-			material->Lookup[TILL_INDEX(i,j)].udv2 = y2[j];
-			//printf("i: %i j: %i %g\n",i,j, y2[j]);
-		}
 	}
 
 	/* Free memory */

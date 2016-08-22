@@ -84,6 +84,21 @@ void main(int argc, char **argv) {
 	}
 	fclose(fp);
 //#endif
+
+	for (i=0;i<granite->nTableRho-1;i+=1)
+	{
+		for (j=0;j<granite->nTableV-1;j+=1)
+		{
+			// Middle of the interval (i,i+1)
+			// v = (j + 0.5)*granite->dv;
+			// v = granite->vmax/pow(granite->nTableV-1,n)*pow(j+k,n);
+		
+			v = j*granite->dv;
+		
+			printf("%.8g  %.8g %.8g\n", v, granite->Lookup[INDEX(i, j)].v,v-granite->Lookup[INDEX(i, j)].v);
+		}
+	}
+exit(1);
 	/* Interpolate values between the isentropes */
 	for (i=0;i<granite->nTableRho-1;i+=1)
 	{
@@ -112,7 +127,7 @@ void main(int argc, char **argv) {
 					u = tillCubicInt(granite, rho, v);
 
 					//fprintf(stderr,"i: %i, j: %i, v: %g, u: %g\n",i,j,v,u);
-		//			printf("  %.8g", u);
+					printf("  %.8g", u);
 					k+=0.5;
 				}
 			}
