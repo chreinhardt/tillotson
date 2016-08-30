@@ -120,9 +120,9 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
 			material->b = 1.5;
 			material->u0 = 9.5e10; /* in ergs/g */
 			material->rho0 = 7.86; /* g/cc */
-			material->A = 1.28e12; /* ergs/cc */
+			material->A = 1.279e12; /* ergs/cc */
 			material->B = 1.05e12; /* ergs/cc */
-			material->us = 1.425e10; /* ergs/g */
+			material->us = 1.42e10; /* ergs/g */
 			material->us2 = 8.45e10; /* ergs/g */
 			material->alpha = 5.0;
 			material->beta = 5.0;
