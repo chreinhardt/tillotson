@@ -1,5 +1,5 @@
 /*
- ** Copyright (c) 2014-2015 Christian Reinhardt and Joachim Stadel.
+ ** Copyright (c) 2014-2016 Christian Reinhardt and Joachim Stadel.
  **
  ** This file provides all the functions for the Tillotson EOS library.
  ** The Tillotson EOS (e.g. Benz 1986) is a relatively simple but reliable
@@ -124,6 +124,9 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
 			material->B = 1.05e12; /* ergs/cc */
 			material->us = 1.42e10; /* ergs/g */
 			material->us2 = 8.45e10; /* ergs/g */
+//			printf("Using much larger values for us and us2\n");
+//			material->us = 5e10; /* ergs/g */
+//			material->us2 = 8.45e11; /* ergs/g */
 			material->alpha = 5.0;
 			material->beta = 5.0;
 			material->cv = 0.449e7; /* ergs/g K */ 
