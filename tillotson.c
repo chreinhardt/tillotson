@@ -104,6 +104,8 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
 			material->b = 1.3;
 			material->u0 = 1.6e11; /* in ergs/g */
 			material->rho0 = 2.7; /* g/cc */
+//			printf("Using larger reference density for granite!\n");
+//			material->rho0 = 3.32; /* g/cc */
 			material->A = 1.8e11; /* ergs/cc */
 			material->B = 1.8e11; /* ergs/cc */
 			material->us = 3.5e10; /* ergs/g */
