@@ -7,6 +7,8 @@
 //#include "tillinitlookup.h"
 //#include "tillsplint.h"
 
+//#include "tillwoolfson.h"
+
 #include "interpol/coeff.h"
 #include "interpol/interpol.h"
 #include "nr/nrcubicspline.h"
@@ -14,8 +16,9 @@
 #define GRANITE 0
 #define IRON 1
 #define BASALT 2
+#define ICE 3
 
-#define TILL_N_MATERIAL_MAX 3
+#define TILL_N_MATERIAL_MAX 4
 /* Degree of the spline function we use for interpolation. */
 #define TILL_SPLINE_DEGREE 3
 

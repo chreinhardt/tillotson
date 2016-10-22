@@ -1,9 +1,9 @@
 
 #objects = tillotson.o interpol/coeff.o interpol/interpol.o interpol/brent.o nr/tridag.o nr/spline.o nr/splint.o nr/nrutil.o
 
-objects = tillotson.o tillinitlookup.o tillsplint.o interpol/coeff.o interpol/interpol.o interpol/brent.o nr/nrcubicspline.o nr/nrutil.o
+objects = tillotson.o tillwoolfson.o tillinitlookup.o tillsplint.o interpol/coeff.o interpol/interpol.o interpol/brent.o nr/nrcubicspline.o nr/nrutil.o
 
-exe = table pressureoldnew lookup lookup_cold testu1 testspline testsplint testnewsplint testsplint2 testsplinerho testsplintrho testsplinev testsplintv testcubicintrho testlookupucold testudrho testudv testgrid testpolyv printderiv printpress pressneg testisintable testrhomin testoutofbounds testsolvebc calcisentrope
+exe = table pressureoldnew lookup lookup_cold testu1 testspline testsplint testnewsplint testsplint2 testsplinerho testsplintrho testsplinev testsplintv testcubicintrho testlookupucold testudrho testudv testgrid testpolyv printderiv printpress pressneg testisintable testrhomin testoutofbounds testsolvebc calcisentrope testrhoptemp
 
 CFLAGS ?= -O3
 
@@ -102,6 +102,9 @@ testsolvebc: testsolvebc.o $(objects)
 
 calcisentrope: calcisentrope.o $(objects)
 	cc -o calcisentrope calcisentrope.o $(objects) -lm
+
+testrhoptemp: testrhoptemp.o $(objects)
+	cc -o testrhoptemp testrhoptemp.o $(objects) -lm
 
 clean:
 	rm $(objects)
