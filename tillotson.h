@@ -17,8 +17,9 @@
 #define IRON 1
 #define BASALT 2
 #define ICE 3
+#define WATER 4
 
-#define TILL_N_MATERIAL_MAX 4
+#define TILL_N_MATERIAL_MAX 5
 /* Degree of the spline function we use for interpolation. */
 #define TILL_SPLINE_DEGREE 3
 

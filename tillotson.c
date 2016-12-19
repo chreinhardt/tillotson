@@ -170,6 +170,23 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
 			// Have to look up in more details?
 			material->cv = 1.0e7; /* ergs/g K */ 
 			break;
+		case WATER:
+			/*
+			** Material parameters from Woolfson 2007.
+			*/
+			material->a = 0.5;
+			material->b = 0.9;
+			material->u0 = 2.0e10; /* in ergs/g */
+			material->rho0 = 1.00; /* g/cc */
+			material->A = 2.00e11; /* ergs/cc */
+			material->B = 1.00e11; /* ergs/cc */
+			material->us = 4.00e9; /* ergs/g */
+			material->us2 = 2.04e10; /* ergs/g */
+			material->alpha = 5.0;
+			material->beta = 5.0;
+			// Have to look up in more details?
+			material->cv = 4.1814e7; /* ergs/g K */ 
+			break;
 		default:
 			/* Unknown material */
 			assert(0);
@@ -464,7 +481,7 @@ double tillPressure(TILLMATERIAL *material, double rho, double u)
 	/* Calculate the pressure from the Tillotson EOS for a material */
 	double P = tillPressureSound(material, rho, u, NULL);
 
-	if (P < 0.0 ) P = 0.0;
+//	if (P < 0.0 ) P = 0.0;
 	return (P);
 }
 
