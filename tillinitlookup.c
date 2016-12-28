@@ -472,3 +472,21 @@ int tillIsInTable(TILLMATERIAL *material,double rho,double u)
 	return(iRet);
 }
 
+int tillIsBelowColdCurve(TILLMATERIAL *material,double rho,double u)
+{
+	/*
+	** This function checks if a given (rho,u) is in an unphysical
+	** state below the cold curve.
+	**
+	** Returns 0 if (rho,u) is below the cold curve and 1 if not.
+	*/
+	int iRet = 1;
+
+	/* Check if u < u(rho,0) where v=0 is the cold curve */
+	if (u < tillCubicIntRho(material, rho, 0))
+	{
+//		printf("tillIsBelowColdCurve: value (%g,%g) below the cold curve (iMat=%i)!\n",rho,u,material->iMaterial);
+		iRet = 0;
+	}
+	return(iRet);
+}

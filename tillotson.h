@@ -126,6 +126,7 @@ TILL_LOOKUP_ENTRY *tillSolveIsentrope(TILLMATERIAL *material, double v);
 TILL_LOOKUP_ENTRY *tillSolveIsentropeBS(TILLMATERIAL *material, double v);
 double tillCalcU(TILLMATERIAL *material,double rho1,double u1,double rho2);
 int tillIsInTable(TILLMATERIAL *material,double rho,double u);
+int tillIsBelowColdCurve(TILLMATERIAL *material,double rho,double u);
 
 // Moved to tillsplint.h
 /* Stuff for the cubic spline interpolator */
