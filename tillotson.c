@@ -481,7 +481,11 @@ double tillPressure(TILLMATERIAL *material, double rho, double u)
 	/* Calculate the pressure from the Tillotson EOS for a material */
 	double P = tillPressureSound(material, rho, u, NULL);
 
-//	if (P < 0.0 ) P = 0.0;
+#ifdef TILL_PRESS_NP
+	/* Make a pressure cut off, if P < 0. */
+	if (P < 0.0 ) P = 0.0;
+#endif
+
 	return (P);
 }
 
