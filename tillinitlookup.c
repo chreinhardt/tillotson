@@ -145,7 +145,6 @@ TILL_LOOKUP_ENTRY *tillSolveIsentrope(TILLMATERIAL *material, double v)
 	/*
 	** Integrate the condensed and expanded states separately.
 	*/
-#ifdef TILL_USE_RK4
 	for (i=material->n+1;i<material->nTableRho;i++)
 	{
 		double hs = h/10.0;
@@ -170,37 +169,12 @@ TILL_LOOKUP_ENTRY *tillSolveIsentrope(TILLMATERIAL *material, double v)
 		isentrope[i].v = v;
 		isentrope[i].u1 = tilldudrho(material, rho, u);
 	}
-#else
-	for (i=material->n+1;i<material->nTableRho;i++)
-	{
-		double hs = h/10.0;
-		
-		/* We do substeps that saved to increase the accuracy. */
-		for (s=0;s<10;s++)
-		{
-			/*
-			** Midpoint Runga-Kutta (2nd order).
-			*/
-			k1u = hs*tilldudrho(material,rho,u);
-			k2u = hs*tilldudrho(material,rho+0.5*hs,u+0.5*k1u);
-
-			u += k2u;
-			rho += hs;
-		}
-
-	    isentrope[i].u = u;
-	    isentrope[i].rho = rho;
-		isentrope[i].v = v;
-		isentrope[i].u1 = tilldudrho(material, rho, u);
-	}
-#endif
 	/*
 	** Now the expanded states. Careful about the negative sign.
 	*/
 	rho = material->rho0;
 	u = v;
 
-#ifdef TILL_USE_RK4
 	for (i=material->n-1;i>=0;i--)
 	{
 		double hs = h/10.0;
@@ -234,30 +208,7 @@ TILL_LOOKUP_ENTRY *tillSolveIsentrope(TILLMATERIAL *material, double v)
 		}
 //#endif
 	}
-#else
-	for (i=material->n-1;i>=0;i--)
-	{
-		double hs = h/10.0;
-		
-		/* We do substeps that saved to increase the accuracy. */
-		for (s=0;s<10;s++)
-		{
-			/*
-			** Midpoint Runga-Kutta (2nd order).
-			*/
-			k1u = hs*-tilldudrho(material,rho,u);
-			k2u = hs*-tilldudrho(material,rho+0.5*hs,u+0.5*k1u);
-
-			u += k2u;
-			rho -= hs;
-		}
 	
-		isentrope[i].u = u;
-	    isentrope[i].rho = rho;
-		isentrope[i].v = v;
-		isentrope[i].u1 = tilldudrho(material, rho, u);
-	}
-#endif
 	return isentrope;
 }
 
@@ -447,14 +398,15 @@ int tillIsInTable(TILLMATERIAL *material,double rho,double u)
 	*/
 	int iRet = 1;
 
-	/* Check if rho < rhomin or rho > rhomax */
-	if (rho < material->rhomin || rho > material->rhomax)
+	/* Check if rho < rhomin or rho >= rhomax */
+	if (rho < material->rhomin || rho >= material->rhomax)
 	{
 		return(iRet);
 	}
-	
-	/* Check if u > u(rho,vmax) */
-	if (u > tillCubicIntRho(material, rho, material->nTableV-1))
+
+	// NEEDS WORK. WE CANT DO A LOOKUP FOR U, IF RHO OR V ARE NOT IN THE LOOKUP TABLE	
+	/* Check if u >= u(rho,vmax) */
+	if (u >= tillCubicIntRho(material, rho, material->nTableV-1))
 	{
 		return(iRet);
 	}
@@ -465,7 +417,7 @@ int tillIsInTable(TILLMATERIAL *material,double rho,double u)
 		/* We are in the unphysical region below the cold curve */
 //		fprintf(stderr,"tillIsInTable: value (%g,%g) below the cold curve!\n",rho,u);
 		printf("tillIsInTable: value (%g,%g) below the cold curve (iMat=%i)!\n",rho,u,material->iMaterial);
-		assert(0);
+//		assert(0);
 		return(iRet);
 	}
 	iRet = 0;
@@ -482,8 +434,7 @@ int tillIsBelowColdCurve(TILLMATERIAL *material,double rho,double u)
 	*/
 	int iRet = 1;
 
-	/* Check if u < u(rho,0) where v=0 is the cold curve */
-	if (u < tillCubicIntRho(material, rho, 0))
+	if (u < tillColdULookup(material, rho))
 	{
 //		printf("tillIsBelowColdCurve: value (%g,%g) below the cold curve (iMat=%i)!\n",rho,u,material->iMaterial);
 		iRet = 0;
