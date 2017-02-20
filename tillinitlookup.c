@@ -136,12 +136,6 @@ TILL_LOOKUP_ENTRY *tillSolveIsentrope(TILLMATERIAL *material, double v)
 	isentrope[i].u = u;
 	isentrope[i].u1 = tilldudrho(material, rho, u); // du/drho
 	
-	/* Output some information. */
-#ifdef TILL_USE_RK4
-//	fprintf(stderr,"Using RK4.\n");
-#else
-	fprintf(stderr,"Using RK2.\n");
-#endif
 	/*
 	** Integrate the condensed and expanded states separately.
 	*/
@@ -161,6 +155,10 @@ TILL_LOOKUP_ENTRY *tillSolveIsentrope(TILLMATERIAL *material, double v)
 			k4u = hs*tilldudrho(material,rho+hs,u+k3u);
 
 			u += k1u/6.0+k2u/3.0+k3u/3.0+k4u/6.0;
+
+			/* Assure that u >= 0.0. */
+			if (u < 0.0) u = 0.0;
+
 			rho += hs;
 		}
 
@@ -169,6 +167,7 @@ TILL_LOOKUP_ENTRY *tillSolveIsentrope(TILLMATERIAL *material, double v)
 		isentrope[i].v = v;
 		isentrope[i].u1 = tilldudrho(material, rho, u);
 	}
+
 	/*
 	** Now the expanded states. Careful about the negative sign.
 	*/
@@ -191,6 +190,10 @@ TILL_LOOKUP_ENTRY *tillSolveIsentrope(TILLMATERIAL *material, double v)
 			k4u = hs*-tilldudrho(material,rho+hs,u+k3u);
 
 			u += k1u/6.0+k2u/3.0+k3u/3.0+k4u/6.0;
+
+			/* Assure that u >= 0.0. */
+			if (u < 0.0) u = 0.0;
+
 			rho -= hs;
 		}
 	
