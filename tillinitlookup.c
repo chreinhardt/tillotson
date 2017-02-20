@@ -221,112 +221,7 @@ void tillBSderivs(TILLMATERIAL *material, float x, float y[], float dydx[])
 	** A function that provides the first derivative of u for bsstep.
 	*/
 }
-#if 0
-TILL_LOOKUP_ENTRY *tillSolveIsentropeBS(TILLMATERIAL *material, double v)
-{
-	/*
-	** Integrate one isentrope for the look up table. The parameter v corresponds to
-	** u(rho=rho0) so v=0 gives the cold curve. We use the Bulirsch-Stoer method from
-	** the Numerical Recipes.
-	*/
-    double rho;
-    double u;
-    double k1u,k2u,k3u,k4u;
-	double h;
-    int i,s;
 
-	/* Use this as a temporary data structure because it is easy to sort with qsort. */
-	TILL_LOOKUP_ENTRY *isentrope;
-
-	/* Variables for bsstep. */
-	float *y;
-	float *xx;
-	float *dydx;
-
-	float *yscal;
-	
-	int nv = 1;
-
-	float eps;
-
-	float htry;
-	float hdid;
-	float hnext;
-
-	/* Allocate memory */
-	y = malloc(sizeof(float));
-	xx = malloc(sizeof(float));
-	dydx = malloc(sizeof(float));
-
-	eps = 1e-8; 
-	
-	// Carefull: nr expects unit offset arrays!
-    isentrope = malloc(material->nTableRho*sizeof(TILL_LOOKUP_ENTRY));
-
-	rho = material->rho0;
-	u = v;
-	htry = material->drho;
-
-	i = material->n;
-
-	isentrope[i].rho = rho;
-	isentrope[i].u = u;
-	isentrope[i].u1 = tilldudrho(material, rho, u); // du/drho
-	
-	/*
-	** Integrate the condensed and expanded states separately.
-	*/
-	for (i=material->n+1;i<material->nTableRho;i++)
-	{
-
-		
-			u += k1u/6.0+k2u/3.0+k3u/3.0+k4u/6.0;
-			rho += hs;
-		}
-
-	    isentrope[i].u = u;
-	    isentrope[i].rho = rho;
-		isentrope[i].u1 = tilldudrho(material, rho, u);
-	}
-
-	/*
-	** Now the expanded states. Careful about the negative sign.
-	*/
-	rho = material->rho0;
-	u = v;
-	fprintf(stderr,"Expanded states\n");
-
-	for (i=material->n-1;i>=0;i--)
-	{
-		double hs = h/100.0;
-		
-		/* We do substeps that saved to increase the accuracy. */
-		for (s=0;s<100;s++)
-		{
-			/*
-			** Midpoint Runga-Kutta (4nd order).
-			*/
-			k1u = hs*-tilldudrho(material,rho,u);
-			k2u = hs*-tilldudrho(material,rho+0.5*hs,u+0.5*k1u);
-			k3u = hs*-tilldudrho(material,rho+0.5*hs,u+0.5*k2u);
-			k4u = hs*-tilldudrho(material,rho+hs,u+k3u);
-
-			u += k1u/6.0+k2u/3.0+k3u/3.0+k4u/6.0;
-			rho -= hs;
-		}
-	
-		isentrope[i].u = u;
-	    isentrope[i].rho = rho;
-		isentrope[i].u1 = tilldudrho(material, rho, u);
-	}
-
-	/* Free memory */
-	free(y);
-	free(xx);
-	free(dydx);
-	return isentrope;
-}
-#endif 
 double tillCalcU(TILLMATERIAL *material,double rho1,double u1,double rho2)
 {
 	/* Calculate u2 by solving the ODE */
@@ -343,15 +238,6 @@ double tillCalcU(TILLMATERIAL *material,double rho1,double u1,double rho2)
 	if (rho1 < rho2)
 	{
 		while (rho < rho2) {
-#ifdef TILL_USE_RK2
-			/*
-			** Midpoint Runga-Kutta (2nd order).
-			*/
-			k1u = h*tilldudrho(material,rho,u);
-			k2u = h*tilldudrho(material,rho+0.5*h,u+0.5*k1u);
-	
-			u += k2u;
-#else
 			/*
 			** Midpoint Runga-Kutta (4nd order).
 			*/
@@ -361,20 +247,10 @@ double tillCalcU(TILLMATERIAL *material,double rho1,double u1,double rho2)
 			k4u = h*tilldudrho(material,rho+h,u+k3u);
 
 			u += k1u/6.0+k2u/3.0+k3u/3.0+k4u/6.0;
-#endif
 			rho += h;
 		}
 	} else if (rho1 > rho2) {
 		while (rho > rho2) {
-#ifdef TILL_USE_RK2
-			/*
-			** Midpoint Runga-Kutta (2nd order).
-			*/
-			k1u = h*-tilldudrho(material,rho,u);
-			k2u = h*-tilldudrho(material,rho+0.5*h,u+0.5*k1u);
-
-			u += k2u;
-#else
 			/*
 			** Midpoint Runga-Kutta (4nd order).
 			*/
@@ -384,7 +260,6 @@ double tillCalcU(TILLMATERIAL *material,double rho1,double u1,double rho2)
 			k4u = h*tilldudrho(material,rho+h,u+k3u);
 
 			u += k1u/6.0+k2u/3.0+k3u/3.0+k4u/6.0;
-#endif
 			rho -= h;
 		}
 	}
