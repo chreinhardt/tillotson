@@ -75,19 +75,28 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
 	/* Number of grid points for the look up table */
 	material->nTableRho = nTableRho;
 	material->nTableV = nTableV;
-    /*
-    ** Convert kboltz/mhydrogen to system units, assuming that
-    ** G == 1.
-    */
-    material->dGasConst = material->dKpcUnit*KPCCM*KBOLTZ
-	/MHYDR/GCGS/material->dMsolUnit/MSOLG;
-    /* code energy per unit mass --> erg per g */
-    material->dErgPerGmUnit = GCGS*material->dMsolUnit*MSOLG/(material->dKpcUnit*KPCCM);
-    /* code density --> g per cc */
-    material->dGmPerCcUnit = (material->dMsolUnit*MSOLG)/pow(material->dKpcUnit*KPCCM,3.0);
-    /* code time --> seconds */
-    material->dSecUnit = sqrt(1/(material->dGmPerCcUnit*GCGS));
 
+	if (dKpcUnit <= 0.0 && dMsolUnit <= 0.0)
+	{
+		/* In this case units are not converted, so the code units are cgs. */
+		material->dGasConst = KBOLTZ;
+		material->dErgPerGmUnit = 1.0;
+		material->dGmPerCcUnit = 1.0;
+		material->dSecUnit = 1.0;
+	} else {
+		/*
+		** Convert kboltz/mhydrogen to system units, assuming that
+		** G == 1.
+		*/
+		material->dGasConst = material->dKpcUnit*KPCCM*KBOLTZ
+		/MHYDR/GCGS/material->dMsolUnit/MSOLG;
+		/* code energy per unit mass --> erg per g */
+		material->dErgPerGmUnit = GCGS*material->dMsolUnit*MSOLG/(material->dKpcUnit*KPCCM);
+		/* code density --> g per cc */
+		material->dGmPerCcUnit = (material->dMsolUnit*MSOLG)/pow(material->dKpcUnit*KPCCM,3.0);
+		/* code time --> seconds */
+		material->dSecUnit = sqrt(1/(material->dGmPerCcUnit*GCGS));
+	}
 
 	/* The memory for the lookup table is allocated when tillInitLookup is called. */
 		
