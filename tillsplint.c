@@ -954,6 +954,7 @@ double tillLookupU(TILLMATERIAL *material,double rho1,double u1,double rho2,int 
 	/* Calculates u2 for a given rho1,u2,rho2. */
 	double v, u;
 
+	fprintf(stderr,"Calling tillIsInTable().\n");
 	/* Check if the starting and end point are inside of the look up table */
 	if (tillIsInTable(material, rho1, u1) != 0 || rho2 < material->rhomin || rho2 > material->rhomax)
 	{
