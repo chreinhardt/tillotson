@@ -259,7 +259,7 @@ double tillCalcU(TILLMATERIAL *material,double rho1,double u1,double rho2)
 			k3u = h*tilldudrho(material,rho+0.5*h,u+0.5*k2u);
 			k4u = h*tilldudrho(material,rho+h,u+k3u);
 
-			u += k1u/6.0+k2u/3.0+k3u/3.0+k4u/6.0;
+			u -= k1u/6.0+k2u/3.0+k3u/3.0+k4u/6.0;
 			rho -= h;
 		}
 	}
@@ -272,9 +272,9 @@ int tillIsInTable(TILLMATERIAL *material,double rho,double u)
 	** This function checks if a given (rho,u) is in our look up
 	** table or not.
 	**
-	** Returns 1 if (rho,u) is in the table and 0 if not.
+	** Returns 0 if (rho,u) is in the table and 1 if not.
 	*/
-	int iRet = 0;
+	int iRet = 1;
 
 	/* Check if rho < rhomin or rho >= rhomax */
 	if (rho < material->rhomin || rho >= material->rhomax)
@@ -297,7 +297,7 @@ int tillIsInTable(TILLMATERIAL *material,double rho,double u)
 		printf("tillIsInTable: value (%g,%g) below the cold curve (iMat=%i)!\n",rho,u,material->iMaterial);
 		return(iRet);
 	}
-	iRet = 1;
+	iRet = 0;
 	return(iRet);
 }
 

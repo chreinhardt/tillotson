@@ -3,9 +3,9 @@
 #objects = tillotson.o tillwoolfson.o tillinitlookup.o tillsplint.o interpol/coeff.o interpol/interpol.o interpol/brent.o nr/nrcubicspline.o nr/nrutil.o
 objects = tillotson.o tillinitlookup.o tillsplint.o interpol/brent.o nr/nrcubicspline.o nr/nrutil.o
 
-exe = table pressureoldnew lookup lookup_cold testu1 testspline testsplint testnewsplint testsplint2 testsplinerho testsplintrho testsplinev testsplintv testcubicintrho testlookupucold testudrho testudv testgrid testpolyv printderiv printpress pressneg testisintable testisbelowcoldcurve testrhomin testoutofbounds testsolvebc calcisentrope testrhoptemp calcpressure
+exe = table pressureoldnew lookup lookup_cold testu1 testspline testsplint testnewsplint testsplint2 testsplinerho testsplintrho testsplinev testsplintv testcubicintrho testlookupucold testudrho testudv testgrid testpolyv printderiv printpress pressneg testisintable testisbelowcoldcurve testrhomin testoutofbounds testsolvebc calcisentrope testrhoptemp calcpressure testdirectintegration
 
-defs = -DTILL_PRESS_NP
+defs = -DTILL_PRESS_NP -DTILL_OUTPUT_ALL_WARNINGS
 
 CFLAGS ?= -O3 $(defs)
 
@@ -114,6 +114,8 @@ testrhoptemp: testrhoptemp.o $(objects)
 calcpressure: calcpressure.o $(objects)
 	cc -o calcpressure calcpressure.o $(objects) -lm
 
+testdirectintegration: testdirectintegration.o $(objects)
+	cc -o testdirectintegration testdirectintegration.o $(objects) -lm
 clean:
 	rm $(objects)
 
