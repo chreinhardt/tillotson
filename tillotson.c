@@ -117,7 +117,7 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
 //			material->rho0 = 3.32; /* g/cc */
 //			printf("Using rho0=%g for granite!\n");
 			// Try to make it more "ice" like
-			material->rho0 = 1.2; /* g/cc */
+//			material->rho0 = 1.2; /* g/cc */
 			material->A = 1.8e11; /* ergs/cc */
 			material->B = 1.8e11; /* ergs/cc */
 			material->us = 3.5e10; /* ergs/g */
