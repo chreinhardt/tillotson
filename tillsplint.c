@@ -958,7 +958,7 @@ double tillLookupU(TILLMATERIAL *material,double rho1,double u1,double rho2,int 
 	/* Check if the starting and end point are inside of the look up table */
 	if (tillIsInTable(material, rho1, u1) != 0 || rho2 < material->rhomin || rho2 > material->rhomax)
 	{
-		printf("tillLookupU: values outside of look up table, doing direct integration.\n");
+//		printf("tillLookupU: values outside of look up table, doing direct integration.\n");
 #ifdef TILL_OUTPUT_ALL_WARNINGS
 		fprintf(stderr,"tillLookupU: values outside of look up table, doing direct integration.\n");
 #endif

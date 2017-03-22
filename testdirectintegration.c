@@ -103,7 +103,7 @@ void main(int argc, char **argv) {
 //#if 0	
 
 	//rho2 = TILL_RHO_MIN*0.1;
-	rho2 = rho1 - 1e-3;
+	rho2 = rho1 - 1e-6;
 	printf("%15.7E%15.7E%15.7E\n",rho1, u1,tillLookupU(granite,rho1,u1,rho2, 0));
 
 
@@ -115,7 +115,7 @@ void main(int argc, char **argv) {
 		printf("%15.7E%15.7E%15.7E\n",rho2, u2,tillLookupU(granite,rho1,u1,rho2, 0));
 		u1 = u2;
 		rho1 = rho2;
-		rho2 -= 1e-3;
+		rho2 -= 1e-6;
 	}
 //#endif
 	tillFinalizeMaterial(granite);
