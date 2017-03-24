@@ -20,8 +20,11 @@ void main(int argc, char **argv) {
 	*/
 	double dKpcUnit = 2.06701e-13;
 	double dMsolUnit = 4.80438e-08;
-	double rhomax = 25.0;
-	double vmax = 26.32;
+//	double rhomax = 25.0;
+//	double vmax = 26.32;
+	double rhomax = 100.0;
+	double vmax = 1200.0;
+
 //	double vmax = 28.0;
 	double rho, u;
 	int nTableRho = 1000;
@@ -35,7 +38,7 @@ void main(int argc, char **argv) {
 
 	fprintf(stderr, "Initializing material...\n");
 
-	granite = tillInitMaterial(GRANITE, dKpcUnit, dMsolUnit, nTableRho, nTableV, rhomax, vmax, 1);
+	granite = tillInitMaterial(IRON, dKpcUnit, dMsolUnit, nTableRho, nTableV, rhomax, vmax, 1);
 	
 	fprintf(stderr, "Initializing the look up table...\n");
 	tillInitLookup(granite);
