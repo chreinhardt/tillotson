@@ -434,7 +434,7 @@ double tillPressureSound(TILLMATERIAL *material, double rho, double u, double *p
 		/* Melosh 1989 suggests to cut the pressure in the expanded cold states for rho/rho < 0.8 */
 		if (eta < 0.8)
 		{
-			fprintf(stderr,"Setting pressure to zero for eta=%g\n",eta);
+//			fprintf(stderr,"Setting pressure to zero for eta=%g\n",eta);
 			Pc = 0.0;
 		}
 #endif
@@ -480,7 +480,7 @@ double tillPressureSound(TILLMATERIAL *material, double rho, double u, double *p
 		/* Melosh 1989 suggests to cut the pressure in the expanded cold states for rho/rho < 0.8 */
 		if (eta < 0.8)
 		{
-			fprintf(stderr,"Setting pressure to zero for eta=%g\n",eta);
+//			fprintf(stderr,"Setting pressure to zero for eta=%g\n",eta);
 			Pc = 0.0;
 		}
 #endif
