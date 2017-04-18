@@ -107,97 +107,89 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
 	{
 		case GRANITE:
 			/*
-			** Just set granite at the moment.
+			** Material parameters from Benz et al. (1986).
 			*/
 			material->a = 0.5;
 			material->b = 1.3;
-			material->u0 = 1.6e11; /* in ergs/g */
-			material->rho0 = 2.7; /* g/cc */
-			// Try to make it more like dunite in ANEOS
-//			material->rho0 = 3.32; /* g/cc */
-//			printf("Using rho0=%g for granite!\n");
-			// Try to make it more "ice" like
-//			material->rho0 = 1.2; /* g/cc */
-			material->A = 1.8e11; /* ergs/cc */
-			material->B = 1.8e11; /* ergs/cc */
-			material->us = 3.5e10; /* ergs/g */
-			material->us2 = 1.8e11; /* ergs/g */
+			material->u0 = 1.6e11;		/* in ergs/g */
+			material->rho0 = 2.7;		/* g/cc */
+			material->A = 1.8e11;		/* ergs/cc */
+			material->B = 1.8e11;		/* ergs/cc */
+			material->us = 3.5e10;		/* ergs/g */
+			material->us2 = 1.8e11;		/* ergs/g */
 			material->alpha = 5.0;
 			material->beta = 5.0;
-			material->cv = 0.79e7; /* ergs/g K (or 790 J/kg K) */ 
+			material->cv = 0.79e7;		/* ergs/g K (or 790 J/kg K) */ 
 			break;
 		case IRON:
 			/*
-			** Material parameters from Benz 1987.
+			** Material parameters from Benz et al. (1987).
 			*/
 			material->a = 0.5;
 			material->b = 1.5;
-			material->u0 = 9.5e10; /* in ergs/g */
-			material->rho0 = 7.86; /* g/cc */
-			material->A = 1.279e12; /* ergs/cc */
-			material->B = 1.05e12; /* ergs/cc */
-			material->us = 1.42e10; /* ergs/g */
-			material->us2 = 8.45e10; /* ergs/g */
-//			printf("Using much larger values for us and us2\n");
-//			material->us = 5e10; /* ergs/g */
-//			material->us2 = 8.45e11; /* ergs/g */
+			material->u0 = 9.5e10;		/* in ergs/g */
+			material->rho0 = 7.86;		/* g/cc */
+			material->A = 1.279e12;		/* ergs/cc */
+			material->B = 1.05e12;		/* ergs/cc */
+			material->us = 1.42e10;		/* ergs/g */
+			material->us2 = 8.45e10;	/* ergs/g */
 			material->alpha = 5.0;
 			material->beta = 5.0;
-			material->cv = 0.449e7; /* ergs/g K */ 
+			material->cv = 0.449e7;		/* ergs/g K */ 
 			break;
 		case BASALT:
 			/*
-			** Material parameters from Benz 1999.
+			** Material parameters from Benz & Asphaug (1999).
 			*/
 			material->a = 0.5;
 			material->b = 1.5;
-			material->u0 = 4.87e12; /* in ergs/g */
-			material->rho0 = 2.7; /* g/cc */
-//			Using a much larger rho0, to compare to dunite in ANEOS.
-//			material->rho0 = 3.32; /* g/cc */
-			material->A = 2.67e11; /* ergs/cc */
-			material->B = 2.67e11; /* ergs/cc */
-			material->us = 4.72e10; /* ergs/g */
-			material->us2 = 1.82e11; /* ergs/g */
+			material->u0 = 4.87e12;		/* in ergs/g */
+			material->rho0 = 2.7;		/* g/cc */
+			material->A = 2.67e11;		/* ergs/cc */
+			material->B = 2.67e11;		/* ergs/cc */
+			material->us = 4.72e10;		/* ergs/g */
+			material->us2 = 1.82e11;	/* ergs/g */
 			material->alpha = 5.0;
 			material->beta = 5.0;
-			material->cv = 0.84e7; /* ergs/g K */ 
+			material->cv = 0.84e7;		/* ergs/g K */ 
 			break;
 		case ICE:
 			/*
-			** Material parameters from Benz 1999.
+			** Material parameters from Benz & Asphaug (1999).
 			*/
 			material->a = 0.3;
 			material->b = 0.1;
-			material->u0 = 1.0e11; /* in ergs/g */
-			material->rho0 = 0.917; /* g/cc */
-//			Using a much larger rho0, to compare to dunite in ANEOS.
-//			material->rho0 = 3.32; /* g/cc */
-			material->A = 9.47e10; /* ergs/cc */
-			material->B = 9.47e10; /* ergs/cc */
-			material->us = 7.73e9; /* ergs/g */
-			material->us2 = 3.04e10; /* ergs/g */
+			material->u0 = 1.0e11;		/* in ergs/g */
+			material->rho0 = 0.917;		/* g/cc */
+			material->A = 9.47e10;		/* ergs/cc */
+			material->B = 9.47e10;		/* ergs/cc */
+			material->us = 7.73e9;		/* ergs/g */
+			material->us2 = 3.04e10;	/* ergs/g */
+			/*
+			 * Note that the expression for Pe provided in Benz et al. (1986) does not agree
+			 * in alpha and beta with the one provided in Melosh (1989) or Benz & Asphaug (1999).
+			 */
 			material->alpha = 10.0;
 			material->beta = 5.0;
 			// Have to look up in more details?
-			material->cv = 1.0e7; /* ergs/g K */ 
+			material->cv = 1.0e7;		/* ergs/g K */ 
 			break;
 		case WATER:
 			/*
-			** Material parameters from Woolfson 2007.
+			** Material parameters from Woolfson (2007).
 			*/
 			material->a = 0.5;
 			material->b = 0.9;
-			material->u0 = 2.0e10; /* in ergs/g */
-			material->rho0 = 1.00; /* g/cc */
-			material->A = 2.00e11; /* ergs/cc */
-			material->B = 1.00e11; /* ergs/cc */
-			material->us = 4.00e9; /* ergs/g */
-			material->us2 = 2.04e10; /* ergs/g */
+			material->u0 = 2.0e10;		/* in ergs/g */
+			material->rho0 = 1.00;		/* g/cc */
+			material->A = 2.00e11;		/* ergs/cc */
+			material->B = 1.00e11;		/* ergs/cc */
+			material->us = 4.00e9;		/* ergs/g */
+			material->us2 = 2.04e10;	/* ergs/g */
 			material->alpha = 5.0;
 			material->beta = 5.0;
 			// Have to look up in more details?
-			material->cv = 4.1814e7; /* ergs/g K */ 
+			material->cv = 4.1814e7;	/* ergs/g K */ 
 			break;
 		default:
 			/* Unknown material */
