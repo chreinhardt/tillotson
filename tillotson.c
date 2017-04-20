@@ -254,7 +254,7 @@ double eosPressureSound(TILLMATERIAL *material, double rho, double u, double *pc
 		 */
 		return ((GAMMA-1.0)*rho*u);
 	} else {
-		return (tillPressureSound(TILLMATERIAL *material, double rho, double u, double *pcSound));
+		return (tillPressureSound(material, rho, u, pcSound));
 	}
 }
 
@@ -272,7 +272,7 @@ double eosdPdrho(TILLMATERIAL *material, double rho, double u)
 		 */
 		return ((GAMMA-1.0)*u);
 	} else {
-		return (tilldPdrho(TILLMATERIAL *material, double rho, double u));
+		return (tilldPdrho(material, rho, u));
 	}
 }
 
@@ -285,7 +285,7 @@ double eosdPdu(TILLMATERIAL *material, double rho, double u)
 		 */
 		return ((GAMMA-1.0)*rho);
 	} else {
-		return (tilldPdu(TILLMATERIAL *material, double rho, double u));
+		return (tilldPdu(material, rho, u));
 	}
 }
 

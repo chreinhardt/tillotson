@@ -3,7 +3,7 @@
 #objects = tillotson.o tillwoolfson.o tillinitlookup.o tillsplint.o interpol/coeff.o interpol/interpol.o interpol/brent.o nr/nrcubicspline.o nr/nrutil.o
 objects = tillotson.o tillinitlookup.o tillsplint.o interpol/brent.o nr/nrcubicspline.o nr/nrutil.o
 
-exe = table pressureoldnew lookup lookup_cold testu1 testspline testsplint testnewsplint testsplint2 testsplinerho testsplintrho testsplinev testsplintv testcubicintrho testlookupucold testudrho testudv testgrid testpolyv printderiv printpress pressneg testisintable testisbelowcoldcurve testrhomin testoutofbounds testsolvebc calcisentrope testrhoptemp calcpressure testdirectintegration testpoverrho2
+exe = table pressureoldnew lookup lookup_cold testu1 testspline testsplint testnewsplint testsplint2 testsplinerho testsplintrho testsplinev testsplintv testcubicintrho testlookupucold testudrho testudv testgrid testpolyv printderiv printpress pressneg testisintable testisbelowcoldcurve testrhomin testoutofbounds testsolvebc calcisentrope testrhoptemp calcpressure testdirectintegration testpoverrho2 testeospressure
 
 defs = -DTILL_PRESS_NP -DTILL_OUTPUT_ALL_WARNINGS -DTILL_PRESS_MELOSH
 
@@ -121,6 +121,10 @@ testdirectintegration: testdirectintegration.o $(objects)
 # Print PoverRho2 for small rho to see, if the expression diverges
 testpoverrho2: testpoverrho2.o $(objects)
 	cc -o testpoverrho2 testpoverrho2.o $(objects) -lm
+
+# Test the function eosPressureSound
+testeospressure: testeospressure.o $(objects)
+	cc -o testeospressure testeospressure.o $(objects) -lm
 
 clean:
 	rm $(objects)

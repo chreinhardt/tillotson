@@ -108,10 +108,10 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
 void tillFinalizeMaterial(TILLMATERIAL *material);
 
 // Some functions that provide a general interface for EOS calls where other EOS, e.g., an ideal gas EOS can be implemented
-double eosPressureSound(TILLMATERIAL *material, double rho, double u, double *pcSound)
-double eosPressure(TILLMATERIAL *material, double rho, double u)
-double eosdPdrho(TILLMATERIAL *material, double rho, double u)
-double eosdPdu(TILLMATERIAL *material, double rho, double u)
+double eosPressureSound(TILLMATERIAL *material, double rho, double u, double *pcSound);
+double eosPressure(TILLMATERIAL *material, double rho, double u);
+double eosdPdrho(TILLMATERIAL *material, double rho, double u);
+double eosdPdu(TILLMATERIAL *material, double rho, double u);
 
 double tilldPdrho(TILLMATERIAL *material, double rho, double u);
 double tillSoundSpeed2old(TILLMATERIAL *material, double rho, double u);
