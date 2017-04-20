@@ -307,7 +307,7 @@ int tillIsBelowColdCurve(TILLMATERIAL *material,double rho,double u)
 	** This function checks if a given (rho,u) is in an unphysical
 	** state below the cold curve.
 	**
-	** Returns 1 if (rho,u) is below the cold curve and 0 if not.
+	** Returns 1 (true) if (rho,u) is below the cold curve and 0 (false) if not.
 	*/
 	int iRet = 0;
 

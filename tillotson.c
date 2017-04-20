@@ -240,6 +240,56 @@ void tillFinalizeMaterial(TILLMATERIAL *material)
 	free(material);
 }
 
+/*
+ * These functions provide a more general interface for EOS calls
+ * so the user can in principle add different EOS (e.g., an ideal
+ * gas).
+ */
+double eosPressureSound(TILLMATERIAL *material, double rho, double u, double *pcSound)
+{
+	if (material == NULL)
+	{
+		/*
+		 * In this case an ideal gas EOS with gamma=5/3 is used.
+		 */
+		return ((GAMMA-1.0)*rho*u);
+	} else {
+		return (tillPressureSound(TILLMATERIAL *material, double rho, double u, double *pcSound));
+	}
+}
+
+double eosPressure(TILLMATERIAL *material, double rho, double u)
+{
+	return (eosPressureSound(material, rho, u, NULL));
+}
+
+double eosdPdrho(TILLMATERIAL *material, double rho, double u)
+{
+	if (material == NULL)
+	{
+		/*
+		 * In this case an ideal gas EOS with gamma=5/3 is used.
+		 */
+		return ((GAMMA-1.0)*u);
+	} else {
+		return (tilldPdrho(TILLMATERIAL *material, double rho, double u));
+	}
+}
+
+double eosdPdu(TILLMATERIAL *material, double rho, double u)
+{
+	if (material == NULL)
+	{
+		/*
+		 * In this case an ideal gas EOS with gamma=5/3 is used.
+		 */
+		return ((GAMMA-1.0)*rho);
+	} else {
+		return (tilldPdu(TILLMATERIAL *material, double rho, double u));
+	}
+}
+
+
 double tilldPdrho_s(TILLMATERIAL *material, double rho, double u)
 {
 	/*

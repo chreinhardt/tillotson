@@ -30,6 +30,11 @@
 //#define TILL_RHO_MIN 1e-2
 #define TILL_RHO_MIN 5e-1
 
+/*
+ * Monoatomic ideal gas.
+ */
+#define GAMMA 5.0/3.0
+
 typedef struct till_lookup_entry
 {
 	double u;
@@ -101,6 +106,13 @@ typedef struct tillMaterial
 //TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit, int nTableMax, double rhomax, double vmax);
 TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit, int nTableRho, int nTableV, double rhomax, double vmax, int iExpV);
 void tillFinalizeMaterial(TILLMATERIAL *material);
+
+// Some functions that provide a general interface for EOS calls where other EOS, e.g., an ideal gas EOS can be implemented
+double eosPressureSound(TILLMATERIAL *material, double rho, double u, double *pcSound)
+double eosPressure(TILLMATERIAL *material, double rho, double u)
+double eosdPdrho(TILLMATERIAL *material, double rho, double u)
+double eosdPdu(TILLMATERIAL *material, double rho, double u)
+
 double tilldPdrho(TILLMATERIAL *material, double rho, double u);
 double tillSoundSpeed2old(TILLMATERIAL *material, double rho, double u);
 double tillPressureSoundold(TILLMATERIAL *material, double rho, double u, double *pcSound);
