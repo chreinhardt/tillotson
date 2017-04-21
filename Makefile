@@ -126,6 +126,14 @@ testpoverrho2: testpoverrho2.o $(objects)
 testeospressure: testeospressure.o $(objects)
 	cc -o testeospressure testeospressure.o $(objects) -lm
 
+# Test the function eosdPdrho
+testeosdpdrho: testeosdpdrho.o $(objects)
+	cc -o testeosdpdrho testeosdpdrho.o $(objects) -lm
+
+# Test the function eosdPdu
+testeosdpdu: testeosdpdu.o $(objects)
+	cc -o testeosdpdu testeosdpdu.o $(objects) -lm
+
 clean:
 	rm $(objects)
 

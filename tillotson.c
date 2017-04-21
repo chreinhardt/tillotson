@@ -252,6 +252,7 @@ double eosPressureSound(TILLMATERIAL *material, double rho, double u, double *pc
 		/*
 		 * In this case an ideal gas EOS with gamma=5/3 is used.
 		 */
+		if (pcSound != NULL) *pcSound = GAMMA*(GAMMA-1.0)*rho*u;
 		return ((GAMMA-1.0)*rho*u);
 	} else {
 		return (tillPressureSound(material, rho, u, pcSound));

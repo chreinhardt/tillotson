@@ -13,11 +13,11 @@ data2 = loadtxt('out.dat',skiprows=3)
 """
 
 # Tillotson material
-data1 = loadtxt('testeospressure.txt')
-data2 = loadtxt('testeospressure2.txt')
+data1 = loadtxt('testeosdpdrho1.txt')
+data2 = loadtxt('testeosdpdrho2.txt')
 
 # Ideal gas
-data3 = loadtxt('testeospressure3.txt')
+data3 = loadtxt('testeosdpdrho3.txt')
 
 print where(fabs(data1-data2) > 1e-30)
 print
