@@ -212,8 +212,6 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
 	material->rhomin = TILL_RHO_MIN;
 	
 	/* Set drho so that rho0 lies on the grid. */
-	//material->n = floor(material->rho0/material->rhomax*material->nTableRho);
- 	//material->drho =  material->rho0/material->n;
 	material->n = floor((material->rho0-material->rhomin)/(material->rhomax-material->rhomin)*material->nTableRho);
  	material->drho =  (material->rho0-material->rhomin)/material->n;
 

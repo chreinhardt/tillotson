@@ -3,7 +3,7 @@
 #objects = tillotson.o tillwoolfson.o tillinitlookup.o tillsplint.o interpol/coeff.o interpol/interpol.o interpol/brent.o nr/nrcubicspline.o nr/nrutil.o
 objects = tillotson.o tillinitlookup.o tillsplint.o interpol/brent.o nr/nrcubicspline.o nr/nrutil.o
 
-exe = table pressureoldnew lookup lookup_cold testu1 testspline testsplint testnewsplint testsplint2 testsplinerho testsplintrho testsplinev testsplintv testcubicintrho testlookupucold testudrho testudv testgrid testpolyv printderiv printpress pressneg testisintable testisbelowcoldcurve testrhomin testoutofbounds testsolvebc calcisentrope testrhoptemp calcpressure testdirectintegration testpoverrho2 testeospressure
+exe = table pressureoldnew lookup lookup_cold testu1 testspline testsplint testnewsplint testsplint2 testsplinerho testsplintrho testsplinev testsplintv testcubicintrho testlookupucold testudrho testudv testgrid testpolyv printderiv printpress pressneg testisintable testisbelowcoldcurve testrhomin testoutofbounds testsolvebc calcisentrope testrhoptemp calcpressure testdirectintegration testpoverrho2 testeospressure testtillpressure
 
 defs = -DTILL_PRESS_NP -DTILL_OUTPUT_ALL_WARNINGS -DTILL_PRESS_MELOSH
 
@@ -26,11 +26,15 @@ table: table.o $(objects)
 pressureoldnew: pressureoldnew.o $(objects)
 	cc -o pressureoldnew pressureoldnew.o $(objects) -lm
 
-# Generate a lookup table for a given material
+#
+# Generate a lookup table for a given material.
+#
 lookup: lookup.o $(objects)
 	cc -o lookup lookup.o $(objects) -lm
 
-# Make a lookup table for the cold curve
+#
+# Make a lookup table for the cold curve.
+#
 lookup_cold: lookup_cold.o $(objects)
 	cc -o lookup_cold lookup_cold.o $(objects) -lm
 
@@ -40,11 +44,15 @@ testu1: testu1.o $(objects)
 testspline: testspline.o $(objects)
 	cc -o testspline testspline.o $(objects) -lm
 
-# Code for debugging the interpolation function tillCubicInt()
+#
+# Code for debugging the interpolation function tillCubicInt().
+#
 testsplint: testsplint.o $(objects)
 	cc -o testsplint testsplint.o $(objects) -lm
 
-# Pretty much the same but it compares the old with the new interpolator 
+#
+# Pretty much the same but it compares the old with the new interpolator.
+#
 testnewsplint: testnewsplint.o $(objects)
 	cc -o testnewsplint testnewsplint.o $(objects) -lm
 
@@ -118,21 +126,35 @@ calcpressure: calcpressure.o $(objects)
 testdirectintegration: testdirectintegration.o $(objects)
 	cc -o testdirectintegration testdirectintegration.o $(objects) -lm
 
-# Print PoverRho2 for small rho to see, if the expression diverges
+#
+# Print PoverRho2 for small rho to see, if the expression diverges.
+#
 testpoverrho2: testpoverrho2.o $(objects)
 	cc -o testpoverrho2 testpoverrho2.o $(objects) -lm
 
-# Test the function eosPressureSound
+#
+# Test the function eosPressureSound.
+#
 testeospressure: testeospressure.o $(objects)
 	cc -o testeospressure testeospressure.o $(objects) -lm
 
-# Test the function eosdPdrho
+#
+# Test the function eosdPdrho.
+#
 testeosdpdrho: testeosdpdrho.o $(objects)
 	cc -o testeosdpdrho testeosdpdrho.o $(objects) -lm
 
-# Test the function eosdPdu
+#
+# Test the function eosdPdu.
+#
 testeosdpdu: testeosdpdu.o $(objects)
 	cc -o testeosdpdu testeosdpdu.o $(objects) -lm
+
+#
+# Test the function tillPressure.
+#
+testtillpressure: testtillpressure.o $(objects)
+	cc -o testtillpressure testtillpressure.o $(objects) -lm
 
 clean:
 	rm $(objects)
