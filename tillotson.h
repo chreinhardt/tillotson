@@ -26,6 +26,9 @@
 /* We write the look up table as a 1D array where a(i,j)=a(i*N+j) */
 #define TILL_INDEX(i, j) (((i)*material->nTableV) + (j))
 
+#define MAX(A,B) ((A) > (B) ? (A) : (B))
+#define MIN(A,B) ((A) > (B) ? (B) : (A))
+
 /* Define a minimum density for the look up table */
 //#define TILL_RHO_MIN 1e-2
 #define TILL_RHO_MIN 5e-1

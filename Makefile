@@ -157,6 +157,12 @@ testeosdpdu: testeosdpdu.o $(objects)
 testtillpressure: testtillpressure.o $(objects)
 	cc -o testtillpressure testtillpressure.o $(objects) -lm
 
+#
+# Test the function tillPressureSound.
+#
+testtillsound: testtillsound.o $(objects)
+	cc -o testtillsound testtillsound.o $(objects) -lm
+
 clean:
 	rm $(objects)
 

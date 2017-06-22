@@ -463,7 +463,13 @@ double tillPressureSound(TILLMATERIAL *material, double rho, double u, double *p
         if (pcSound != NULL)
 		{
 			/* Calculate the sound speed. */
-			c2c = (Gammac+1.0)*Pc/rho + (material->A+material->B*(eta*eta-1.0))/rho + material->b/(w0*w0)*(w0-1.0)*(2*u-Pc/rho);
+//			c2c = (Gammac+1.0)*Pc/rho + (material->A+material->B*(eta*eta-1.0))/rho + material->b/(w0*w0)*(w0-1.0)*(2*u-Pc/rho);
+            // Altough for P > 0 the two expressions are the same, for P=0 this gives a bigger sound speed.
+			c2c =material->a*u+material->b*u/(w0*w0)*(3.0*w0-2.0)+(material->A+2.0*material->B*mu)/material->rho0 + P/(rho*rho)*(material->a*rho+material->b*rho/(w0*w0));
+            /*
+             * Set the minimum sound speed to the uncompressed bulk sound speed to avoid issues when P<0.
+             */
+            c2c = MAX(c2c, material->A/material->rho0);
 			//*pcSound = sqrt(c2c);
 			*pcSound = c2c;
 		}
@@ -480,6 +486,7 @@ double tillPressureSound(TILLMATERIAL *material, double rho, double u, double *p
 			/* calculate the sound speed */
 			c2e = (Gammae+1.0)*Pe/rho + material->A/material->rho0*exp(-(material->alpha*z+material->beta*z*z))*(1.0+mu/(eta*eta)*(material->alpha+2.0*material->beta*z-eta)) + material->b*rho*u/(w0*w0*eta*eta)*exp(-material->beta*z*z)*(2.0*material->beta*z*w0/material->rho0+1.0/(material->u0*rho)*(2.0*u-Pe/rho));
 			//*pcSound = sqrt(c2e);
+            c2e = MAX(c2e, material->A/material->rho0);
 			*pcSound = c2e;
 		}
 		
@@ -511,11 +518,13 @@ double tillPressureSound(TILLMATERIAL *material, double rho, double u, double *p
 		if (pcSound != NULL)
 		{
 			/* calculate the sound speed */
-			c2c = (Gammac+1.0)*Pc/rho + (material->A+material->B*(eta*eta-1.0))/rho + material->b/(w0*w0)*(w0-1.0)*(2*u-Pc/rho);
-			c2e = (Gammae+1.0)*Pe/rho + material->A/material->rho0*exp(-(material->alpha*z+material->beta*z*z))*(1.0+mu/(eta*eta)*(material->alpha+2.0*material->beta*z-eta)) + material->b*rho*u/(w0*w0*eta*eta)*exp(-material->beta*z*z)*(2.0*material->beta*z*w0/material->rho0+1.0/(material->u0*rho)*(2.0*u-Pe/rho));
+//			c2c = (Gammac+1.0)*Pc/rho + (material->A+material->B*(eta*eta-1.0))/rho + material->b/(w0*w0)*(w0-1.0)*(2*u-Pc/rho);
+			c2c =material->a*u+material->b*u/(w0*w0)*(3.0*w0-2.0)+(material->A+2.0*material->B*mu)/material->rho0 + P/(rho*rho)*(material->a*rho+material->b*rho/(w0*w0));
+            c2e = (Gammae+1.0)*Pe/rho + material->A/material->rho0*exp(-(material->alpha*z+material->beta*z*z))*(1.0+mu/(eta*eta)*(material->alpha+2.0*material->beta*z-eta)) + material->b*rho*u/(w0*w0*eta*eta)*exp(-material->beta*z*z)*(2.0*material->beta*z*w0/material->rho0+1.0/(material->u0*rho)*(2.0*u-Pe/rho));
 
 			//*pcSound = sqrt(c2c*(1.0-y)+c2e*y);
 			*pcSound = c2c*(1.0-y)+c2e*y;
+            *pcSound = MAX(*pcSound, material->A/material->rho0);
 		}
 
 		return (Pc*(1.0-y)+Pe*y);
@@ -611,13 +620,13 @@ double tilldPdu(TILLMATERIAL *material, double rho, double u)
 		return (dPcdu);
 	} else if (u > material->us2) {
 		/*
-		** expanded hot states (rho < rho0 and u > us2)
+		** Expanded hot states (rho < rho0 and u > us2).
 		*/
 		dPedu = (material->a + material->b/(w0*w0)*exp(-material->beta*z*z))*rho;		
 		return (dPedu);
 	} else {
 		/*
-		**  intermediate states (rho < rho0 and us < u < us2)
+		** Intermediate states (rho < rho0 and us < u < us2).
 		*/
 		y = (u - material->us)/(material->us2 - material->us);
 
