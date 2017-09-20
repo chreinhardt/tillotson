@@ -745,6 +745,7 @@ double tillSoundSpeed(TILLMATERIAL *material, double rho, double u)
 double tillDensRatio(TILLMATERIAL material1, TILLMATERIAL material2, double P, double T)
 {
 	/* From Woolfson 2007 */
+    assert(0);
 }
 
 /* 
@@ -757,7 +758,15 @@ double tillRhoPU(TILLMATERIAL *material, double P, double u)
     /*
      * Try to bracket the root with (a, b).
      */
-    a = 0.0;
+    if (u == 0.0)
+    {
+        // For rho=0 AND u=0 Pc diverges!
+        a = 1e-30;
+    } else {
+        // If u > 0 there is no problem
+        a = 0.0;
+    }
+
     Pa = tillPressure(material, a, u);
     b = 10.0*material->rho0;
     Pb = tillPressure(material, b, u);
@@ -768,7 +777,8 @@ double tillRhoPU(TILLMATERIAL *material, double P, double u)
         Pb = tillPressure(material, b, u);
     }
 
-    assert(Pa < P && Pb > P);
+//    fprintf(stderr, "tillRhoPU: Root bracketed by: a=%15.7E Pa=%15.7E b=%15.7E Pb=%15.7E\n", a, Pa, b, Pb);
+//    assert(Pa < P && Pb > P);
 	
     if (Pa >= P) return(a);
     if (Pb <= P) return(b);
