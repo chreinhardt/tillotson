@@ -131,6 +131,7 @@ double tillTempRhoU(TILLMATERIAL *material, double rho, double u);
 double tillTempRhoP(TILLMATERIAL *material, double rho, double P);
 double tillURhoTemp(TILLMATERIAL *material, double rho, double T);
 double tillSoundSpeed(TILLMATERIAL *material, double rho, double u);
+double tillRhoPU(TILLMATERIAL *material, double P, double u);
 double tilldudrho(TILLMATERIAL *material, double rho, double u);
 void tillSolveBC(TILLMATERIAL *mat1, TILLMATERIAL *mat2, double rho1, double u1, double *prho2, double *pu2);
 

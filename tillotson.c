@@ -465,7 +465,7 @@ double tillPressureSound(TILLMATERIAL *material, double rho, double u, double *p
 			/* Calculate the sound speed. */
 //			c2c = (Gammac+1.0)*Pc/rho + (material->A+material->B*(eta*eta-1.0))/rho + material->b/(w0*w0)*(w0-1.0)*(2*u-Pc/rho);
             // Altough for P > 0 the two expressions are the same, for P=0 this gives a bigger sound speed.
-			c2c =material->a*u+material->b*u/(w0*w0)*(3.0*w0-2.0)+(material->A+2.0*material->B*mu)/material->rho0 + P/(rho*rho)*(material->a*rho+material->b*rho/(w0*w0));
+			c2c =material->a*u+material->b*u/(w0*w0)*(3.0*w0-2.0)+(material->A+2.0*material->B*mu)/material->rho0 + Pc/(rho*rho)*(material->a*rho+material->b*rho/(w0*w0));
             /*
              * Set the minimum sound speed to the uncompressed bulk sound speed to avoid issues when P<0.
              */
@@ -519,7 +519,7 @@ double tillPressureSound(TILLMATERIAL *material, double rho, double u, double *p
 		{
 			/* calculate the sound speed */
 //			c2c = (Gammac+1.0)*Pc/rho + (material->A+material->B*(eta*eta-1.0))/rho + material->b/(w0*w0)*(w0-1.0)*(2*u-Pc/rho);
-			c2c =material->a*u+material->b*u/(w0*w0)*(3.0*w0-2.0)+(material->A+2.0*material->B*mu)/material->rho0 + P/(rho*rho)*(material->a*rho+material->b*rho/(w0*w0));
+			c2c =material->a*u+material->b*u/(w0*w0)*(3.0*w0-2.0)+(material->A+2.0*material->B*mu)/material->rho0 + Pc/(rho*rho)*(material->a*rho+material->b*rho/(w0*w0));
             c2e = (Gammae+1.0)*Pe/rho + material->A/material->rho0*exp(-(material->alpha*z+material->beta*z*z))*(1.0+mu/(eta*eta)*(material->alpha+2.0*material->beta*z-eta)) + material->b*rho*u/(w0*w0*eta*eta)*exp(-material->beta*z*z)*(2.0*material->beta*z*w0/material->rho0+1.0/(material->u0*rho)*(2.0*u-Pe/rho));
 
 			//*pcSound = sqrt(c2c*(1.0-y)+c2e*y);
@@ -745,6 +745,50 @@ double tillSoundSpeed(TILLMATERIAL *material, double rho, double u)
 double tillDensRatio(TILLMATERIAL material1, TILLMATERIAL material2, double P, double T)
 {
 	/* From Woolfson 2007 */
+}
+
+/* 
+ * Calculate rho(P,u) by doing a root finding using bisection.
+ */
+double tillRhoPU(TILLMATERIAL *material, double P, double u)
+{
+	double a, b, c, Pa, Pb, Pc;
+
+    /*
+     * Try to bracket the root with (a, b).
+     */
+    a = 0.0;
+    Pa = tillPressure(material, a, u);
+    b = 10.0*material->rho0;
+    Pb = tillPressure(material, b, u);
+    
+    while (Pb < P)
+    {
+        b *= 2.0;
+        Pb = tillPressure(material, b, u);
+    }
+
+    assert(Pa < P && Pb > P);
+	
+    if (Pa >= P) return(a);
+    if (Pb <= P) return(b);
+
+    while (Pb-Pa > 1e-10*Pc)
+    {
+        c = 0.5*(a+b);
+        Pc = tillPressure(material, c, u);
+//        fprintf(stderr, "a= %15.7E ua= %15.7E b= %15.7E ub= %15.7E c= %15.7E uc= %15.7E\n",a,ua,b,ub,c,uc);
+        if (Pc < P)
+        {
+            a = c;
+            Pa = Pc;
+        } else {
+            b = c;
+            Pb = Pc;
+        }
+    }
+
+	return (c);
 }
 
 double tilldudrho(TILLMATERIAL *material, double rho, double u)
