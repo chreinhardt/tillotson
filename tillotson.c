@@ -276,7 +276,7 @@ double eosdPdrho(TILLMATERIAL *material, double rho, double u)
 		/*
 		 * In this case an ideal gas EOS is used.
 		 */
-		return ((materia->dConstGamma-1.0)*u);
+		return ((material->dConstGamma-1.0)*u);
 	} else {
 		return (tilldPdrho(material, rho, u));
 	}

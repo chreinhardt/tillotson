@@ -169,6 +169,12 @@ testtillsound: testtillsound.o $(objects)
 testtillrhopu: testtillrhopu.o $(objects)
 	cc -o testtillrhopu testtillrhopu.o $(objects) -lm
 
+#
+# Test the ideal gas EOS.
+#
+testtillidealgas: testtillidealgas.o $(objects)
+	cc -o testtillidealgas testtillidealgas.o $(objects) -lm
+
 clean:
 	rm $(objects)
 
