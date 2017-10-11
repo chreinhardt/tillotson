@@ -35,11 +35,6 @@
 //#define TILL_RHO_MIN 1e-2
 #define TILL_RHO_MIN 5e-1
 
-/*
- * Monoatomic ideal gas.
- */
-#define GAMMA 5.0/3.0
-
 typedef struct till_lookup_entry
 {
 	double u;

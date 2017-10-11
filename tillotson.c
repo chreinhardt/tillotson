@@ -111,7 +111,7 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
              */
             material->dConstGamma = 5.0/3.0;
             material->dMeanMolMass = 1.0;
-            material->cv = material->dGasConst/((model->dConstGamma-1.0)*model->dMeanMolMass);
+            material->cv = material->dGasConst/((material->dConstGamma-1.0)*material->dMeanMolMass);
 		case GRANITE:
 			/*
 			** Material parameters from Benz et al. (1986).
