@@ -13,15 +13,17 @@
 #include "interpol/interpol.h"
 #include "nr/nrcubicspline.h"
 
-#define GRANITE 0
-#define IRON 1
-#define BASALT 2
-#define ICE 3
-#define WATER 4
+/*
+ * Warning: redefined the material constants on 10.10.2017!
+ */
+#define IDEALGAS    0
+#define GRANITE     1
+#define IRON        2
+#define BASALT      3
+#define ICE         4
+#define WATER       5
 
-#define TILL_N_MATERIAL_MAX 5
-/* Degree of the spline function we use for interpolation. */
-#define TILL_SPLINE_DEGREE 3
+#define TILL_N_MATERIAL_MAX 6
 
 /* We write the look up table as a 1D array where a(i,j)=a(i*N+j) */
 #define TILL_INDEX(i, j) (((i)*material->nTableV) + (j))
@@ -80,7 +82,9 @@ typedef struct tillMaterial
 	double dGmPerCcUnit;
 	double dSecUnit;
 
-	/* A material is defined by 10 Tillotson parameters */
+	/*
+     * A material is defined by 10 Tillotson parameters.
+     */
 	double a;
 	double b;
 	double A;
@@ -91,6 +95,12 @@ typedef struct tillMaterial
 	double us2;
 	double alpha;
 	double beta;
+
+    /*
+     * The constants needed for the ideal gas EOS.
+     */
+    double dConstGamma;
+    double dMeanMolMass;        // in units of m_hydrogen
 
 	 /* the specific heat capacity (assumed constant) */
 	double cv;

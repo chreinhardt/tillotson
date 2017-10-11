@@ -79,7 +79,7 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
 	if (dKpcUnit <= 0.0 && dMsolUnit <= 0.0)
 	{
 		/* In this case units are not converted, so the code units are cgs. */
-		material->dGasConst = KBOLTZ;
+		material->dGasConst = KBOLTZ;   // dGasConst is NOT KBOLZ !!!!!!!
 		material->dErgPerGmUnit = 1.0;
 		material->dGmPerCcUnit = 1.0;
 		material->dSecUnit = 1.0;
@@ -105,6 +105,13 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
 	*/
 	switch(iMaterial)
 	{
+        case IDEALGAS:
+            /*
+             * Ideal gas EOS. Currently we are limited to monoatomic gases.
+             */
+            material->dConstGamma = 5.0/3.0;
+            material->dMeanMolMass = 1.0;
+            material->cv = material->dGasConst/((model->dConstGamma-1.0)*model->dMeanMolMass);
 		case GRANITE:
 			/*
 			** Material parameters from Benz et al. (1986).
@@ -245,13 +252,13 @@ void tillFinalizeMaterial(TILLMATERIAL *material)
  */
 double eosPressureSound(TILLMATERIAL *material, double rho, double u, double *pcSound)
 {
-	if (material == NULL)
+	if (material->iMaterial == IDEALGAS)
 	{
 		/*
-		 * In this case an ideal gas EOS with gamma=5/3 is used.
+		 * In this case an ideal gas EOS is used.
 		 */
-		if (pcSound != NULL) *pcSound = GAMMA*(GAMMA-1.0)*rho*u;
-		return ((GAMMA-1.0)*rho*u);
+		if (pcSound != NULL) *pcSound = material->dConstGamma*(material->dConstGamma-1.0)*u;
+		return ((material->dConstGamma-1.0)*rho*u);
 	} else {
 		return (tillPressureSound(material, rho, u, pcSound));
 	}
@@ -264,12 +271,12 @@ double eosPressure(TILLMATERIAL *material, double rho, double u)
 
 double eosdPdrho(TILLMATERIAL *material, double rho, double u)
 {
-	if (material == NULL)
+	if (material->iMaterial == IDEALGAS)
 	{
 		/*
-		 * In this case an ideal gas EOS with gamma=5/3 is used.
+		 * In this case an ideal gas EOS is used.
 		 */
-		return ((GAMMA-1.0)*u);
+		return ((materia->dConstGamma-1.0)*u);
 	} else {
 		return (tilldPdrho(material, rho, u));
 	}
@@ -277,12 +284,12 @@ double eosdPdrho(TILLMATERIAL *material, double rho, double u)
 
 double eosdPdu(TILLMATERIAL *material, double rho, double u)
 {
-	if (material == NULL)
+	if (material->iMaterial == IDEALGAS)
 	{
 		/*
-		 * In this case an ideal gas EOS with gamma=5/3 is used.
+		 * In this case an ideal gas EOS is used.
 		 */
-		return ((GAMMA-1.0)*rho);
+		return ((material->dConstGamma-1.0)*rho);
 	} else {
 		return (tilldPdu(material, rho, u));
 	}
