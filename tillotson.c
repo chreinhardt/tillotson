@@ -111,7 +111,15 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
              */
             material->dConstGamma = 5.0/3.0;
             material->dMeanMolMass = 1.0;
+#if 0
+            /*
+             * This doesnt work as cv is converted to code units below.
+             */
             material->cv = material->dGasConst/((material->dConstGamma-1.0)*material->dMeanMolMass);
+#endif
+            material->cv = KBOLTZ/MHYDR/((material->dConstGamma-1.0)*material->dMeanMolMass);
+            material->rho0 = 0.001;
+			break;
 		case GRANITE:
 			/*
 			** Material parameters from Benz et al. (1986).
@@ -214,6 +222,8 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
     material->B /= (material->dGmPerCcUnit*material->dErgPerGmUnit);
  
  	material->cv /= material->dErgPerGmUnit;
+
+    printf("cv= %15.7E\n", material->cv);
 
 	/* Set rhomin */
 	material->rhomin = TILL_RHO_MIN;
