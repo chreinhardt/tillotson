@@ -305,6 +305,28 @@ double eosdPdu(TILLMATERIAL *material, double rho, double u)
 	}
 }
 
+double eosTempRhoU(TILLMATERIAL *material, double rho, double u)
+{
+	/*
+     * Calculate T(rho,u) for a material. As an approximation we use
+     *
+     * u(rho,T) = uc(rho) + cv*T
+     *
+     * for condensed materials.
+     */
+	assert(material->cv > 0.0);
+
+    /*
+     * For an ideal gas the temperature is independent of the density.
+     */
+    if (material->iMaterial == IDEALGAS)
+    {
+        return(u/material->cv);
+
+    } else {
+        return ((u-tillColdULookup(material,rho))/material->cv);
+    }
+}
 
 double tilldPdrho_s(TILLMATERIAL *material, double rho, double u)
 {
