@@ -117,7 +117,7 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
              */
             material->cv = material->dGasConst/((material->dConstGamma-1.0)*material->dMeanMolMass);
 #endif
-            material->cv = KBOLTZ/MHYDR/((material->dConstGamma-1.0)*material->dMeanMolMass);
+            material->cv = KBOLTZ/((material->dConstGamma-1.0)*MHYDR*material->dMeanMolMass);
             material->rho0 = 0.001;
 			break;
 		case GRANITE:
@@ -223,7 +223,10 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
  
  	material->cv /= material->dErgPerGmUnit;
 
-    printf("cv= %15.7E\n", material->cv);
+    if (material->iMaterial == IDEALGAS)
+    {
+        fprintf(stderr, "Ideal gas: cv= %g\n in code units.\n", material->cv);
+    }
 
 	/* Set rhomin */
 	material->rhomin = TILL_RHO_MIN;
@@ -321,10 +324,10 @@ double eosTempRhoU(TILLMATERIAL *material, double rho, double u)
      */
     if (material->iMaterial == IDEALGAS)
     {
+        fprintf(stderr, "(CR) eosTempRhoU(): Ideal gas: rho= %g u= %g gamma= %g cv= %g T= %g\n", rho, u, material->dConstGamma, material->cv, u/material->cv);
         return(u/material->cv);
-
     } else {
-        return ((u-tillColdULookup(material,rho))/material->cv);
+        return(tillTempRhoU(material, rho, u));
     }
 }
 

@@ -1018,9 +1018,12 @@ double tillCubicIntRho(TILLMATERIAL *material, double rhoint, int iv) {
 	double uint;
 	int i;
 
-	// rhoint is between rho[i] and rho[i+1]
-	i = floor(rhoint/material->drho);
-	assert(i < material->nTableRho-1);
+    /*
+     * For even spaced data points rhoint is between rho[i] and rho[i+1].
+     * (CR) 24.11.2017: Keep in mind that one has to account for rhomin.
+     */
+	i = floor((rhoint-material->rhomin)/material->drho);
+	assert(i >= 0 && i < material->nTableRho-1);
 
 	/* Allocate memory */
 	ce = malloc(4*sizeof(double));
@@ -1042,9 +1045,9 @@ double tillCubicIntRho(TILLMATERIAL *material, double rhoint, int iv) {
 	//e = (rhoint - rho[0])/dx;
 	//e1 = e - 1;
 	
-	// Only works for uniform steps in rho
+	// Only works for uniform steps in rho (do I have to change this for rhomin too?)
 	dx = material->drho;
-	e = (rhoint - i*material->drho)/dx;
+	e = (rhoint - (material->rhomin+i*material->drho))/dx;
 	e1 = e - 1;
 
 	// these are the 4 Hermite functions

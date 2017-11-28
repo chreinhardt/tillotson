@@ -4,9 +4,6 @@
 #ifndef TILLOTSON_HINCLUDED
 #define TILLOTSON_HINCLUDED
 
-//#include "tillinitlookup.h"
-//#include "tillsplint.h"
-
 //#include "tillwoolfson.h"
 
 #include "interpol/coeff.h"

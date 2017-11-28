@@ -175,6 +175,18 @@ testtillrhopu: testtillrhopu.o $(objects)
 testtillidealgas: testtillidealgas.o $(objects)
 	cc -o testtillidealgas testtillidealgas.o $(objects) -lm
 
+#
+# Generate an ASCII file containing the cold curve u_cold(rho).
+#
+tillmakecoldcurve: tillmakecoldcurve.o $(objects)
+	cc -o tillmakecoldcurve tillmakecoldcurve.o $(objects)  -lm
+
+#
+# Test tillColdULookup().
+#
+testtillcoldu: testtillcoldu.o $(objects)
+	cc -o testtillcoldu testtillcoldu.o $(objects)  -lm
+
 clean:
 	rm $(objects)
 
