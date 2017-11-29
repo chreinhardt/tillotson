@@ -26,7 +26,7 @@ void main(int argc, char **argv) {
 
     char MatName[256];
     
-    int iMat = 1;
+    int iMat;
 
 	int i = 0;
 	int j = 0;
@@ -34,13 +34,22 @@ void main(int argc, char **argv) {
 	TILLMATERIAL *tillMat;
 	TILL_LOOKUP_ENTRY *isentrope;
 
+    if (argc != 2)
+    {
+        fprintf(stderr,"Usage: tillmakecoldcurve <iMat> >cold.txt\n");
+        exit(1);
+	}
+
+    iMat = atoi(argv[1]);
+
+    assert(iMat > 0);
+
 	fprintf(stderr, "Initializing material: ");
 	tillMat = tillInitMaterial(iMat, dKpcUnit, dMsolUnit, nTableRho, nTableV, rhomax, vmax, 1);
     tilliMatString(tillMat, &MatName);
 	fprintf(stderr, "%s\n", MatName);
+	fprintf(stderr,"\n");
 
-	fprintf(stderr, "Done.\n");
-    exit(1);
 	fprintf(stderr, "Initializing the look up table...\n");
 	tillInitLookup(tillMat);
 	fprintf(stderr, "Done.\n");
@@ -74,10 +83,16 @@ void main(int argc, char **argv) {
 	fclose(fp);
 #endif
 
+
     /*
      * Print some header.
      */
     printf("# rho             u\n");
+
+    /*
+     * Fill the gap between zero and rhomin.
+     */
+	printf("%15.7E %15.7E\n", 0.0, 0.0);
 
     /*
      * Solve for the cold curve.
@@ -89,7 +104,7 @@ void main(int argc, char **argv) {
 		printf("%15.7E %15.7E\n", isentrope[j].rho, isentrope[j].u);
 	}
 
-    fprintf(stderr, "rhomax= %g umax=%g\n", isentrope[tillMat->nTableRho-1].rho, isentrope[tillMat->nTableRho-1].u);
+//    fprintf(stderr, "rhomax= %g umax=%g\n", isentrope[tillMat->nTableRho-1].rho, isentrope[tillMat->nTableRho-1].u);
 
     tillFinalizeMaterial(tillMat);
 }
