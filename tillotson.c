@@ -223,10 +223,12 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
  
  	material->cv /= material->dErgPerGmUnit;
 
+#if 0
     if (material->iMaterial == IDEALGAS)
     {
         fprintf(stderr, "Ideal gas: cv= %g\n in code units.\n", material->cv);
     }
+#endif
 
 	/* Set rhomin */
 	material->rhomin = TILL_RHO_MIN;
@@ -268,22 +270,22 @@ void tilliMatString(TILLMATERIAL *material, char *MatName)
 	switch(material->iMaterial)
 	{
         case IDEALGAS:
-            MatName = "IDEAL_GAS";
+            sprintf(MatName, "IDEAL_GAS");
 			break;
 		case GRANITE:
-            MatName = "GRANITE";
+            sprintf(MatName, "GRANITE");
 			break;
 		case IRON:
-            MatName = "IRON";
+            sprintf(MatName, "IRON");
 			break;
 		case BASALT:
-            MatName = "BASALT";
+            sprintf(MatName, "BASALT");
 			break;
 		case ICE:
-            MatName = "ICE";
+            sprintf(MatName, "ICE");
 			break;
 		case WATER:
-            MatName = "WATER";
+            sprintf(MatName, "WATER");
 			break;
 		default:
 			/* Unknown material */

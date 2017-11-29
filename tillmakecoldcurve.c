@@ -26,7 +26,7 @@ void main(int argc, char **argv) {
 
     char MatName[256];
     
-    int iMat;
+    int iMat = 1;
 
 	int i = 0;
 	int j = 0;
@@ -34,11 +34,13 @@ void main(int argc, char **argv) {
 	TILLMATERIAL *tillMat;
 	TILL_LOOKUP_ENTRY *isentrope;
 
-	fprintf(stderr, "Initializing material:");
+	fprintf(stderr, "Initializing material: ");
 	tillMat = tillInitMaterial(iMat, dKpcUnit, dMsolUnit, nTableRho, nTableV, rhomax, vmax, 1);
-
+    tilliMatString(tillMat, &MatName);
 	fprintf(stderr, "%s\n", MatName);
-	
+
+	fprintf(stderr, "Done.\n");
+    exit(1);
 	fprintf(stderr, "Initializing the look up table...\n");
 	tillInitLookup(tillMat);
 	fprintf(stderr, "Done.\n");
