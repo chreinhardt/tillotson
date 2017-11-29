@@ -259,6 +259,39 @@ void tillFinalizeMaterial(TILLMATERIAL *material)
 }
 
 /*
+ * This function stores the materials name in a string string.
+ */
+void tilliMatString(TILLMATERIAL *material, char *MatName)
+{
+    assert(MatName != NULL);
+
+	switch(material->iMaterial)
+	{
+        case IDEALGAS:
+            MatName = "IDEAL_GAS";
+			break;
+		case GRANITE:
+            MatName = "GRANITE";
+			break;
+		case IRON:
+            MatName = "IRON";
+			break;
+		case BASALT:
+            MatName = "BASALT";
+			break;
+		case ICE:
+            MatName = "ICE";
+			break;
+		case WATER:
+            MatName = "WATER";
+			break;
+		default:
+			/* Unknown material */
+			assert(0);
+	} 
+}
+
+/*
  * These functions provide a more general interface for EOS calls
  * so the user can in principle add different EOS (e.g., an ideal
  * gas).

@@ -24,15 +24,20 @@ void main(int argc, char **argv) {
 	int nTableRho = 1000;
 	int nTableV = 1000;
 
+    char MatName[256];
+    
+    int iMat;
+
 	int i = 0;
 	int j = 0;
 
 	TILLMATERIAL *tillMat;
 	TILL_LOOKUP_ENTRY *isentrope;
 
-	fprintf(stderr, "Initializing material...\n");
+	fprintf(stderr, "Initializing material:");
+	tillMat = tillInitMaterial(iMat, dKpcUnit, dMsolUnit, nTableRho, nTableV, rhomax, vmax, 1);
 
-	tillMat = tillInitMaterial(ICE, dKpcUnit, dMsolUnit, nTableRho, nTableV, rhomax, vmax, 1);
+	fprintf(stderr, "%s\n", MatName);
 	
 	fprintf(stderr, "Initializing the look up table...\n");
 	tillInitLookup(tillMat);
@@ -44,7 +49,7 @@ void main(int argc, char **argv) {
 	fprintf(stderr,"drho: %g, dv: %g \n", tillMat->drho, tillMat->dv);
 	fprintf(stderr,"\n");
 
-//#if 0
+#if 0
     /*
      * Generate the cold curve from the lookup table.
      */
@@ -65,7 +70,7 @@ void main(int argc, char **argv) {
         fprintf(fp, "%15.7E %15.7E\n", rho, u);
 	}
 	fclose(fp);
-//#endif
+#endif
 
     /*
      * Print some header.
