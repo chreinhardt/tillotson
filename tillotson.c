@@ -905,7 +905,7 @@ void tillSolveBC(TILLMATERIAL *mat1, TILLMATERIAL *mat2, double rho1, double u1,
 	ua = tillURhoTemp(mat2, a, T);
 	Pa = tillPressure(mat2, a, ua);
 
-	b = 0.0;
+	b = mat2->rhomin;
 	ub = tillURhoTemp(mat2, b, T);
 	Pb = tillPressure(mat2, b, ub);
 	
