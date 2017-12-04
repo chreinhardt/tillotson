@@ -294,6 +294,43 @@ void tilliMatString(TILLMATERIAL *material, char *MatName)
 }
 
 /*
+ * This function prints the material constants for a given material.
+ */
+void tillPrintMat(TILLMATERIAL *material)
+{
+    char MatName[256];
+
+    assert(material != NULL);
+    tilliMatString(material, MatName);
+
+
+    fprintf(stderr,"Material: %i (%s)\n", material->iMaterial, MatName);
+
+    /*
+     * Currently the ideal gas is treated differently.
+     */
+    if (material->iMaterial == IDEALGAS)
+    {
+        fprintf(stderr,"dConstGamma: %g\n", material->dConstGamma);
+        fprintf(stderr,"dMeanMolMass: %g\n", material->dMeanMolMass);    
+    	fprintf(stderr,"rho0: %g\n", material->rho0);
+    	fprintf(stderr,"cv: %g\n", material->cv);
+    } else {
+        fprintf(stderr,"a: %g\n", material->a);
+    	fprintf(stderr,"b: %g\n", material->b);
+    	fprintf(stderr,"A: %g\n", material->A);
+    	fprintf(stderr,"B: %g\n", material->B);
+    	fprintf(stderr,"rho0: %g\n", material->rho0);
+    	fprintf(stderr,"u0: %g\n", material->u0);
+    	fprintf(stderr,"us: %g\n", material->us);
+    	fprintf(stderr,"us2: %g\n", material->us2);
+    	fprintf(stderr,"alpha: %g\n", material->alpha);
+    	fprintf(stderr,"beta: %g\n", material->beta);
+    	fprintf(stderr,"cv: %g\n", material->cv);
+    }
+}
+
+/*
  * These functions provide a more general interface for EOS calls
  * so the user can in principle add different EOS (e.g., an ideal
  * gas).

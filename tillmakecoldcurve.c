@@ -13,7 +13,8 @@
 
 #define INDEX(i, j) ((i*tillMat->nTableV) + (j))
 
-void main(int argc, char **argv) {
+void main(int argc, char **argv)
+{
 	double dKpcUnit = 2.06701e-13;
 	double dMsolUnit = 4.80438e-08;
 	double rhomax = 100.0;
@@ -48,6 +49,9 @@ void main(int argc, char **argv) {
 	tillMat = tillInitMaterial(iMat, dKpcUnit, dMsolUnit, nTableRho, nTableV, rhomax, vmax, 1);
     tilliMatString(tillMat, &MatName);
 	fprintf(stderr, "%s\n", MatName);
+#ifdef TILL_PRESS_NP
+    fprintf(stderr, "Pressure cutoff if P<0.\n");
+#endif
 	fprintf(stderr,"\n");
 
 	fprintf(stderr, "Initializing the look up table...\n");

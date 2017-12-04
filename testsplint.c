@@ -65,8 +65,8 @@ void main(int argc, char **argv) {
 
 	
 	/*
-	** Print the look up table to a file first.
-	*/	
+     * Print the look up table to a file first.
+     */	
 //#if 0
 
 	//sprintf(achFile,"%s.log",msrOutName(msr));
@@ -75,8 +75,13 @@ void main(int argc, char **argv) {
 
 	for (i=0;i<granite->nTableRho;i+=1)
 	{
-		rho = i*granite->drho;
+        /*
+         * Careful, its better to use Lookup[i, j].rho.
+		 * rho = i*granite->drho;
+         */
+        rho = granite->Lookup[INDEX(i, j)].rho;
 		fprintf(fp,"%g",rho);
+
 		for (j=0;j<granite->nTableV;j+=1)
 		{
 			// v = j*granite->dv
@@ -88,7 +93,7 @@ void main(int argc, char **argv) {
 	fclose(fp);
 //#endif
 	/* Interpolate values between the isentropes */
-	for (i=0;i<granite->nTableRho-1;i+=1)
+	for (i=0;i<granite->nTableRho-2;i+=1)
 	{
 		// Middle of the interval (i,i+1)
 		//rho = (i + 0.5)*granite->drho;
@@ -96,7 +101,7 @@ void main(int argc, char **argv) {
 		while (l < 0.9)
 		{
 			// Try
-			rho = (i + l)*granite->drho;
+			rho = granite->rhomin+(i + l)*granite->drho;
 			//rho = granite->Lookup[INDEX(i, 0)].rho;
 			//rho += l*fabs((granite->Lookup[INDEX(i, 0)].rho-granite->Lookup[INDEX(i+1, 0)].rho));
 

@@ -854,8 +854,11 @@ double tillCubicInt(TILLMATERIAL *material, double rhoint, double vint) {
 
 	intvalues = malloc(4*sizeof(double));
 
-	// rhoint is between rho[i] and rho[i+1]
-	i = floor(rhoint/material->drho);
+    /*
+     * For even spaced data points rhoint is between rho[i] and rho[i+1].
+     * (CR) 24.11.2017: Keep in mind that one has to account for rhomin.
+     */
+	i = floor((rhoint-material->rhomin)/material->drho);
 	assert(i < material->nTableRho-1);
 
 	// vint is between v[j] and v[j+1]
@@ -874,8 +877,8 @@ double tillCubicInt(TILLMATERIAL *material, double rhoint, double vint) {
 	//dv = (material->vmax/pow(material->nTableV-1,material->n))*(pow(j+1,material->n)-pow(j,material->n));
 	// (CR) 15.11.15: Done
 	
-	rho[0] = i*material->drho;
-	rho[1] = (i+1)*material->drho;
+	rho[0] = material->rhomin+i*material->drho;
+	rho[1] = material->rhomin+(i+1)*material->drho;
 
 	/* Do the spline look up in v. */
 	u[0] = tillSplineIntU(material, vint, i);

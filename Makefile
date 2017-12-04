@@ -187,6 +187,12 @@ tillmakecoldcurve: tillmakecoldcurve.o $(objects)
 testtillcoldu: testtillcoldu.o $(objects)
 	cc -o testtillcoldu testtillcoldu.o $(objects)  -lm
 
+#
+# Print the Tillotson EOS parameters for a material.
+#
+tillprintmat: tillprintmat.o $(objects)
+	cc -o tillprintmat tillprintmat.o $(objects)  -lm
+
 clean:
 	rm $(objects)
 
