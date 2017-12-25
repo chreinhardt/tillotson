@@ -119,6 +119,20 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
 #endif
             material->cv = KBOLTZ/((material->dConstGamma-1.0)*MHYDR*material->dMeanMolMass);
             material->rho0 = 0.001;
+            
+            /*
+             * Add a finite volume to each gas particle to avoid crazy
+             * densities at large pressure but neglect self-interaction.
+             *
+             * Hydrogen: b = 26.6 cm^3/mol (Wikipedia)
+             *
+             * The code uses b'=b/(dMeanMolMass*MHYDR) instead, so be careful
+             * when converting the parameter [b] = cm^3/(g*mol).
+             *
+             * For b=0 the ideal gas EOS is obtained.
+             */
+            material->b = 26.6/(dMeanMolMass*MHYDR);
+            material->a = 0.0;
 			break;
 		case GRANITE:
 			/*
@@ -222,6 +236,15 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
     material->B /= (material->dGmPerCcUnit*material->dErgPerGmUnit);
  
  	material->cv /= material->dErgPerGmUnit;
+
+    /*
+     * In case of an ideal gas the parameters a and b have to be converted to
+     * code units too. Note that [b] = cm^3/(g*mol).
+     */
+    if (iMaterial == IDEALGAS)
+    {
+        material->b *=material->dGmPerCcUnit;
+    }
 
 #if 0
     if (material->iMaterial == IDEALGAS)
@@ -342,8 +365,16 @@ double eosPressureSound(TILLMATERIAL *material, double rho, double u, double *pc
 		/*
 		 * In this case an ideal gas EOS is used.
 		 */
-		if (pcSound != NULL) *pcSound = material->dConstGamma*(material->dConstGamma-1.0)*u;
+#if 0
+        if (pcSound != NULL) *pcSound = material->dConstGamma*(material->dConstGamma-1.0)*u;
 		return ((material->dConstGamma-1.0)*rho*u);
+#endif
+        /*
+         * (CR) 25.12.17: Generalized the ideal gas EOS by introducing a volume
+         * to each gas particle. In the limit b=0 an ideal gas is obtained.
+         */
+        if (pcSound != NULL) *pcSound = (material->dConstGamma-1.0)*u*(material->dConstGamma+material->b)/pow(1.0-material->b*rho, 2.0);
+		return ((material->dConstGamma-1.0)*rho*u/(1.0-material->b*rho));
 	} else {
 		return (tillPressureSound(material, rho, u, pcSound));
 	}
@@ -361,7 +392,14 @@ double eosdPdrho(TILLMATERIAL *material, double rho, double u)
 		/*
 		 * In this case an ideal gas EOS is used.
 		 */
+#if 0
 		return ((material->dConstGamma-1.0)*u);
+#endif
+        /*
+         * (CR) 25.12.17: Generalized the ideal gas EOS by introducing a volume
+         * to each gas particle. In the limit b=0 an ideal gas is obtained.
+         */
+		return ((material->dConstGamma-1.0)*u*(1.0+material->b)/(pow(1.0-material->b*rho, 2.0)));
 	} else {
 		return (tilldPdrho(material, rho, u));
 	}
@@ -374,7 +412,14 @@ double eosdPdu(TILLMATERIAL *material, double rho, double u)
 		/*
 		 * In this case an ideal gas EOS is used.
 		 */
+# if 0
 		return ((material->dConstGamma-1.0)*rho);
+#endif
+        /*
+         * (CR) 25.12.17: Generalized the ideal gas EOS by introducing a volume
+         * to each gas particle. In the limit b=0 an ideal gas is obtained.
+         */
+		return ((material->dConstGamma-1.0)*rho/(1.0-material->b*rho));
 	} else {
 		return (tilldPdu(material, rho, u));
 	}

@@ -92,6 +92,30 @@ void main(int argc, char **argv) {
 	}
 	fclose(fp);
 //#endif
+
+	/* Interpolate values between the isentropes */
+	for (i=0;i<granite->nTableRho-1;i+=1)
+	{
+		rho = granite->rhomin+(i + l)*granite->drho;
+		rho = granite->Lookup[INDEX(i, 0)].rho+granite->drho*0.5;
+
+        printf("%g", rho);
+		for (j=0;j<granite->nTableV-1;j+=1)
+		{
+            v = granite->dv*(j+0.5);
+
+            v = granite->dv*j;
+//            u = tillCubicInt(granite, rho, v);
+            u = tillCubicIntRho(granite, rho, j);
+
+			printf("  %.8g", u);
+		}
+
+		printf("\n");
+	}
+
+    exit(1);
+
 	/* Interpolate values between the isentropes */
 	for (i=0;i<granite->nTableRho-2;i+=1)
 	{
@@ -116,6 +140,8 @@ void main(int argc, char **argv) {
 					// This does not work for non uniform steps in v
 					//v = (j + k)*granite->dv;
 					v = granite->vmax/pow(granite->nTableV-1,n)*pow(j+k,n);
+
+					v = granite->vmax/granite->dv*(j+k);
 
 					u = tillCubicInt(granite, rho, v);
 

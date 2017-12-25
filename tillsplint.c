@@ -876,9 +876,21 @@ double tillCubicInt(TILLMATERIAL *material, double rhoint, double vint) {
 	// (CR) 15.11.15: Try non uniform steps in v. Needs work!!
 	//dv = (material->vmax/pow(material->nTableV-1,material->n))*(pow(j+1,material->n)-pow(j,material->n));
 	// (CR) 15.11.15: Done
-	
-	rho[0] = material->rhomin+i*material->drho;
-	rho[1] = material->rhomin+(i+1)*material->drho;
+
+#if 0
+
+    /*
+     * This is risky! Using Lookup(i, 0) only works if rho does not depend on j.
+     */
+//	rho[0] = material->rhomin+i*material->drho;
+//	rho[1] = material->rhomin+(i+1)*material->drho;
+
+    if (fabs(material->rhomin+i*material->drho-material->Lookup[TILL_INDEX(i, 0)].rho) > 1e-10)
+        assert(0);
+#endif
+
+	rho[0] = material->Lookup[TILL_INDEX(i, 0)].rho;
+	rho[1] = material->Lookup[TILL_INDEX(i+1, 0)].rho;
 
 	/* Do the spline look up in v. */
 	u[0] = tillSplineIntU(material, vint, i);
