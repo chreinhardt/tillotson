@@ -131,7 +131,7 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
              *
              * For b=0 the ideal gas EOS is obtained.
              */
-            material->b = 26.6/(dMeanMolMass*MHYDR);
+            material->b = 26.6/(material->dMeanMolMass*MHYDR);
             material->a = 0.0;
 			break;
 		case GRANITE:
