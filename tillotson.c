@@ -46,7 +46,7 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
     const double MSOLG = 1.99e33;        /* solar mass in grams */
     const double GCGS = 6.67e-8;         /* G in cgs */
     const double KPCCM = 3.085678e21;    /* kiloparsec in centimeters */
-
+    const double NA = 6.022e23;          /* Avogadro's number */
     TILLMATERIAL *material;
 	int i;
 	 
@@ -108,31 +108,42 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
         case IDEALGAS:
             /*
              * Ideal gas EOS. Currently we are limited to monoatomic gases.
+             * Keep in mind that dGasConstant is not R but seems to be kb/mp
+             * (where mp is the mean particle mass) in Gasoline.
              */
             material->dConstGamma = 5.0/3.0;
             material->dMeanMolMass = 1.0;
+
+            material->dMeanMolMass = 23.0; // 10x solar value (mu=2.3)
 #if 0
             /*
              * This doesnt work as cv is converted to code units below.
              */
             material->cv = material->dGasConst/((material->dConstGamma-1.0)*material->dMeanMolMass);
 #endif
+            // cv = kb/mp
             material->cv = KBOLTZ/((material->dConstGamma-1.0)*MHYDR*material->dMeanMolMass);
             material->rho0 = 0.001;
-            
+
+            printf("cv= %g\n", material->cv);
             /*
              * Add a finite volume to each gas particle to avoid crazy
              * densities at large pressure but neglect self-interaction.
              *
              * Hydrogen: b = 26.6 cm^3/mol (Wikipedia)
              *
-             * The code uses b'=b/(dMeanMolMass*MHYDR) instead, so be careful
-             * when converting the parameter [b] = cm^3/(g*mol).
+             * The code uses b'=b/dMeanMolarMass instead, so be careful when
+             * converting the parameter ([b] = cm^3/(g*mol)).
              *
              * For b=0 the ideal gas EOS is obtained.
+             *
+             * NOTE:    Introducing the parameter b defines a maximum density
+             *          and the code must assert that rho < rho_max.
              */
-            material->b = 26.6/(material->dMeanMolMass*MHYDR);
+            material->b = 26.6/(material->dMeanMolMass*MHYDR*NA); 
             material->a = 0.0;
+            fprintf(stderr, "b= %g [cm^3/g]\n", material->b);
+//            material->b = 0.0; 
 			break;
 		case GRANITE:
 			/*
@@ -244,6 +255,7 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
     if (iMaterial == IDEALGAS)
     {
         material->b *=material->dGmPerCcUnit;
+        fprintf(stderr, "b= %g\n [RE^3/Munit]", material->b);
     }
 
 #if 0
@@ -373,7 +385,9 @@ double eosPressureSound(TILLMATERIAL *material, double rho, double u, double *pc
          * (CR) 25.12.17: Generalized the ideal gas EOS by introducing a volume
          * to each gas particle. In the limit b=0 an ideal gas is obtained.
          */
-        if (pcSound != NULL) *pcSound = (material->dConstGamma-1.0)*u*(material->dConstGamma+material->b)/pow(1.0-material->b*rho, 2.0);
+        if (pcSound != NULL)
+            *pcSound = material->dConstGamma*(material->dConstGamma-1.0)*u/pow(1.0-material->b*rho, 2.0);
+
 		return ((material->dConstGamma-1.0)*rho*u/(1.0-material->b*rho));
 	} else {
 		return (tillPressureSound(material, rho, u, pcSound));
@@ -398,8 +412,9 @@ double eosdPdrho(TILLMATERIAL *material, double rho, double u)
         /*
          * (CR) 25.12.17: Generalized the ideal gas EOS by introducing a volume
          * to each gas particle. In the limit b=0 an ideal gas is obtained.
+         * (CR) 20.01.18: Found a bug in the expression for the ideal gas!
          */
-		return ((material->dConstGamma-1.0)*u*(1.0+material->b)/(pow(1.0-material->b*rho, 2.0)));
+		return ((material->dConstGamma-1.0)*u/(pow(1.0-material->b*rho, 2.0)));
 	} else {
 		return (tilldPdrho(material, rho, u));
 	}
@@ -446,6 +461,50 @@ double eosTempRhoU(TILLMATERIAL *material, double rho, double u)
     } else {
         return(tillTempRhoU(material, rho, u));
     }
+}
+
+/*
+ * Calculate rho(P, u) for a given EOS and material using bisection.
+ */
+double eosRhoPU(TILLMATERIAL *material, double P, double u)
+{
+    double a, b, c, Pa, Pb, Pc;
+
+    a = 0.0;
+    Pa = eosPressure(material, a, u);
+
+    b = material->rhomax;
+    Pb = eosPressure(material, b, u);
+
+    /*
+     * Make sure the root is bracketed.
+     */
+    while (Pb < P)
+    {
+        b = 2.0*b;
+        Pb = eosPressure(material, b, u);
+    }
+
+    fprintf(stderr, "a= %g, Pa= %g, b= %g, Pb= %g\n", a, Pa, b, Pb);
+
+    assert(Pa < P && Pb > P);
+
+    while ((Pb-Pa) > 1e-10*Pc)
+    {
+        c = 0.5*(a + b);
+        Pc = eosPressure(material, c, u);
+
+        if (Pc < P)
+        {
+            a = c;
+            Pa = Pc;
+        } else {
+            b = c;
+            Pb = Pc;
+        }
+    }
+
+    return(c);
 }
 
 double tilldPdrho_s(TILLMATERIAL *material, double rho, double u)

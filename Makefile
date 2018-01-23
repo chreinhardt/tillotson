@@ -152,6 +152,12 @@ testeosdpdu: testeosdpdu.o $(objects)
 	cc -o testeosdpdu testeosdpdu.o $(objects) -lm
 
 #
+# Test the function eosRhoPU.
+#
+testeosrhopu: testeosrhopu.o $(objects)
+	cc -o testeosrhopu testeosrhopu.o $(objects) -lm
+
+#
 # Test the function tillPressure.
 #
 testtillpressure: testtillpressure.o $(objects)

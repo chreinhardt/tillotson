@@ -118,6 +118,7 @@ double eosPressureSound(TILLMATERIAL *material, double rho, double u, double *pc
 double eosPressure(TILLMATERIAL *material, double rho, double u);
 double eosdPdrho(TILLMATERIAL *material, double rho, double u);
 double eosdPdu(TILLMATERIAL *material, double rho, double u);
+double eosRhoPU(TILLMATERIAL *material, double P, double u);
 
 double tilldPdrho(TILLMATERIAL *material, double rho, double u);
 double tillSoundSpeed2old(TILLMATERIAL *material, double rho, double u);
