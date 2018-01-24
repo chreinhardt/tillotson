@@ -384,7 +384,13 @@ double eosPressureSound(TILLMATERIAL *material, double rho, double u, double *pc
         /*
          * (CR) 25.12.17: Generalized the ideal gas EOS by introducing a volume
          * to each gas particle. In the limit b=0 an ideal gas is obtained.
+         *
+         * NOTE:    For densities larger than 1/b the pressure is negative.
+         *          This must be treated properly or the code will crash.
          */
+        if (rho >= (1.0/material->b)*0.9)
+            rho = (1.0/material->b)*0.9;
+
         if (pcSound != NULL)
             *pcSound = material->dConstGamma*(material->dConstGamma-1.0)*u/pow(1.0-material->b*rho, 2.0);
 
