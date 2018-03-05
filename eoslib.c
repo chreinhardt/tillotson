@@ -46,10 +46,19 @@ void *eosInitMat(int iMat, double dKpcUnit, double dMsolUnit, void *param)
 
     if (iMat == IDEALGAS)
     {
-        // Ideal gas
-        return((igMat *) igInit());
+        /*
+         * Classic ideal gas.
+         */
+        return((igMat *) igInit((igParam *));
+    } else if (iMat == VDW_EOS) {
+        /*
+         * The Van der Waals EOS.
+         */
+        return(vdwInit());
     } else if (EOS_TILL_BEGIN <= iMat <= EOS_TILL_END) {
-        // Tillotson EOS
+        /*
+         * The Tillotson EOS (Tillotson 1962).
+         */
         return((TILLMATERIAL*) (tillInitMaterial(iMat, dKpcUnit, dMsolUnit, param->nTableRho, param->nTableV, param->rhomax, param->vmax, param->iExpV)));
     } else {
         fprintf(stderr, "iMat= %i undefined.\n", iMat);

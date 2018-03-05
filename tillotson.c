@@ -115,6 +115,8 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
             material->dMeanMolMass = 1.0;
 
             material->dMeanMolMass = 23.0; // 10x solar value (mu=2.3)
+//          material->dMeanMolMass = 11.5; // 5x solar value (mu=2.3)
+//          material->dMeanMolMass = 17.25; // 7.5x solar value (mu=2.3)
 #if 0
             /*
              * This doesnt work as cv is converted to code units below.
@@ -400,7 +402,7 @@ double eosPressureSound(TILLMATERIAL *material, double rho, double u, double *pc
 	}
 }
 
-double eosPressure(TILLMATERIAL *material, double rho, double u)
+ouble eosPressure(TILLMATERIAL *material, double rho, double u)
 {
 	return (eosPressureSound(material, rho, u, NULL));
 }
@@ -462,7 +464,7 @@ double eosTempRhoU(TILLMATERIAL *material, double rho, double u)
      */
     if (material->iMaterial == IDEALGAS)
     {
-        fprintf(stderr, "(CR) eosTempRhoU(): Ideal gas: rho= %g u= %g gamma= %g cv= %g T= %g\n", rho, u, material->dConstGamma, material->cv, u/material->cv);
+//        fprintf(stderr, "(CR) eosTempRhoU(): Ideal gas: rho= %g u= %g gamma= %g cv= %g T= %g\n", rho, u, material->dConstGamma, material->cv, u/material->cv);
         return(u/material->cv);
     } else {
         return(tillTempRhoU(material, rho, u));
@@ -511,6 +513,19 @@ double eosRhoPU(TILLMATERIAL *material, double P, double u)
     }
 
     return(c);
+}
+
+/*
+ * Calculate phi and gamma as given in Hu et al. (2009).
+ */
+double eosPhi(TILLMATERIAL *material, double rho, double u)
+{
+    return(eosdPdrho(material, rho, u));
+}
+
+double eosGamma(TILLMATERIAL *material, double rho, double u)
+{
+    return(1.0/rho*eosdPdu(material, rho, u));
 }
 
 double tilldPdrho_s(TILLMATERIAL *material, double rho, double u)
@@ -1030,24 +1045,35 @@ double tilldudrho(TILLMATERIAL *material, double rho, double u)
 	return(tillPressure(material,rho,u)/(rho*rho));
 }
 
-void tillSolveBC(TILLMATERIAL *mat1, TILLMATERIAL *mat2, double rho1, double u1, double *prho2, double *pu2)
+int tillSolveBC(TILLMATERIAL *mat1, TILLMATERIAL *mat2, double rho1, double u1, double *prho2, double *pu2)
 {
 	/*
-	** Given rho1, u1 (material 1) solve for rho2, u2 (material 2) at the interface between two material.
-	** The b.c. are P1(rho1,u1)=P2(rho2,u2) and T1(rho1,u1)=T2(rho2,u2). We solve for P2(rho2)-P1=0.
-	*/
+     * Given rho1, u1 (material 1) solve for rho2, u2 (material 2) at the interface between two material.
+     *
+     * The b.c. are:
+     *
+     * P1(rho1,u1)=P2(rho2,u2) and T1(rho1,u1)=T2(rho2,u2)
+     *
+     * Since P = P(rho, T) and T1=T2 we solve for P2(rho2)-P1=0.
+     *
+     * Returns 0 if successful or -1 if not.
+     */
 	double P, T;
 	double a, ua, Pa, b, ub, Pb, c, uc, Pc;
+    int iRet;
 
+    iRet = -1;
 	Pc = 0.0;
 
 	/* Calculate P and T in material 1. */
 	P = tillPressure(mat1, rho1, u1);
 	T = tillTempRhoU(mat1, rho1, u1);
 
+	fprintf(stderr,"modelSolveBC: P= %g, T= %g\n", P, T);
+
 	/*
-	** We use rho1 as an upper limit for rho2 assuming that the denser component is in the inner shell.
-	*/
+     * We use rho1 as an upper limit for rho2 assuming that the denser component is in the inner shell.
+     */
 	a = rho1;
 	ua = tillURhoTemp(mat2, a, T);
 	Pa = tillPressure(mat2, a, ua);
@@ -1056,12 +1082,23 @@ void tillSolveBC(TILLMATERIAL *mat1, TILLMATERIAL *mat2, double rho1, double u1,
 	ub = tillURhoTemp(mat2, b, T);
 	Pb = tillPressure(mat2, b, ub);
 	
-	assert (Pa > P && Pb < P);	
-	fprintf(stderr,"modelSolveBC: starting with a=%g ua=%g Pa=%g b=%g ub=%g Pb=%g\n",a,ua,Pa,b,ub,Pb);
+	fprintf(stderr,"modelSolveBC: starting with a=%g ua=%g Pa=%g b=%g ub=%g Pb=%g\n",a ,ua, Pa, b, ub, Pb);
 
     /*
-    ** Root bracketed by (a,b).
-    */
+     * Assert that the root is bracketed by (a, b).
+     */
+    if (Pa < P || Pb > P)
+    {
+
+        return(iRet);
+
+    }
+
+//	assert (Pa > P && Pb < P);	
+
+    /*
+     * Root bracketed by (a,b).
+     */
     while (Pa-Pb > 1e-10) {
 		c = 0.5*(a + b);
 		uc = tillURhoTemp(mat2,c,T);
@@ -1078,18 +1115,14 @@ void tillSolveBC(TILLMATERIAL *mat1, TILLMATERIAL *mat2, double rho1, double u1,
 //		fprintf(stderr,"c:%.10g Pc:%.10g\n",c,Pc);
 	}
 
-//	fprintf(stderr,"modelSolveBC: rho1: %g, u1: %g, rho2:%g, u2:%g\n",rho1,u1,c,uc);
-//	fprintf(stderr,"modelSolveBC: P1: %g, T1: %g, P2:%g, T2:%g\n",P,T,tillPressure(mat2,c,uc),tillTempRhoU(mat2,c,uc));
 	/*
-	** Return values.
-	*/
+     * Return values.
+     */
 	*prho2 = c;
 	*pu2 = uc; 
 
-//	float brent(float ax, float bx, float cx, float (*f)(float), float tol,
-//	float *xmin)
+    iRet = 0;
 
-
-
+    return(iRet);
 }
 
