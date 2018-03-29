@@ -1,5 +1,5 @@
 /*
- ** Copyright (c) 2014-2016 Christian Reinhardt and Joachim Stadel.
+ ** Copyright (c) 2014-2018 Christian Reinhardt and Joachim Stadel.
  **
  ** This file provides all the functions for the Tillotson EOS library.
  ** The Tillotson EOS (e.g. Benz 1986) is a relatively simple but reliable
@@ -11,8 +11,6 @@
 #include <assert.h>
 #include <stdio.h>
 #include "tillotson.h"
-//#include "tillinitlookup.h"
-//#include "tillsplint.h"
 
 /* This will cut the pressure in the cold expanded states for rho/rho0 < 0.8 as suggested in Melosh1989. */
 //#define TILL_PRESS_MELOSH
@@ -50,10 +48,11 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
     TILLMATERIAL *material;
 	int i;
 	 
-    material = malloc(sizeof(TILLMATERIAL));
+    material = calloc(1, sizeof(TILLMATERIAL));
     assert(material != NULL);
 
 	material->iMaterial = iMaterial;
+
 /*
     material->dKpcUnit = 2.06701e-13;
     material->dMsolUnit = 4.80438e-08;
@@ -127,7 +126,6 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
             material->cv = KBOLTZ/((material->dConstGamma-1.0)*MHYDR*material->dMeanMolMass);
             material->rho0 = 0.001;
 
-            printf("cv= %g\n", material->cv);
             /*
              * Add a finite volume to each gas particle to avoid crazy
              * densities at large pressure but neglect self-interaction.
@@ -144,7 +142,7 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
              */
             material->b = 26.6/(material->dMeanMolMass*MHYDR*NA); 
             material->a = 0.0;
-            fprintf(stderr, "b= %g [cm^3/g]\n", material->b);
+            fprintf(stderr, "Modified ideal gas: b= %g [cm^3/g]\n", material->b);
 //            material->b = 0.0; 
 			break;
 		case GRANITE:
@@ -257,7 +255,7 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
     if (iMaterial == IDEALGAS)
     {
         material->b *=material->dGmPerCcUnit;
-        fprintf(stderr, "b= %g\n [RE^3/Munit]", material->b);
+//        fprintf(stderr, "b= %g [RE^3/Munit]\n", material->b);
     }
 
 #if 0
@@ -402,7 +400,7 @@ double eosPressureSound(TILLMATERIAL *material, double rho, double u, double *pc
 	}
 }
 
-ouble eosPressure(TILLMATERIAL *material, double rho, double u)
+double eosPressure(TILLMATERIAL *material, double rho, double u)
 {
 	return (eosPressureSound(material, rho, u, NULL));
 }

@@ -67,7 +67,7 @@ void tillInitLookup(TILLMATERIAL *material)
     int i,j;
 
 	/* We arrange the look up table as a 1D array with Lookup[i][j] = Lookup[i*Ntable+j] */
-    material->Lookup = malloc(material->nTableRho*material->nTableV*sizeof(TILL_LOOKUP_ENTRY));
+    material->Lookup = calloc(material->nTableRho*material->nTableV, sizeof(TILL_LOOKUP_ENTRY));
     assert(material->Lookup != NULL);
 
 	v = 0.0;
