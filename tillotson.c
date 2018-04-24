@@ -1,10 +1,10 @@
 /*
- ** Copyright (c) 2014-2018 Christian Reinhardt and Joachim Stadel.
+ * Copyright (c) 2014-2018 Christian Reinhardt and Joachim Stadel.
  **
- ** This file provides all the functions for the Tillotson EOS library.
- ** The Tillotson EOS (e.g. Benz 1986) is a relatively simple but reliable
- ** and convenient to use equation of state that can describe matter over
- ** a large range of pressures, densities and internal energies.
+ * This file provides all the functions for the Tillotson EOS library.
+ * The Tillotson EOS (e.g. Benz 1986) is a relatively simple but reliable
+ * and convenient to use equation of state that can describe matter over
+ * a large range of pressures, densities and internal energies.
  */
 #include <stdlib.h>
 #include <math.h>
@@ -923,15 +923,29 @@ double tillURhoTemp(TILLMATERIAL *material, double rho, double T)
 
 double tillRhoPTemp(TILLMATERIAL *material, double P, double T)
 {
-	/* Calculate rho(P,T) for a material */
+	/* 
+     * Calculate rho(P,T) for a material. Because thermodynamical consistency
+     * requires dP/drho >= 0 this should always work.
+     */
 	double a, ua, Pa, b, ub, Pb, c, uc, Pc;
 
 	Pc = 0.0;
 
+    /*
+     * Check, if P <= 0.0. In this case the algorithm will not work and the
+     * function returns a negative value for the density to indicate that it
+     * failed.
+     */
+    if (P <= 0.0)
+        return(-1.0);
+
 	/*
-	** We use rhoa=0 and rhob=rhomax as limits.
-	*/
+     * We use rhoa=0 and rhob=rhomax as limits.
+     */
 	a = material->rhomin;
+    // For rho=0.0 the pressure diverges so set a minimum density.
+    if (a < 1e-5)
+        a = 1e-5;
 	ua = tillURhoTemp(material, a, T);
 	Pa = tillPressure(material, a, ua);
 

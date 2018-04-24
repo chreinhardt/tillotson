@@ -199,6 +199,12 @@ testtillcoldu: testtillcoldu.o $(objects)
 tillprintmat: tillprintmat.o $(objects)
 	cc -o tillprintmat tillprintmat.o $(objects)  -lm
 
+#
+# Test the Woolfson (2007) density correction.
+#
+testwoolfson: testwoolfson.o $(objects) tillwoolfson.o
+	cc -o testwoolfson testwoolfson.o tillwoolfson.o $(objects) -lm
+
 clean:
 	rm $(objects)
 
