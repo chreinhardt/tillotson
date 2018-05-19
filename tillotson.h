@@ -142,6 +142,7 @@ double tillTempRhoU(TILLMATERIAL *material, double rho, double u);
 // Not implemented yet
 double tillTempRhoP(TILLMATERIAL *material, double rho, double P);
 double tillURhoTemp(TILLMATERIAL *material, double rho, double T);
+double tillRhoPTemp(TILLMATERIAL *material, double P, double T);
 double tillSoundSpeed(TILLMATERIAL *material, double rho, double u);
 double tillRhoPU(TILLMATERIAL *material, double P, double u);
 double tilldudrho(TILLMATERIAL *material, double rho, double u);
@@ -182,6 +183,8 @@ double tillLookupU(TILLMATERIAL *material,double rho1,double u1,double rho2,int 
 double tillCubicIntRho(TILLMATERIAL *material, double rhoint, int iv);
 double tillColdULookup(TILLMATERIAL *material,double rho);
 
+// A general version of tillLookupU() that can be used as an interface for different EOS
+double eosLookupU(TILLMATERIAL *material,double rho1,double u1,double rho2,int iOrder);
 
 void tillBSderivs(TILLMATERIAL *material, float x, float y[], float dydx[]);
 

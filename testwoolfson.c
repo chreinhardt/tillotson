@@ -36,6 +36,7 @@ void main(int argc, char **argv)
 
 	TILLMATERIAL **tillmat;
 	FILE *fp = NULL;
+    WOOLFSON_COEFF_TABLE *table;
 
 	int i = 0;
 	int j = 0;
@@ -98,9 +99,19 @@ void main(int argc, char **argv)
 
 		fprintf(fp, "\n");
 	}
-
 	
+    fprintf(stderr, "Done.\n");
+
     fclose(fp);
+
+    /*
+     * Now generate the lookup table and print it.
+     */
+    fprintf(stderr, "Initializing lookup table.\n");
+    table = InitWoolfsonCoeffTable(tillmat[0], tillmat[1], nP, nT, Pmin, Pmax, Tmin, Tmax);
+    fprintf(stderr, "Done.\n");
+
+    PrintWoolfsonCoeffTable(table);
 
 	tillFinalizeMaterial(tillmat[0]);
 	tillFinalizeMaterial(tillmat[1]);

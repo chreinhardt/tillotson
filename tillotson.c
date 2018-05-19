@@ -954,9 +954,8 @@ double tillRhoPTemp(TILLMATERIAL *material, double P, double T)
 	Pb = tillPressure(material, b, ub);
 	
 	/* What do we do for P=0 in the expanded cold states?*/
-	fprintf(stderr,"tillRhoPTemp: starting with a=%g ua=%g Pa=%g b=%g ub=%g Pb=%g\n",a,ua,Pa,b,ub,Pb);
+//	fprintf(stderr,"tillRhoPTemp: starting with a= %g ua= %g Pa= %g b=%g ub= %g Pb= %g\n", a, ua, Pa, b, ub, Pb);
 	assert (Pa < P && P < Pb);	
-	//fprintf(stderr,"tillRhoPTemp: starting with a=%g ua=%g Pa=%g b=%g ub=%g Pb=%g\n",a,ua,Pa,b,ub,Pb);
 
     /*
     ** Root bracketed by (a,b).
@@ -977,7 +976,7 @@ double tillRhoPTemp(TILLMATERIAL *material, double P, double T)
 //		fprintf(stderr,"c:%.10g Pc:%.10g\n",c,Pc);
 	}
 
-	fprintf(stderr,"tillRhoPTemp: rhoc=%g uc=%g Pc=%g P=%g T=%g\n",c,uc,Pc,P,T);
+//	fprintf(stderr,"tillRhoPTemp: rhoc= %g uc= %g Pc= %g P= %g T= %g\n", c, uc, Pc, P, T);
 	/*
 	** Return values.
 	*/

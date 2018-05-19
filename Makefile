@@ -205,6 +205,12 @@ tillprintmat: tillprintmat.o $(objects)
 testwoolfson: testwoolfson.o $(objects) tillwoolfson.o
 	cc -o testwoolfson testwoolfson.o tillwoolfson.o $(objects) -lm
 
+#
+# Calculate the Woolfson (2007) coefficients for two given material.
+#
+calc_fij: calc_fij.o $(objects) tillwoolfson.o
+	cc -o calc_fij calc_fij.o tillwoolfson.o $(objects) -lm -Wall
+
 clean:
 	rm $(objects)
 
