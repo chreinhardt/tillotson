@@ -30,8 +30,12 @@
 
 /* Define a minimum density for the look up table */
 //#define TILL_RHO_MIN 1e-2
-#define TILL_RHO_MIN 5e-1
-//#define TILL_RHO_MIN 0.0
+//#define TILL_RHO_MIN 5e-1
+#define TILL_RHO_MIN 0.0
+
+/* Define FALSE and TRUE. */
+//const int FALSE = 0;
+//const int TRUE = 1;
 
 typedef struct till_lookup_entry
 {
@@ -118,7 +122,10 @@ double eosPressureSound(TILLMATERIAL *material, double rho, double u, double *pc
 double eosPressure(TILLMATERIAL *material, double rho, double u);
 double eosdPdrho(TILLMATERIAL *material, double rho, double u);
 double eosdPdu(TILLMATERIAL *material, double rho, double u);
+double eosTempRhoU(TILLMATERIAL *material, double rho, double u);
 double eosRhoPU(TILLMATERIAL *material, double P, double u);
+double eosPhi(TILLMATERIAL *material, double rho, double u);
+double eosGamma(TILLMATERIAL *material, double rho, double u);
 
 double tilldPdrho(TILLMATERIAL *material, double rho, double u);
 double tillSoundSpeed2old(TILLMATERIAL *material, double rho, double u);
@@ -131,13 +138,15 @@ double tilldPdu(TILLMATERIAL *material, double rho, double u);
 double tilldTdrho(TILLMATERIAL *material, double rho, double u);
 double tilldTdu(TILLMATERIAL *material, double rho, double u);
 double tillTempRhoU(TILLMATERIAL *material, double rho, double u);
+
 // Not implemented yet
 double tillTempRhoP(TILLMATERIAL *material, double rho, double P);
 double tillURhoTemp(TILLMATERIAL *material, double rho, double T);
+double tillRhoPTemp(TILLMATERIAL *material, double P, double T);
 double tillSoundSpeed(TILLMATERIAL *material, double rho, double u);
 double tillRhoPU(TILLMATERIAL *material, double P, double u);
 double tilldudrho(TILLMATERIAL *material, double rho, double u);
-void tillSolveBC(TILLMATERIAL *mat1, TILLMATERIAL *mat2, double rho1, double u1, double *prho2, double *pu2);
+int tillSolveBC(TILLMATERIAL *mat1, TILLMATERIAL *mat2, double rho1, double u1, double *prho2, double *pu2);
 
 // Moved to tillinitlookup.h
 void tillInitColdCurve(TILLMATERIAL *material);
@@ -174,6 +183,8 @@ double tillLookupU(TILLMATERIAL *material,double rho1,double u1,double rho2,int 
 double tillCubicIntRho(TILLMATERIAL *material, double rhoint, int iv);
 double tillColdULookup(TILLMATERIAL *material,double rho);
 
+// A general version of tillLookupU() that can be used as an interface for different EOS
+double eosLookupU(TILLMATERIAL *material,double rho1,double u1,double rho2,int iOrder);
 
 void tillBSderivs(TILLMATERIAL *material, float x, float y[], float dydx[]);
 

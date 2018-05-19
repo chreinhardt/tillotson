@@ -1,18 +1,16 @@
 /*
- ** Copyright (c) 2014-2016 Christian Reinhardt and Joachim Stadel.
+ * Copyright (c) 2014-2018 Christian Reinhardt and Joachim Stadel.
  **
- ** This file provides all the functions for the Tillotson EOS library.
- ** The Tillotson EOS (e.g. Benz 1986) is a relatively simple but reliable
- ** and convenient to use equation of state that can describe matter over
- ** a large range of pressures, densities and internal energies.
+ * This file provides all the functions for the Tillotson EOS library.
+ * The Tillotson EOS (e.g. Benz 1986) is a relatively simple but reliable
+ * and convenient to use equation of state that can describe matter over
+ * a large range of pressures, densities and internal energies.
  */
 #include <stdlib.h>
 #include <math.h>
 #include <assert.h>
 #include <stdio.h>
 #include "tillotson.h"
-//#include "tillinitlookup.h"
-//#include "tillsplint.h"
 
 /* This will cut the pressure in the cold expanded states for rho/rho0 < 0.8 as suggested in Melosh1989. */
 //#define TILL_PRESS_MELOSH
@@ -50,10 +48,11 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
     TILLMATERIAL *material;
 	int i;
 	 
-    material = malloc(sizeof(TILLMATERIAL));
+    material = calloc(1, sizeof(TILLMATERIAL));
     assert(material != NULL);
 
 	material->iMaterial = iMaterial;
+
 /*
     material->dKpcUnit = 2.06701e-13;
     material->dMsolUnit = 4.80438e-08;
@@ -115,6 +114,8 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
             material->dMeanMolMass = 1.0;
 
             material->dMeanMolMass = 23.0; // 10x solar value (mu=2.3)
+//          material->dMeanMolMass = 11.5; // 5x solar value (mu=2.3)
+//          material->dMeanMolMass = 17.25; // 7.5x solar value (mu=2.3)
 #if 0
             /*
              * This doesnt work as cv is converted to code units below.
@@ -125,7 +126,6 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
             material->cv = KBOLTZ/((material->dConstGamma-1.0)*MHYDR*material->dMeanMolMass);
             material->rho0 = 0.001;
 
-            printf("cv= %g\n", material->cv);
             /*
              * Add a finite volume to each gas particle to avoid crazy
              * densities at large pressure but neglect self-interaction.
@@ -142,7 +142,7 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
              */
             material->b = 26.6/(material->dMeanMolMass*MHYDR*NA); 
             material->a = 0.0;
-            fprintf(stderr, "b= %g [cm^3/g]\n", material->b);
+            fprintf(stderr, "Modified ideal gas: b= %g [cm^3/g]\n", material->b);
 //            material->b = 0.0; 
 			break;
 		case GRANITE:
@@ -255,7 +255,7 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
     if (iMaterial == IDEALGAS)
     {
         material->b *=material->dGmPerCcUnit;
-        fprintf(stderr, "b= %g\n [RE^3/Munit]", material->b);
+//        fprintf(stderr, "b= %g [RE^3/Munit]\n", material->b);
     }
 
 #if 0
@@ -462,7 +462,7 @@ double eosTempRhoU(TILLMATERIAL *material, double rho, double u)
      */
     if (material->iMaterial == IDEALGAS)
     {
-        fprintf(stderr, "(CR) eosTempRhoU(): Ideal gas: rho= %g u= %g gamma= %g cv= %g T= %g\n", rho, u, material->dConstGamma, material->cv, u/material->cv);
+//        fprintf(stderr, "(CR) eosTempRhoU(): Ideal gas: rho= %g u= %g gamma= %g cv= %g T= %g\n", rho, u, material->dConstGamma, material->cv, u/material->cv);
         return(u/material->cv);
     } else {
         return(tillTempRhoU(material, rho, u));
@@ -511,6 +511,19 @@ double eosRhoPU(TILLMATERIAL *material, double P, double u)
     }
 
     return(c);
+}
+
+/*
+ * Calculate phi and gamma as given in Hu et al. (2009).
+ */
+double eosPhi(TILLMATERIAL *material, double rho, double u)
+{
+    return(eosdPdrho(material, rho, u));
+}
+
+double eosGamma(TILLMATERIAL *material, double rho, double u)
+{
+    return(1.0/rho*eosdPdu(material, rho, u));
 }
 
 double tilldPdrho_s(TILLMATERIAL *material, double rho, double u)
@@ -910,15 +923,29 @@ double tillURhoTemp(TILLMATERIAL *material, double rho, double T)
 
 double tillRhoPTemp(TILLMATERIAL *material, double P, double T)
 {
-	/* Calculate rho(P,T) for a material */
+	/* 
+     * Calculate rho(P,T) for a material. Because thermodynamical consistency
+     * requires dP/drho >= 0 this should always work.
+     */
 	double a, ua, Pa, b, ub, Pb, c, uc, Pc;
 
 	Pc = 0.0;
 
+    /*
+     * Check, if P <= 0.0. In this case the algorithm will not work and the
+     * function returns a negative value for the density to indicate that it
+     * failed.
+     */
+    if (P <= 0.0)
+        return(-1.0);
+
 	/*
-	** We use rhoa=0 and rhob=rhomax as limits.
-	*/
+     * We use rhoa=0 and rhob=rhomax as limits.
+     */
 	a = material->rhomin;
+    // For rho=0.0 the pressure diverges so set a minimum density.
+    if (a < 1e-5)
+        a = 1e-5;
 	ua = tillURhoTemp(material, a, T);
 	Pa = tillPressure(material, a, ua);
 
@@ -927,9 +954,8 @@ double tillRhoPTemp(TILLMATERIAL *material, double P, double T)
 	Pb = tillPressure(material, b, ub);
 	
 	/* What do we do for P=0 in the expanded cold states?*/
-	fprintf(stderr,"tillRhoPTemp: starting with a=%g ua=%g Pa=%g b=%g ub=%g Pb=%g\n",a,ua,Pa,b,ub,Pb);
+//	fprintf(stderr,"tillRhoPTemp: starting with a= %g ua= %g Pa= %g b=%g ub= %g Pb= %g\n", a, ua, Pa, b, ub, Pb);
 	assert (Pa < P && P < Pb);	
-	//fprintf(stderr,"tillRhoPTemp: starting with a=%g ua=%g Pa=%g b=%g ub=%g Pb=%g\n",a,ua,Pa,b,ub,Pb);
 
     /*
     ** Root bracketed by (a,b).
@@ -950,7 +976,7 @@ double tillRhoPTemp(TILLMATERIAL *material, double P, double T)
 //		fprintf(stderr,"c:%.10g Pc:%.10g\n",c,Pc);
 	}
 
-	fprintf(stderr,"tillRhoPTemp: rhoc=%g uc=%g Pc=%g P=%g T=%g\n",c,uc,Pc,P,T);
+//	fprintf(stderr,"tillRhoPTemp: rhoc= %g uc= %g Pc= %g P= %g T= %g\n", c, uc, Pc, P, T);
 	/*
 	** Return values.
 	*/
@@ -1030,24 +1056,35 @@ double tilldudrho(TILLMATERIAL *material, double rho, double u)
 	return(tillPressure(material,rho,u)/(rho*rho));
 }
 
-void tillSolveBC(TILLMATERIAL *mat1, TILLMATERIAL *mat2, double rho1, double u1, double *prho2, double *pu2)
+int tillSolveBC(TILLMATERIAL *mat1, TILLMATERIAL *mat2, double rho1, double u1, double *prho2, double *pu2)
 {
 	/*
-	** Given rho1, u1 (material 1) solve for rho2, u2 (material 2) at the interface between two material.
-	** The b.c. are P1(rho1,u1)=P2(rho2,u2) and T1(rho1,u1)=T2(rho2,u2). We solve for P2(rho2)-P1=0.
-	*/
+     * Given rho1, u1 (material 1) solve for rho2, u2 (material 2) at the interface between two material.
+     *
+     * The b.c. are:
+     *
+     * P1(rho1,u1)=P2(rho2,u2) and T1(rho1,u1)=T2(rho2,u2)
+     *
+     * Since P = P(rho, T) and T1=T2 we solve for P2(rho2)-P1=0.
+     *
+     * Returns 0 if successful or -1 if not.
+     */
 	double P, T;
 	double a, ua, Pa, b, ub, Pb, c, uc, Pc;
+    int iRet;
 
+    iRet = -1;
 	Pc = 0.0;
 
 	/* Calculate P and T in material 1. */
 	P = tillPressure(mat1, rho1, u1);
 	T = tillTempRhoU(mat1, rho1, u1);
 
+	fprintf(stderr,"modelSolveBC: P= %g, T= %g\n", P, T);
+
 	/*
-	** We use rho1 as an upper limit for rho2 assuming that the denser component is in the inner shell.
-	*/
+     * We use rho1 as an upper limit for rho2 assuming that the denser component is in the inner shell.
+     */
 	a = rho1;
 	ua = tillURhoTemp(mat2, a, T);
 	Pa = tillPressure(mat2, a, ua);
@@ -1056,12 +1093,23 @@ void tillSolveBC(TILLMATERIAL *mat1, TILLMATERIAL *mat2, double rho1, double u1,
 	ub = tillURhoTemp(mat2, b, T);
 	Pb = tillPressure(mat2, b, ub);
 	
-	assert (Pa > P && Pb < P);	
-	fprintf(stderr,"modelSolveBC: starting with a=%g ua=%g Pa=%g b=%g ub=%g Pb=%g\n",a,ua,Pa,b,ub,Pb);
+	fprintf(stderr,"modelSolveBC: starting with a=%g ua=%g Pa=%g b=%g ub=%g Pb=%g\n",a ,ua, Pa, b, ub, Pb);
 
     /*
-    ** Root bracketed by (a,b).
-    */
+     * Assert that the root is bracketed by (a, b).
+     */
+    if (Pa < P || Pb > P)
+    {
+
+        return(iRet);
+
+    }
+
+//	assert (Pa > P && Pb < P);	
+
+    /*
+     * Root bracketed by (a,b).
+     */
     while (Pa-Pb > 1e-10) {
 		c = 0.5*(a + b);
 		uc = tillURhoTemp(mat2,c,T);
@@ -1078,18 +1126,14 @@ void tillSolveBC(TILLMATERIAL *mat1, TILLMATERIAL *mat2, double rho1, double u1,
 //		fprintf(stderr,"c:%.10g Pc:%.10g\n",c,Pc);
 	}
 
-//	fprintf(stderr,"modelSolveBC: rho1: %g, u1: %g, rho2:%g, u2:%g\n",rho1,u1,c,uc);
-//	fprintf(stderr,"modelSolveBC: P1: %g, T1: %g, P2:%g, T2:%g\n",P,T,tillPressure(mat2,c,uc),tillTempRhoU(mat2,c,uc));
 	/*
-	** Return values.
-	*/
+     * Return values.
+     */
 	*prho2 = c;
 	*pu2 = uc; 
 
-//	float brent(float ax, float bx, float cx, float (*f)(float), float tol,
-//	float *xmin)
+    iRet = 0;
 
-
-
+    return(iRet);
 }
 
