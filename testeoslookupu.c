@@ -15,20 +15,36 @@
 
 //#define TILL_PRESS_NP
 
+double dudrho(TILLMATERIAL *mat, double rho, double u)
+{
+    double P = (mat->dConstGamma-1.0)*rho*u/(1.0-mat->b*rho);
+    return (P/(rho*rho));
+//    return (eosPressure(mat, rho, u)/(rho*rho));
+}
+
 void main(int argc, char **argv)
 {
 	/*
-     * Calculate rho(P, u) for an ideal gas from the Tillotson EOS library and
-     * compare the results to the analytic expression.
+     * Calculate u(rho) along an isentrope and compare to the result obtained
+     * from eosLookupU().
      */
 	double dKpcUnit = 2.06701e-13;
 	double dMsolUnit = 4.80438e-08;
-	double rhomax = 100.0;
+    double rhomin = 1e-4;
+	double rhomax = 10.0;
     double vmax = 100.0;
+    double umin = 0.0;
 	double umax = 100.0;
-	double rho, rho1, rho2, u, P;
+	double rho, rho1, rho2;
+    double u, u1, u2;
+    double drho, du;
+    // Needed for RK2
+    double k1u, k2u;
 	int nTableRho = 100;
 	int nTableV = 100;
+    // The larger mean molecular weight the more points are needed for precission
+    int nRho = 10000;
+    int nU = 10;
 
 	TILLMATERIAL *tillmat;
 	FILE *fp = NULL;
@@ -37,72 +53,104 @@ void main(int argc, char **argv)
 	int j = 0;
 
 	fprintf(stderr, "Initializing material...\n");
+
+    // Do not convert to code units (does this really work?)
+    dKpcUnit = 0.0;
+	dMsolUnit = 0.0;
+
 	tillmat = tillInitMaterial(IDEALGAS, dKpcUnit, dMsolUnit, nTableRho, nTableV, rhomax, vmax, 1);
 	fprintf(stderr, "Done.\n");
 
 	/*
-	 * Determine rho(P, u) on a P x u grid.
-	 */	
-	fp = fopen("testeosrhopu.txt","w");
+	 * Solve isentropes numerically for different inital u.
+	 */
+	fp = fopen("testeoslookupu.txt","w");
 	assert(fp != NULL);
 
-	for (i=0; i<tillmat->nTableRho; i++)
+    rhomax = 1.0/tillmat->b;
+
+    fprintf(stderr, "rhomax= %g b= %g\n", rhomax, tillmat->b);
+
+    rhomax *= 0.9;
+
+    drho = (rhomax - rhomin)/(nRho - 1);
+    du = (umax - umin)/(nU - 1);
+
+    for (i=0; i< nU; i++)
     {
-        rho = i*tillmat->drho;
+        u = umin + i*du;
 
-		for (j=0; j<tillmat->nTableV; j++)
-		{
-			u = j*tillmat->dv;
-            P = eosPressure(tillmat, rho, u);
+        rho = rhomin;
+        
+        for (j=0; j<nRho; j++)
+        {
+            /*
+             * Midpoint Runga-Kutta (2nd order).
+             */
+            k1u = drho*dudrho(tillmat, rho, u);
+		    k2u = drho*dudrho(tillmat, rho+0.5*drho, u+0.5*k1u);
 
-//            fprintf(stderr, "rho= %g, u= %g, P= %g\n", rho, u, P);
-
-            P /= fabs(P);
-            if (P > 0.0) P = 1e5;
-
-			fprintf(fp, " %15.7E", P);
-            if (P < 0.0)
-                fprintf(stderr, "rho= %g, u= %g, P= %g\n", rho, u, P);
-
-		}
-
-		fprintf(fp, "\n");
-	}
-
-    exit(1);
-    /*
-     * Starting from rho=0 or u=0 causes problems as P=0 for all rho.
-     */
-	for (i=1; i<tillmat->nTableRho; i++)
-    {
-        rho = i*tillmat->drho;
+		    u += k2u;
+            rho += drho;
+            
+            /*
+             * Note: All isentropes are written into two columns and then split
+             * into different vectors in python.
+             */
+            fprintf(fp, "%15.7E  %15.7E\n", rho, u);
+        }
+    }
 
 #if 0
-        if (rho >= 1.0/tillmat->b)
-        {
-            fprintf(stderr, "i= %i: rho= %g, b= %g, 1/b= %g rho*b= %g\n", i, rho, tillmat->b, 1.0/tillmat->b, rho*tillmat->b);
-            continue;
-        }
+    u = 0.1;
+    rho = rhomin;
+
+    for (j=0; j<nRho; j++)
+    {
+        /*
+         * Midpoint Runga-Kutta (2nd order).
+         */
+        k1u = drho*dudrho(tillmat, rho, u);
+		k2u = drho*dudrho(tillmat, rho+0.5*drho, u+0.5*k1u);
+
+        u += k2u;
+        rho += drho;
+        
+        fprintf(fp, "%15.7E  %15.7E\n", rho, u);
+    }
+
+    rho1 = rhomin;
+    u1 = 0.1;
+
+    rho2 = 0.9*rhomax;
+
+    u2 = eosLookupU(tillmat, rho1, u1, rho2, i);
+
+    printf("rho1= %15.7E u1= %15.7E rho2= %15.7E u2= %15.7E\n", rho1, u1, rho2, u2);
 #endif
+    /*
+     * Use analytic solution.
+     */
 
-		for (j=1; j<tillmat->nTableV; j++)
-		{
-			u = j*tillmat->dv;
-            P = eosPressure(tillmat, rho, u);
+    for (i=0; i< nU; i++)
+    {
+        u1 = umin + i*du;
+        rho1 = rhomin;
 
-            fprintf(stderr, "rho= %g, u= %g, P= %g\n", rho, u, P);
+         printf("%15.7E  %15.7E\n", rho1, u1);
+    
+        for (j=0; j<nRho-1; j++)
+        {
+            rho2 = (j+1)*drho; 
+            u2 = eosLookupU(tillmat, rho1, u1, rho2, i);
+        
+            printf("%15.7E  %15.7E\n", rho2, u2);
 
-            rho1 = eosRhoPU(tillmat, P, u);
-            rho2 = P/((tillmat->dConstGamma-1.0)*u+tillmat->b*P);
+            rho1 = rho2;
+            u1 = u2;
+        }
+    }
 
-			fprintf(fp, " %15.7E", rho1-rho2);
-
-            if (fabs(rho1-rho2) > 1e-10)
-                fprintf(stderr, "rho1= %15.7E rho2= %15.7E\n", rho1, rho2);
-		}
-		fprintf(fp, "\n");
-	}
-	
     fclose(fp);
 
 	tillFinalizeMaterial(tillmat);

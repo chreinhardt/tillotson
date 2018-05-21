@@ -142,7 +142,8 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
              */
             material->b = 26.6/(material->dMeanMolMass*MHYDR*NA); 
             material->a = 0.0;
-            fprintf(stderr, "Modified ideal gas: b= %g [cm^3/g]\n", material->b);
+            fprintf(stderr, "Modified ideal gas: b=  %g [cm^3/g]\n", material->b);
+            fprintf(stderr, "Modified ideal gas: mu= %g [1/m_H]\n", material->dMeanMolMass);
 //            material->b = 0.0; 
 			break;
 		case GRANITE:
@@ -338,7 +339,6 @@ void tillPrintMat(TILLMATERIAL *material)
     assert(material != NULL);
     tilliMatString(material, MatName);
 
-
     fprintf(stderr,"Material: %i (%s)\n", material->iMaterial, MatName);
 
     /*
@@ -385,8 +385,8 @@ double eosPressureSound(TILLMATERIAL *material, double rho, double u, double *pc
          * (CR) 25.12.17: Generalized the ideal gas EOS by introducing a volume
          * to each gas particle. In the limit b=0 an ideal gas is obtained.
          *
-         * NOTE:    For densities larger than 1/b the pressure is negative.
-         *          This must be treated properly or the code will crash.
+         * NOTE: For densities larger than 1/b the pressure is negative. This
+         *       must be treated properly or the code will crash.
          */
         if (rho >= (1.0/material->b)*0.9)
             rho = (1.0/material->b)*0.9;

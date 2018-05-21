@@ -158,6 +158,12 @@ testeosrhopu: testeosrhopu.o $(objects)
 	cc -o testeosrhopu testeosrhopu.o $(objects) -lm
 
 #
+# Test the function eosLookupU.
+#
+testeoslookupu: testeoslookupu.o $(objects)
+	cc -o testeoslookupu testeoslookupu.o $(objects) -lm
+
+#
 # Test the function tillPressure.
 #
 testtillpressure: testtillpressure.o $(objects)

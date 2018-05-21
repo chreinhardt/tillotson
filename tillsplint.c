@@ -997,7 +997,8 @@ double eosLookupU(TILLMATERIAL *material, double rho1, double u1, double rho2, i
         /*
          * For the ideal gas EOS there is an analytic expression.
          */
-        return(u1*pow(rho2/rho1, material->dConstGamma-1.0));
+//        return(u1*pow(rho2/rho1, material->dConstGamma-1.0));
+        return(u1*pow(rho2/rho1*(1.0-material->b*rho1)/(1.0-material->b*rho2), material->dConstGamma-1.0));
     }  else {
         return tillLookupU(material, rho1, u1, rho2, iOrder);
     }
