@@ -388,8 +388,8 @@ double eosPressureSound(TILLMATERIAL *material, double rho, double u, double *pc
          * NOTE: For densities larger than 1/b the pressure is negative. This
          *       must be treated properly or the code will crash.
          */
-        if (rho >= (1.0/material->b)*0.9)
-            rho = (1.0/material->b)*0.9;
+        if (rho >= (1.0/material->b)*0.99)
+            rho = (1.0/material->b)*0.99;
 
         if (pcSound != NULL)
             *pcSound = material->dConstGamma*(material->dConstGamma-1.0)*u/pow(1.0-material->b*rho, 2.0);

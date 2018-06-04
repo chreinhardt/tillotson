@@ -294,7 +294,7 @@ int tillIsInTable(TILLMATERIAL *material,double rho,double u)
 	{
 		/* We are in the unphysical region below the cold curve */
 //		fprintf(stderr,"tillIsInTable: value (%g,%g) below the cold curve!\n",rho,u);
-		printf("tillIsInTable: value (%g,%g) below the cold curve (iMat=%i)!\n",rho,u,material->iMaterial);
+//		printf("tillIsInTable: value (%g,%g) below the cold curve (iMat=%i)!\n",rho,u,material->iMaterial);
 		return(iRet);
 	}
 	iRet = 0;
