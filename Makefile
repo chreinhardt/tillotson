@@ -217,6 +217,12 @@ testwoolfson: testwoolfson.o $(objects) tillwoolfson.o
 calc_fij: calc_fij.o $(objects) tillwoolfson.o
 	cc -o calc_fij calc_fij.o tillwoolfson.o $(objects) -lm -Wall
 
+#
+# Set a minimum sound speed.
+#
+soundspeed_cutoff: soundspeed_cutoff.o $(objects)
+	cc -o soundspeed_cutoff soundspeed_cutoff.o $(objects) -lm
+
 clean:
 	rm $(objects)
 
