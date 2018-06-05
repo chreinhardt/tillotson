@@ -1,3 +1,4 @@
+#!/usr/bin/env python2
 """
 This script compares the density obtained from tillRhoPU() with the expected value.
 """
@@ -37,6 +38,7 @@ imshow(P1-P2)
 #ylim(0,7.33)
 xlabel('Int. energy')
 ylabel('Density')
+title('P1-P2')
 colorbar()
 
 """
@@ -50,6 +52,7 @@ figure(2)
 imshow(cs1-cs2)
 xlabel('Int. energy')
 ylabel('Density')
+title('cs1-cs2')
 colorbar()
 
 """
@@ -63,6 +66,7 @@ figure(3)
 imshow(dPdrho1-dPdrho2)
 xlabel('Int. energy')
 ylabel('Density')
+title('dPdrho1-dPdrho2')
 colorbar()
 
 """
@@ -76,6 +80,7 @@ figure(4)
 imshow(dPdu1-dPdu2)
 xlabel('Int. energy')
 ylabel('Density')
+title('dPdu1-dPdu2')
 colorbar()
 
 show()

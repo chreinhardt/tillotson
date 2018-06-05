@@ -55,9 +55,16 @@ void main(int argc, char **argv)
 	for (i=0; i<tillmat->nTableRho; i++)
 	{
 		rho = i*tillmat->drho;
+        printf("i= %i rho= %g drho= %g\n", i, rho, tillmat->drho);
 		for (j=0; j<tillmat->nTableV; j++)
 		{
 			u = j*tillmat->dv;
+		    if (eosPressure(tillmat, rho, u) >= 0.0)
+            {
+            } else {
+                printf("P= %g, rho= %g, u= %g\n", eosPressure(tillmat, rho, u), rho, u);
+                assert(0);
+            }
 
 			fprintf(fp1, " %15.7E", eosPressure(tillmat, rho, u));
 			fprintf(fp2, " %15.7E", (5.0/3.0-1.0)*rho*u);
