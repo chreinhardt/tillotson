@@ -527,6 +527,51 @@ double eosRhoPU(TILLMATERIAL *material, double P, double u)
 }
 
 /*
+ * Calculate u(rho, P) for a given EOS and material using bisection.
+ */
+double eosURhoP(TILLMATERIAL *material, double rho, double P)
+{
+    double a, b, c, Pa, Pb, Pc;
+
+    // umin = 0.0
+    a = 0.0;
+    Pa = eosPressure(material, rho, a);
+
+    b = material->vmax;
+    Pb = eosPressure(material, rho, b);
+
+    /*
+     * Make sure the root is bracketed.
+     */
+    while (Pb < P)
+    {
+        b = 2.0*b;
+        Pb = eosPressure(material, rho, b);
+    }
+
+    fprintf(stderr, "a= %g, Pa= %g, b= %g, Pb= %g\n", a, Pa, b, Pb);
+
+    assert(Pa<P && Pb>P);
+
+    while ((Pb-Pa) > 1e-10*Pc)
+    {
+        c = 0.5*(a + b);
+        Pc = eosPressure(material, rho, c);
+
+        if (Pc < P)
+        {
+            a = c;
+            Pa = Pc;
+        } else {
+            b = c;
+            Pb = Pc;
+        }
+    }
+
+    return(c);
+}
+
+/*
  * Calculate phi and gamma as given in Hu et al. (2009).
  */
 double eosPhi(TILLMATERIAL *material, double rho, double u)
