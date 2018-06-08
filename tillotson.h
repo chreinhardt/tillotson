@@ -124,6 +124,7 @@ double eosdPdrho(TILLMATERIAL *material, double rho, double u);
 double eosdPdu(TILLMATERIAL *material, double rho, double u);
 double eosTempRhoU(TILLMATERIAL *material, double rho, double u);
 double eosRhoPU(TILLMATERIAL *material, double P, double u);
+double eosURhoP(TILLMATERIAL *material, double rho, double P);
 double eosPhi(TILLMATERIAL *material, double rho, double u);
 double eosGamma(TILLMATERIAL *material, double rho, double u);
 

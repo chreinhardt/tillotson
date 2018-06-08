@@ -140,11 +140,11 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
              * NOTE:    Introducing the parameter b defines a maximum density
              *          and the code must assert that rho < rho_max.
              */
-            material->b = 26.6/(material->dMeanMolMass*MHYDR*NA);
+//            material->b = 26.6/(material->dMeanMolMass*MHYDR*NA);
+            material->b = 0.0; 
             material->a = 0.0;
             fprintf(stderr, "Modified ideal gas: b=  %g [cm^3/g]\n", material->b);
             fprintf(stderr, "Modified ideal gas: mu= %g [1/m_H]\n", material->dMeanMolMass);
-//            material->b = 0.0; 
 			break;
 		case GRANITE:
 			/*
@@ -543,13 +543,13 @@ double eosURhoP(TILLMATERIAL *material, double rho, double P)
     /*
      * Make sure the root is bracketed.
      */
-    while (Pb < P)
+    while (Pb <= P)
     {
         b = 2.0*b;
         Pb = eosPressure(material, rho, b);
     }
 
-    fprintf(stderr, "a= %g, Pa= %g, b= %g, Pb= %g\n", a, Pa, b, Pb);
+    fprintf(stderr, "rho= %g P= %g: a= %g, Pa= %g, b= %g, Pb= %g\n", rho, P, a, Pa, b, Pb);
 
     assert(Pa<P && Pb>P);
 
