@@ -9,6 +9,8 @@
  * Ideal gas EOS
  * Tillotson EOS (Tillotson 1962)
  * Van der Waals EOS
+ * ANEOS (Thompson 1972)
+ * M-ANEOS (Melosh 2007)
  */
 #include <stdlib.h>
 #include <math.h>
@@ -19,17 +21,18 @@
 /*
  * Basic functions:
  *
- * eosInitMat: initialise a material of a given EOS from its material ID.
+ * eosInitMat:       initialise a material of a given EOS from its material ID.
  *
- * eosFinalizeMat: finalize a material, free memory if needed.
+ * eosFinalizeMat:   finalize a material, free memory if needed.
  *
  * eosPressureSound: calculate the pressure and soundspeed for a given EOS/material.
  *
- * eosPressure: calculate the pressure only (uses eosPressureSound).
+ * eosPressure:      calculate the pressure only (uses eosPressureSound).
  *
- * eosSoundSpeed: calculate the sound speed for a given rho and u (uses eosPressureSound).
+ * eosSoundSpeed:    calculate the sound speed for a given rho and u (uses
+ *                   eosPressureSound).
  *
- * eosFinalize: free memory.
+ * eosFinalize:      free memory.
  */
 
 void *eosInitMat(int iMat, double dKpcUnit, double dMsolUnit, void *param)
@@ -43,7 +46,6 @@ void *eosInitMat(int iMat, double dKpcUnit, double dMsolUnit, void *param)
      * params:      a general array containing different parameters that depend
      *              on the EOS.
 	 */
-
     if (iMat == IDEALGAS)
     {
         /*
@@ -55,7 +57,7 @@ void *eosInitMat(int iMat, double dKpcUnit, double dMsolUnit, void *param)
          * The Van der Waals EOS.
          */
         return(vdwInit());
-    } else if (EOS_TILL_BEGIN <= iMat <= EOS_TILL_END) {
+    } else if (EOS_TILL_MIN <= iMat <= EOS_TILL_MAX) {
         /*
          * The Tillotson EOS (Tillotson 1962).
          */
@@ -71,8 +73,8 @@ void eosFinalizeMat(void *eosMat)
 	/*
      * Free the memory.
      */
-
-	free(eosMat);
+    if (eosMat != NULL)
+        free(eosMat);
 }
 
 double eosPressureSound(void *eosMat, double rho, double u, double *pcSound)
@@ -81,8 +83,10 @@ double eosPressureSound(void *eosMat, double rho, double u, double *pcSound)
      * Calculate the pressure and sound speed for a given EOS and material.
      *
      * Input:
-     * void *eosMat
-     *
+     * eosMat:      structure that contains EOS/material specific data
+     * rho:         density
+     * u:           internal energy
+     * pcSound:     sound speed (if NULL nothing is returned)
      * Output:
      * Pressure
      */
