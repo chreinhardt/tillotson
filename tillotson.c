@@ -232,6 +232,23 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
 			// Have to look up in more details?
 			material->cv = 4.1814e7;	/* ergs/g K */ 
 			break;
+		case DUNITE:
+			/*
+			** Material parameters that imitate dunite in ANEOS (Thompson 1972).
+			*/
+			material->a = 0.5;
+			material->b = 1.5;
+			material->u0 = 4.87e12;		/* in ergs/g */
+            // Key difference is the reference density
+			material->rho0 = 3.32;		/* g/cc */
+			material->A = 2.67e11;		/* ergs/cc */
+			material->B = 2.67e11;		/* ergs/cc */
+			material->us = 4.72e10;		/* ergs/g */
+			material->us2 = 1.82e11;	/* ergs/g */
+			material->alpha = 5.0;
+			material->beta = 5.0;
+			material->cv = 0.84e7;		/* ergs/g K */ 
+			break;
 		default:
 			/* Unknown material */
 			assert(0);
