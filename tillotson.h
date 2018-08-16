@@ -11,6 +11,15 @@
 #include "nr/nrcubicspline.h"
 
 /*
+ * Version.
+ */
+#define TILL_VERSION_TEXT    "2.0.0"
+#define TILL_VERSION_MAJOR   2
+#define TILL_VERSION_MINOR   0
+#define TILL_VERSION_PATCH   0
+
+
+/*
  * Warning: redefined the material constants on 10.10.2017!
  */
 #define IDEALGAS    0
