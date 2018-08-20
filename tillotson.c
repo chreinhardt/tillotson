@@ -589,6 +589,25 @@ double eosURhoP(TILLMATERIAL *material, double rho, double P)
 }
 
 /*
+ * Calculate rho(P, T) for a given EOS and material.
+ */
+double eosRhoPTemp(TILLMATERIAL *material, double P, double T)
+{
+    double rho;
+    
+    if (material->iMat == IDEALGAS)
+    {
+        // For the ideal gas there is an analytic expression.
+        rho = P/((material->dConstGamma-1.0)*material->cv*T);
+    } else {
+        // If it is a Tillotson material call tillRhoPTemp().
+        rho = tillRhoPTemp(material, P, T);
+    }
+    
+    return rho;
+}
+
+/*
  * Calculate phi and gamma as given in Hu et al. (2009).
  */
 double eosPhi(TILLMATERIAL *material, double rho, double u)

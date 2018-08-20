@@ -1,5 +1,5 @@
 /*
- * The header file for tillwoolfson.c.
+ * The header file for woolfson.c.
  */
 #ifndef TILLWOOLFSON_HINCLUDED
 #define TILLWOOLFSON_HINCLUDED
