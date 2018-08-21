@@ -1,5 +1,5 @@
 /*
- * This is a simple program to test the functions provided in tillwoolfson.c.
+ * This is a simple program to test the functions provided in woolfson.c.
  */
 #include <math.h>
 #include <stdio.h>
@@ -19,8 +19,8 @@
 void main(int argc, char **argv)
 {
 	/*
-     * Calculate a look up table for the coefficients f_ij for two materials
-     * (e.g., iron and granite).
+     * Calculate a look up table for the coefficients f_ij for two materials (e.g., iron and
+     * granite).
      */
 	double dKpcUnit = 2.06701e-13;
 	double dMsolUnit = 4.80438e-08;

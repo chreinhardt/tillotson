@@ -595,7 +595,7 @@ double eosRhoPTemp(TILLMATERIAL *material, double P, double T)
 {
     double rho;
     
-    if (material->iMat == IDEALGAS)
+    if (material->iMaterial == IDEALGAS)
     {
         // For the ideal gas there is an analytic expression.
         rho = P/((material->dConstGamma-1.0)*material->cv*T);

@@ -214,14 +214,14 @@ tillprintmat: tillprintmat.o $(objects)
 #
 # Test the Woolfson (2007) density correction.
 #
-testwoolfson: testwoolfson.o $(objects) tillwoolfson.o
-	cc -o testwoolfson testwoolfson.o tillwoolfson.o $(objects) -lm
+testwoolfson: testwoolfson.o woolfson.o $(objects)
+	cc -o testwoolfson testwoolfson.o woolfson.o $(objects) -lm
 
 #
 # Calculate the Woolfson (2007) coefficients for two given material.
 #
-calc_fij: calc_fij.o $(objects) tillwoolfson.o
-	cc -o calc_fij calc_fij.o tillwoolfson.o $(objects) -lm -Wall
+calc_fij: calc_fij.o woolfson.o $(objects)
+	cc -o calc_fij calc_fij.o woolfson.o $(objects) -lm -Wall
 
 #
 # Set a minimum sound speed.

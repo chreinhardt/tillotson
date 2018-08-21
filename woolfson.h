@@ -1,8 +1,8 @@
 /*
  * The header file for woolfson.c.
  */
-#ifndef TILLWOOLFSON_HINCLUDED
-#define TILLWOOLFSON_HINCLUDED
+#ifndef WOOLFSON_HINCLUDED
+#define WOOLFSON_HINCLUDED
 
 #include "tillotson.h"
 
@@ -37,10 +37,14 @@ double CalcWoolfsonCoeff(TILLMATERIAL *mat1, TILLMATERIAL *mat2, double P, doubl
 
 // Basic functions for the lookup table
 WOOLFSON_COEFF_TABLE_ENTRY **CoeffMatrixAlloc(int nRow, int nCol);
-WOOLFSON_COEFF_TABLE* InitWoolfsonCoeffTable(TILLMATERIAL *Mat1, TILLMATERIAL *Mat2, int nP, int nT, double Pmin, double Pmax, double Tmin, double Tmax);
+WOOLFSON_COEFF_TABLE* InitWoolfsonCoeffTable(TILLMATERIAL *Mat1, TILLMATERIAL *Mat2, int nP,
+                                             int nT, double Pmin, double Pmax, double Tmin,
+                                             double Tmax);
 
-int WoolfsonLookupPIndex(WOOLFSON_COEFF_TABLE_ENTRY **Lookup, double P, unsigned int nRow, unsigned int iCol);
-int WoolfsonLookupTIndex(WOOLFSON_COEFF_TABLE_ENTRY **Lookup, double T, unsigned int iRow, unsigned int nCol);
+int WoolfsonLookupPIndex(WOOLFSON_COEFF_TABLE_ENTRY **Lookup, double P, unsigned int nRow,
+                         unsigned int iCol);
+int WoolfsonLookupTIndex(WOOLFSON_COEFF_TABLE_ENTRY **Lookup, double T, unsigned int iRow,
+                         unsigned int nCol);
 double WoolfsonCoeffInterpol(WOOLFSON_COEFF_TABLE *table, double P, double T);
 
 int PrintWoolfsonCoeffTable(WOOLFSON_COEFF_TABLE *table);
