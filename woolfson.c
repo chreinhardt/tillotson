@@ -34,6 +34,10 @@ double CalcWoolfsonCoeff(TILLMATERIAL *mat1, TILLMATERIAL *mat2, double P, doubl
     double rho1;
     double rho2;
 
+    // Check if there is indeed a material interface.
+    if (mat1->iMaterial == mat2->iMaterial)
+        return 1.0;
+
     /*
      * In the low density region a density correction can be problematic (dPdrho not monotonic,
      * interpretation of mixed phases in the Tillotson EOS difficult), so the correction factor
