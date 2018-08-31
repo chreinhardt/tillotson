@@ -18,8 +18,8 @@
  *
  * InitWoolfsonCoeffTable: Allocate memory and generate the lookup table.
  *
- *
  * WoolfsonCoeffInterpol: Linear interpolate in the lookup table to find f_ij(P, T).
+ *
  * CalcWoolfsonCoeff: Calculate the correction coefficients f_ij as in Woolfson (2007).
  */
 double CalcWoolfsonCoeff(TILLMATERIAL *mat1, TILLMATERIAL *mat2, double P, double T)
@@ -33,6 +33,14 @@ double CalcWoolfsonCoeff(TILLMATERIAL *mat1, TILLMATERIAL *mat2, double P, doubl
      */
     double rho1;
     double rho2;
+
+    /*
+     * In the low density region a density correction can be problematic (dPdrho not monotonic,
+     * interpretation of mixed phases in the Tillotson EOS difficult), so the correction factor
+     * is one in this case.
+     */
+    if ((rho1 < mat1->rho0) || (rho2 < mat2->rho0))
+        return 1.0;
 
     rho1 = eosRhoPTemp(mat1, P, T);
     rho2 = eosRhoPTemp(mat2, P, T);

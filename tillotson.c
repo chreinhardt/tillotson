@@ -1070,11 +1070,11 @@ double tillRhoPTemp(TILLMATERIAL *material, double P, double T)
         //		fprintf(stderr,"c:%.10g Pc:%.10g\n",c,Pc);
     }
 
-    //	fprintf(stderr,"tillRhoPTemp: rhoc= %g uc= %g Pc= %g P= %g T= %g\n", c, uc, Pc, P, T);
+    //fprintf(stderr,"tillRhoPTemp: rhoc= %g uc= %g Pc= %g P= %g T= %g\n", c, uc, Pc, P, T);
     /*
      ** Return values.
      */
-    return(c);
+    return c;
 }
 
 double tillSoundSpeed(TILLMATERIAL *material, double rho, double u)

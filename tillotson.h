@@ -34,7 +34,6 @@
 #define ANEOS_DUNITE 32
 
 
-
 #define TILL_N_MATERIAL_MAX 32
 
 /* We write the look up table as a 1D array where a(i,j)=a(i*N+j) */
@@ -140,6 +139,7 @@ double eosdPdu(TILLMATERIAL *material, double rho, double u);
 double eosTempRhoU(TILLMATERIAL *material, double rho, double u);
 double eosRhoPU(TILLMATERIAL *material, double P, double u);
 double eosURhoP(TILLMATERIAL *material, double rho, double P);
+double eosRhoPTemp(TILLMATERIAL *material, double P, double T);
 double eosPhi(TILLMATERIAL *material, double rho, double u);
 double eosGamma(TILLMATERIAL *material, double rho, double u);
 
