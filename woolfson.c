@@ -43,9 +43,19 @@ double CalcWoolfsonCoeff(TILLMATERIAL *mat1, TILLMATERIAL *mat2, double P, doubl
      * interpretation of mixed phases in the Tillotson EOS difficult), so the correction factor
      * is one in this case.
      */
-    if ((rho1 < mat1->rho0) || (rho2 < mat2->rho0))
+#if 0
+    //// CR This doesnt work as the iron particles at the CMB are in the expanded states because the density is miscalculated. 
+    //// CR This can not work because we dont know the density.
+    if ((rho1 < mat1->rho0) || (rho2 < mat2->rho0)) {
+        fprintf(stderr, "Warning: particle is in expanded states so no density correction is done.\n");
         return 1.0;
+    }
+#endif
 
+    if (P < WOOLFSON_MIN_PRESSURE) {
+        fprintf(stderr, "Warning: Pressure is close to zero so no density correction is done.\n");
+        return 1.0;
+    }
     rho1 = eosRhoPTemp(mat1, P, T);
     rho2 = eosRhoPTemp(mat2, P, T);
 

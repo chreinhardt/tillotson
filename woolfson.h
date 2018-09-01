@@ -6,6 +6,9 @@
 
 #include "tillotson.h"
 
+// Minimum pressure to avoid problems in root finding if P(rho) is not monotonic
+#define WOOLFSON_MIN_PRESSURE 1e-3
+
 typedef struct woolfson_coeff_table_entry
 {
 //	double u;
