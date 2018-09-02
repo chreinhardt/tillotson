@@ -1019,7 +1019,7 @@ double tillRhoPTemp(TILLMATERIAL *material, double P, double T)
 {
     /* 
      * Calculate rho(P,T) for a material. Because thermodynamical consistency
-     * requires dP/drho >= 0 this should always work.
+     * requires (dP/drho)_T > 0 this should always work.
      */
     double a, ua, Pa, b, ub, Pb, c, uc, Pc;
 
@@ -1031,7 +1031,7 @@ double tillRhoPTemp(TILLMATERIAL *material, double P, double T)
      * failed.
      */
     if (P <= 0.0)
-        return(-1.0);
+        return -1.0;
 
     /*
      * We use rhoa=0 and rhob=rhomax as limits.
@@ -1049,10 +1049,15 @@ double tillRhoPTemp(TILLMATERIAL *material, double P, double T)
 
     /* What do we do for P=0 in the expanded cold states?*/
     //	fprintf(stderr,"tillRhoPTemp: starting with a= %g ua= %g Pa= %g b=%g ub= %g Pb= %g\n", a, ua, Pa, b, ub, Pb);
+    /* Check if the root is bracketed. */
+    if ((Pa >= P) || (Pb <=P))
+    {
+        fprintf(stderr, "tillRhoPTemp: Root can not be bracketed (P= %g, Pa= %g, Pb= %g).\n", P, Pa, Pb);
+    }
     assert (Pa < P && P < Pb);	
 
     /*
-     ** Root bracketed by (a,b).
+     * Root bracketed by (a,b).
      */
     while (Pb-Pa > 1e-10) {
         c = 0.5*(a + b);
@@ -1072,7 +1077,7 @@ double tillRhoPTemp(TILLMATERIAL *material, double P, double T)
 
     //fprintf(stderr,"tillRhoPTemp: rhoc= %g uc= %g Pc= %g P= %g T= %g\n", c, uc, Pc, P, T);
     /*
-     ** Return values.
+     * Return values.
      */
     return c;
 }
