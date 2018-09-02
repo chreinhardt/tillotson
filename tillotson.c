@@ -1053,7 +1053,9 @@ double tillRhoPTemp(TILLMATERIAL *material, double P, double T)
     if ((Pa >= P) || (Pb <=P))
     {
         fprintf(stderr, "tillRhoPTemp: Root can not be bracketed (P= %g, Pa= %g, Pb= %g).\n", P, Pa, Pb);
+        return -1.0;
     }
+
     assert (Pa < P && P < Pb);	
 
     /*

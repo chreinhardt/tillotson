@@ -63,7 +63,11 @@ double CalcWoolfsonCoeff(TILLMATERIAL *mat1, TILLMATERIAL *mat2, double P, doubl
 
     // If the density is unphysical return 1 so the density is not corrected.
     if ((rho1 <= 0.0) || (rho2 <= 0.0))
-        return 1.0;
+    {
+        fprintf(stderr, "CalcWoolfsonCoeff: unphysical density (rho1= %g, rho2= %g).\n");
+//        return 1.0;
+        return -1.0;
+    }
 
     return (rho1/rho2);
 }
