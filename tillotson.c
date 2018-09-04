@@ -1076,7 +1076,7 @@ double tillRhoPTemp(TILLMATERIAL *material, double P, double T)
         tillInitLookup(material);
 
 #ifdef TILL_VERBOSE
-        fprintf(stderr, "tillRhoPTemp: P > Pb, expanding lookup table (P= %g, Pb= %g, b= %g).\n", P, Pa, Pb, b);
+        fprintf(stderr, "tillRhoPTemp: P > Pb, expanding lookup table (P= %g, Pb= %g, b= %g).\n", P, Pb, b);
 #endif
         b = material->rhomax*0.99;
 
