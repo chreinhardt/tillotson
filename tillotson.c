@@ -1059,7 +1059,26 @@ double tillRhoPTemp(TILLMATERIAL *material, double P, double T)
     // Make sure that Pb > P. If nescessary the lookup table has to be expanded.
     while (Pb < P)
     {
-        b *= 2.0;
+        /*
+         * Careful, here a new lookup table has to be generated. Currently the new parameters are
+         * set by hand but it would make more sense to move the initialization of all lookup table
+         * related values in tillInitLookup().
+         */
+        material->rhomax *= 2.0;
+        
+        /* Set drho so that rho0 lies on the grid. */
+        material->n = floor((material->rho0-material->rhomin)/(material->rhomax-material->rhomin)*material->nTableRho);
+        material->drho =  (material->rho0-material->rhomin)/material->n;
+
+        /* Set the actual rhomax. */ 
+        material->rhomax = material->drho*(material->nTableRho-1);
+        
+        tillInitLookup(material);
+
+#ifdef TILL_VERBOSE
+        fprintf(stderr, "tillRhoPTemp: P > Pb, expanding lookup table (P= %g, Pb= %g, b= %g).\n", P, Pa, Pb, b);
+#endif
+        b = material->rhomax*0.99;
 
         ub = tillURhoTemp(material, b, T);
         Pb = tillPressure(material, b, ub);

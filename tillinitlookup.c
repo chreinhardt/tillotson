@@ -1,10 +1,10 @@
 /*
- ** Copyright (c) 2014-2015 Christian Reinhardt and Joachim Stadel.
- **
- ** This file provides all the functions for the Tillotson EOS library.
- ** The Tillotson EOS (e.g. Benz 1986) is a relatively simple but reliable
- ** and convenient to use equation of state that can describe matter over
- ** a large range of pressures, densities and internal energies.
+ * Copyright (c) 2014-2018 Christian Reinhardt and Joachim Stadel.
+ *
+ * This file provides all the functions for the Tillotson EOS library.
+ * The Tillotson EOS (e.g. Benz 1986) is a relatively simple but reliable
+ * and convenient to use equation of state that can describe matter over
+ * a large range of pressures, densities and internal energies.
  */
 #include <stdlib.h>
 #include <math.h>
