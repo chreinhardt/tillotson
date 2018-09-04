@@ -235,6 +235,11 @@ soundspeed_cutoff: soundspeed_cutoff.o $(objects)
 tillpressrhotemp: tillpressrhotemp.o $(objects)
 	cc -o tillpressrhotemp tillpressrhotemp.o $(objects) -lm
 
+#
+# Check if P(rho, T=const) is monotonic.
+#
+tillpressrhotemp_monotonic: tillpressrhotemp_monotonic.o $(objects)
+	cc -o tillpressrhotemp_monotonic tillpressrhotemp_monotonic.o $(objects) -lm
 clean:
 	rm $(objects)
 

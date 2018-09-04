@@ -1012,14 +1012,15 @@ double tillTempRhoP(TILLMATERIAL *material, double rho, double P)
 double tillURhoTemp(TILLMATERIAL *material, double rho, double T)
 {
     /* Calculate u(rho,T) for a material */
-    return(tillColdULookup(material,rho) + material->cv*T);
+    return(tillColdULookup(material, rho) + material->cv*T);
 }
 
 double tillRhoPTemp(TILLMATERIAL *material, double P, double T)
 {
     /* 
      * Calculate rho(P,T) for a material. Because thermodynamical consistency
-     * requires (dP/drho)_T > 0 this should always work.
+     * requires (dP/drho)_T > 0 this should always work except where we do the
+     * pressure cutoff.
      */
     double a, ua, Pa, b, ub, Pb, c, uc, Pc;
 
@@ -1031,15 +1032,23 @@ double tillRhoPTemp(TILLMATERIAL *material, double P, double T)
      * failed.
      */
     if (P <= 0.0)
+    {
+#if TILL_VERBOSE
+        fprintf(stderr, "tillRhoPTemp: Called for negative pressure (P= %g, Pa= %g, Pb= %g). No correction is done.\n", P);
+#endif
         return -1.0;
+    }
 
     /*
      * We use rhoa=0 and rhob=rhomax as limits.
      */
     a = material->rhomin;
+
     // For rho=0.0 the pressure diverges so set a minimum density.
     if (a < 1e-5)
         a = 1e-5;
+
+    // We should find a way to more precisely bracket P and avoid Pa <= 0.
     ua = tillURhoTemp(material, a, T);
     Pa = tillPressure(material, a, ua);
 
@@ -1047,12 +1056,23 @@ double tillRhoPTemp(TILLMATERIAL *material, double P, double T)
     ub = tillURhoTemp(material, b, T);
     Pb = tillPressure(material, b, ub);
 
+    // Make sure that Pb > P. If nescessary the lookup table has to be expanded.
+    while (Pb < P)
+    {
+        b *= 2.0;
+
+        ub = tillURhoTemp(material, b, T);
+        Pb = tillPressure(material, b, ub);
+    }
+
     /* What do we do for P=0 in the expanded cold states?*/
     //	fprintf(stderr,"tillRhoPTemp: starting with a= %g ua= %g Pa= %g b=%g ub= %g Pb= %g\n", a, ua, Pa, b, ub, Pb);
     /* Check if the root is bracketed. */
     if ((Pa >= P) || (Pb <=P))
     {
+#ifdef TILL_VERBOSE
         fprintf(stderr, "tillRhoPTemp: Root can not be bracketed (P= %g, Pa= %g, Pb= %g).\n", P, Pa, Pb);
+#endif
         return -1.0;
     }
 
@@ -1074,7 +1094,6 @@ double tillRhoPTemp(TILLMATERIAL *material, double P, double T)
             b = c;
             Pb = Pc;
         }
-        //		fprintf(stderr,"c:%.10g Pc:%.10g\n",c,Pc);
     }
 
     //fprintf(stderr,"tillRhoPTemp: rhoc= %g uc= %g Pc= %g P= %g T= %g\n", c, uc, Pc, P, T);

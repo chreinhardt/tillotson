@@ -19,9 +19,9 @@ void main(int argc, char **argv)
 {
 	double dKpcUnit = 2.06701e-13;
 	double dMsolUnit = 4.80438e-08;
-	double rhomax = 100.0;
+	double rhomax = 10.0;
     double rhomin = 1e-2;
-    double Tmax = 1e4;
+    double Tmax = 1e6;
     double Tmin = 1e-2;
     double drho;
         double dT;

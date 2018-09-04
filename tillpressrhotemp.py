@@ -62,7 +62,7 @@ data = loadtxt('press_rho_temp.txt')
 
 rho = data[:,0]
 
-for i in range(1,size(data[:,0]),1):
+for i in range(1,size(data[1,:]),1):
 		plot(data[:,0],data[:,i],'-',color='red',markersize=1,label='T')
 
 """
@@ -70,8 +70,13 @@ xlim(0, max(max(R), max(Rmodel)*1.05))
 ylim(0, max(max(rho), max(rhomodel)*1.05))
 """
 
+xlim(0, 5e-2)
+ylim(0, 4)
+
 xlabel(r'Density [code units]')
 ylabel(r'Pressure [code units]')
 #ylabel(r'Density [g/cm$^3$]')
 savefig('press_rho_temp.png', dpi=300, bbox_inches='tight')
+
+show()
 
