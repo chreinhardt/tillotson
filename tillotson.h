@@ -18,6 +18,18 @@
 #define TILL_VERSION_MINOR   1
 #define TILL_VERSION_PATCH   0
 
+/*
+ * Error codes.
+ */
+enum till_error
+{
+    TILL_LOOKUP_SUCCESS = 0,
+    TILL_LOOKUP_OUTSIDE_RHOMIN,
+    TILL_LOOKUP_OUTSIDE_RHOMAX,
+    TILL_LOOKUP_OUTSIDE_VMIN,
+    TILL_LOOKUP_OUTSIDE_VMAX
+};
+
 
 /*
  * Warning: redefined the material constants on 10.10.2017!

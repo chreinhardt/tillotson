@@ -269,48 +269,59 @@ double tillCalcU(TILLMATERIAL *material,double rho1,double u1,double rho2)
 int tillIsInTable(TILLMATERIAL *material,double rho,double u)
 {
 	/*
-	** This function checks if a given (rho,u) is in our look up
-	** table or not.
-	**
-	** Returns 0 if (rho,u) is in the table and 1 if not.
-	*/
-	int iRet = 1;
+     * This function checks if a given (rho,u) is in the look up table or not.
+     * 
+     * Returns TILL_LOOKUP_SUCCESS if (rho,u) is in the table and an error code if not.
+     */
+    int i;
 
 	/* Check if rho < rhomin or rho >= rhomax */
-	if (rho < material->rhomin || rho >= material->rhomax)
+	if (rho <= material->rhomin)
 	{
-		return(iRet);
+		return TILL_LOOKUP_OUTSIDE_RHOMIN;
 	}
 
-	// NEEDS WORK. WE CANT DO A LOOKUP FOR U, IF RHO OR V ARE NOT IN THE LOOKUP TABLE	
-	/* Check if u >= u(rho,vmax) */
-	if (u >= tillCubicIntRho(material, rho, material->nTableV-1))
+	if (rho >= material->rhomax)
 	{
-		return(iRet);
+		return TILL_LOOKUP_OUTSIDE_RHOMAX;
 	}
 
-	/* Check if u < u(rho,0) where v=0 is the cold curve */
-	if (u < tillCubicIntRho(material, rho, 0))
-	{
-		/* We are in the unphysical region below the cold curve */
-//		fprintf(stderr,"tillIsInTable: value (%g,%g) below the cold curve!\n",rho,u);
-//		printf("tillIsInTable: value (%g,%g) below the cold curve (iMat=%i)!\n",rho,u,material->iMaterial);
-		return(iRet);
-	}
-	iRet = 0;
-	return(iRet);
+    /* Now find rho_i and rho_i+1 so that rho is bracketed (only works for equal spaced grid). */
+	i = floor((rho-material->rhomin)/material->drho);
+	assert(i >= 0 && i < material->nTableRho-1);
+
+    /* Check if v(rho, u) < v_max. */
+    if ((u < material->Lookup[TILL_INDEX(i,material->nTableV-1)].u) &&
+        (u < material->Lookup[TILL_INDEX(i+1,material->nTableV-1)].u))
+    {
+        /* Check if v(rho, u) > v_0 (so if u > u(rho, 0)). */
+        if ((u > material->Lookup[TILL_INDEX(i,0)].u) && (u > material->Lookup[TILL_INDEX(i+1,0)].u))
+        {
+            /* u(rho, v) is definitely inside of the lookup table. */
+            return TILL_LOOKUP_SUCCESS;
+        } else {
+            /* u(rho, v) is below the cold curve. */
+#ifdef TILL_VERBOSE
+            fprintf(stderr, "tillIsInTable: Value (rho=%g, u=%g) below the cold curve!\n", rho, u);
+#endif
+            return TILL_LOOKUP_OUTSIDE_VMIN;
+        }
+    } else {
+        /* u(rho, v) is larger than u(rho, v_max) so the lookup table has to be extended. */
+        return TILL_LOOKUP_OUTSIDE_VMAX;
+    }
 }
 
 int tillIsBelowColdCurve(TILLMATERIAL *material,double rho,double u)
 {
 	/*
-	** This function checks if a given (rho,u) is in an unphysical
-	** state below the cold curve.
-	**
-	** Returns 1 (true) if (rho,u) is below the cold curve and 0 (false) if not.
-	*/
+     * This function checks if a given (rho,u) is in an unphysical state below the cold curve.
+     *
+     * Returns 1 (true) if (rho,u) is below the cold curve and 0 (false) if not.
+	 */
 	int iRet = 0;
 
+    /// CR: This needs work!
 	if (u < tillColdULookup(material, rho))
 	{
 //		printf("tillIsBelowColdCurve: value (%g,%g) below the cold curve (iMat=%i)!\n",rho,u,material->iMaterial);
