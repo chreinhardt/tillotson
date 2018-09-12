@@ -968,24 +968,26 @@ double tillLookupU(TILLMATERIAL *material,double rho1,double u1,double rho2,int 
 {
 	/* Calculates u2 for a given rho1,u2,rho2. */
 	double v, u;
+    int iRet;
 
-//	fprintf(stderr,"Calling tillIsInTable().\n");
+    iRet = tillIsInTable(material, rho1, u1);
+
 	/* Check if the starting and end point are inside of the look up table */
-	if (tillIsInTable(material, rho1, u1) != 0 || rho2 < material->rhomin || rho2 > material->rhomax)
+	if ((iRet == TILL_LOOKUP_SUCCESS) && (rho2 < material->rhomin) && (rho2 > material->rhomax))
 	{
-//		printf("tillLookupU: values outside of look up table, doing direct integration.\n");
-#ifdef TILL_OUTPUT_ALL_WARNINGS
-		fprintf(stderr,"tillLookupU: values outside of look up table, doing direct integration.\n");
-#endif
-		/* In this case we either about with an error or do a direct integration using tillCalcU(). */
-		u = tillCalcU(material, rho1, u1, rho2);
-	} else {
 		/* Interpolate using the look up table */
 		v = tillFindEntropyCurve(material,rho1,u1,iOrder);
 		u = tillFindUonIsentrope(material,v,rho2);
+	} else {
+        /* Do direct integration unless the value is below the cold curve. */
+#ifdef TILL_OUTPUT_ALL_WARNINGS
+		fprintf(stderr,"tillLookupU: values outside of look up table, doing direct integration.\n");
+#endif
+        assert(iRet != TILL_LOOKUP_OUTSIDE_VMIN);
+		u = tillCalcU(material, rho1, u1, rho2);
 	}
+
 	return u;
-//	return tillFindUonIsentrope(material,v,rho2);
 }
 
 double eosLookupU(TILLMATERIAL *material, double rho1, double u1, double rho2, int iOrder)
