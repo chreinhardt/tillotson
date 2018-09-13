@@ -980,7 +980,7 @@ double tillLookupU(TILLMATERIAL *material,double rho1,double u1,double rho2,int 
 		u = tillFindUonIsentrope(material,v,rho2);
 	} else {
         /* Do direct integration unless the value is below the cold curve. */
-#ifdef TILL_OUTPUT_ALL_WARNINGS
+#ifdef TILL_VERBOSE
 		fprintf(stderr,"tillLookupU: values outside of look up table, doing direct integration.\n");
 #endif
         assert(iRet != TILL_LOOKUP_OUTSIDE_VMIN);
