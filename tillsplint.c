@@ -973,7 +973,7 @@ double tillLookupU(TILLMATERIAL *material,double rho1,double u1,double rho2,int 
     iRet = tillIsInTable(material, rho1, u1);
 
 	/* Check if the starting and end point are inside of the look up table */
-	if ((iRet == TILL_LOOKUP_SUCCESS) && (rho2 < material->rhomin) && (rho2 > material->rhomax))
+	if ((iRet == TILL_LOOKUP_SUCCESS) && (rho2 > material->rhomin) && (rho2 < material->rhomax))
 	{
 		/* Interpolate using the look up table */
 		v = tillFindEntropyCurve(material,rho1,u1,iOrder);
