@@ -10,7 +10,8 @@ double brent(double (*func)(TILLMATERIAL *,double,double,double), TILLMATERIAL *
     fa = (*func)(material,a,rho,u);  fb = (*func)(material,b,rho,u);
     if (fa*fb > 0)
     {
-        fprintf(stderr,"Particle: %i\n",iOrder);
+        fprintf(stderr,"brent: Particle: %i\n",iOrder);
+        fprintf(stderr,"brent: %i: a= %g b= %g fa= %g fb= %g\n", iOrder, a, b, fa, fb);
         fprintf(stderr,"Root must be bracketed in zbrent\n");  exit(3);
     }
     c = b; fc = fb;
