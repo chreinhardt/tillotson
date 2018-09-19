@@ -40,9 +40,7 @@ void tillInitSplines(TILLMATERIAL *material)
 	** For this we use routines from Numerical Recipes.
 	*/
     /// CR: Debug stuff
-    fprintf(stderr, "Calling tillInitSplineU1.\n");
 	tillInitSplineU1(material);
-    fprintf(stderr, "Calling tillInitSplineU.\n");
 	tillInitSplineU(material);
 }
 

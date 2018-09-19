@@ -101,10 +101,10 @@ void tillInitLookup(TILLMATERIAL *material)
 		v += dv;
 	}
 
-	fprintf(stderr,"Init splines\n",j);	
+	fprintf(stderr,"tillInitLookup: Init splines.\n",j);	
     /* Solve splines for both u and u1 in v storing the 2nd derivatives wrt v */
 	tillInitSplines(material);
-	fprintf(stderr,"Splines initialised\n",j);	
+	fprintf(stderr,"tillInitLookup: Splines initialised.\n",j);	
 	/* Initialize the coefficients for the interpolation. */
 //	SamplesToCoefficients(material->Lookup,material->nTableMax,material->nTableMax, TILL_SPLINE_DEGREE);
 }
