@@ -287,7 +287,7 @@ int tillIsInTable(TILLMATERIAL *material,double rho,double u)
 	}
 
     /* Now find rho_i and rho_i+1 so that rho is bracketed (only works for equal spaced grid). */
-	i = floor((rho-material->rhomin)/material->drho);
+	i = tillLookupIndexRho(material, rho);
 	assert(i >= 0 && i < material->nTableRho-1);
 
     /* Check if v(rho, u) < v_max. */

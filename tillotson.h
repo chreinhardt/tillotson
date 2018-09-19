@@ -139,7 +139,9 @@ typedef struct tillMaterial
 	TILL_LOOKUP_ENTRY *Lookup;	// this is an array of pointers
 } TILLMATERIAL;
 
-//TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit, int nTableMax, double rhomax, double vmax);
+/*
+ * Tillotson.c
+ */
 TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit, int nTableRho, int nTableV, double rhomax, double vmax, int iExpV);
 void tillFinalizeMaterial(TILLMATERIAL *material);
 
@@ -176,7 +178,9 @@ double tillRhoPU(TILLMATERIAL *material, double P, double u);
 double tilldudrho(TILLMATERIAL *material, double rho, double u);
 int tillSolveBC(TILLMATERIAL *mat1, TILLMATERIAL *mat2, double rho1, double u1, double *prho2, double *pu2);
 
-// Moved to tillinitlookup.h
+/*
+ * tillinitlookup.c
+ */
 void tillInitColdCurve(TILLMATERIAL *material);
 void tillInitLookup(TILLMATERIAL *material);
 TILL_LOOKUP_ENTRY *tillSolveIsentrope(TILLMATERIAL *material, double v);
@@ -186,7 +190,9 @@ double tillCalcU(TILLMATERIAL *material,double rho1,double u1,double rho2);
 int tillIsInTable(TILLMATERIAL *material,double rho,double u);
 int tillIsBelowColdCurve(TILLMATERIAL *material,double rho,double u);
 
-/* Stuff for the cubic spline interpolator */
+/*
+ * tillsplint.c
+ */
 void tillInitSplines(TILLMATERIAL *material);
 void tillInitSplineRho(TILLMATERIAL *material);
 void tillInitSplinev(TILLMATERIAL *material);
