@@ -39,7 +39,10 @@ void tillInitSplines(TILLMATERIAL *material)
 	** Calculate the second derivatives for u and u1 in v.
 	** For this we use routines from Numerical Recipes.
 	*/
+    /// CR: Debug stuff
+    fprintf(stderr, "Calling tillInitSplineU1.\n");
 	tillInitSplineU1(material);
+    fprintf(stderr, "Calling tillInitSplineU.\n");
 	tillInitSplineU(material);
 }
 
@@ -1094,7 +1097,7 @@ int tillLookupIndexRho(TILLMATERIAL *material, double rho)
     int i;
 
     // Assume uniform spacing in rho.
-	i = floor((rhoint-material->rhomin)/material->drho);
+	i = floor((rho-material->rhomin)/material->drho);
 
     // Check if logrho is outside of the table.
     if (i < 0)

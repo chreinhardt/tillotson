@@ -130,8 +130,8 @@ typedef struct tillMaterial
 
 	/* The cold curve */	
 	TILL_LOOKUP_ENTRY *cold;
-//	double delta;
 	double drho;
+	double dlogrho;
 	double dv;
 
 	/* A look up table for u(rho) along an isentrope */
