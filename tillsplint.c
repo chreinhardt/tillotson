@@ -1097,6 +1097,26 @@ double tillColdULookup(TILLMATERIAL *material,double rho)
 }
 
 /*
+ * Return the index i, so that rho_i and rho_i+1 bracket rho in the lookup table.
+ */
+int tillLookupIndexRho(TILLMATERIAL *material, double rho)
+{
+    int i;
+
+    // Assume uniform spacing in rho.
+	i = floor((rhoint-material->rhomin)/material->drho);
+
+    // Check if logrho is outside of the table.
+    if (i < 0)
+        return -1;
+
+    if (i >= material->nTableRho)
+        return material->nTableRho;
+
+    return i;
+}
+
+/*
  * Return the index i, so that log(rho_i) and log(rho_i+1) bracket log(rho) in the lookup table.
  */
 int tillLookupIndexLogRho(TILLMATERIAL *material, double logrho)

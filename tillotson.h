@@ -186,7 +186,6 @@ double tillCalcU(TILLMATERIAL *material,double rho1,double u1,double rho2);
 int tillIsInTable(TILLMATERIAL *material,double rho,double u);
 int tillIsBelowColdCurve(TILLMATERIAL *material,double rho,double u);
 
-// Moved to tillsplint.h
 /* Stuff for the cubic spline interpolator */
 void tillInitSplines(TILLMATERIAL *material);
 void tillInitSplineRho(TILLMATERIAL *material);
@@ -210,6 +209,10 @@ double tillFindEntropyCurve(TILLMATERIAL *material,double rho,double u,int iOrde
 double tillLookupU(TILLMATERIAL *material,double rho1,double u1,double rho2,int iOrder);
 double tillCubicIntRho(TILLMATERIAL *material, double rhoint, int iv);
 double tillColdULookup(TILLMATERIAL *material,double rho);
+
+int tillLookupIndexRho(TILLMATERIAL *material, double rho);
+int tillLookupIndexLogRho(TILLMATERIAL *material, double logrho);
+int tillLookupIndexV(TILLMATERIAL *material, double v);
 
 // A general version of tillLookupU() that can be used as an interface for different EOS
 double eosLookupU(TILLMATERIAL *material,double rho1,double u1,double rho2,int iOrder);
