@@ -322,6 +322,9 @@ int tillIsBelowColdCurve(TILLMATERIAL *material,double rho,double u)
 	int iRet = 0;
 
     /// CR: This needs work!
+    fprintf(stderr, "tillIsBelowColdCurve is currently not working!\n");
+    exit(1);
+
 	if (u < tillColdULookup(material, rho))
 	{
 //		printf("tillIsBelowColdCurve: value (%g,%g) below the cold curve (iMat=%i)!\n",rho,u,material->iMaterial);

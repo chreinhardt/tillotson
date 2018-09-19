@@ -67,19 +67,19 @@ typedef struct till_lookup_entry
 {
 	double u;
 	double rho;
+    double logrho;
 	double v;
     double u1;		// du/drho
     /*
-    ** The following 2 variables are the second derivatives of the above
-    ** variables (u and u1) with respect to v (which is the value of the
-    ** constant entropy curve (adiabat) at rho_0). Both of these are obtained
-    ** by fitting splines to u and u1 runs in the v axis.
-    */
+     * The following 2 variables are the second derivatives of the above variables (u and u1) with
+     * respect to v (which is the value of the constant entropy curve (adiabat) at rho_0). Both of
+     * these are obtained by fitting splines to u and u1 runs in the v axis.
+     */
     double udv2; 	// d2u/dv2
     double u1dv2;	// d2/dv2(du/drho)
 #ifdef TILL_DEBUG_SPLINT
 	// Only for debugging
-	double udrho2;
+	double udrho2;  // d2u/drho2
 #endif
 } TILL_LOOKUP_ENTRY;
 

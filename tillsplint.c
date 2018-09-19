@@ -710,24 +710,8 @@ double tillSplineIntU(TILLMATERIAL *material, double v, int irho)
 	int klo,khi,k;
 	double h,b,a;
 	double u;
-/*
-	klo=1;
-	khi=material->nTableV;
 	
-	while (khi-klo > 1) {
-		k=(khi+klo) >> 1;
-		if (material->Lookup[TILL_INDEX(irho,k)].v > v) khi=k;
-		else klo=k;
-	}
-	
-	h=material->Lookup[TILL_INDEX(irho,khi)].v-material->Lookup[TILL_INDEX(irho,klo)].v;
-//	if (h == 0.0) nrerror("Bad xa input to routine splint");
-	assert(h != 0.0);
-	a=(material->Lookup[TILL_INDEX(irho,khi)].v-v)/h;
-	b=(v-material->Lookup[TILL_INDEX(irho,klo)])/h;
-*/
-	/* Use v=k*material->dv */
-	
+    /* Use v=k*material->dv */
 	klo = floor(v/material->dv);
 	khi = klo+1;
 
@@ -752,6 +736,7 @@ double tillSplineIntU1(TILLMATERIAL *material, double v, int irho)
 	double h,b,a;
 	double u1;
 	
+	/* Use v=k*material->dv */
 	klo = floor(v/material->dv);
 	khi = klo+1;
 
@@ -776,7 +761,8 @@ double tillSplineIntrho(TILLMATERIAL *material, double rho, int iv)
 	int klo,khi,k;
 	double h,b,a;
 	double u;
-	
+
+    /// CR: This does not work!!!!
 	klo = floor(rho/material->drho);
 	khi = klo+1;
 
@@ -831,15 +817,12 @@ void cubicint(double u[2],double dudrho[2], double dudv[2], double dudvdrho[2], 
 	
 	// free memory
 	free(ce);
-
-//	return(ce[0]*u[0] + ce[1]*dudrho[0]*dx + ce[2]*u[1] + ce[3]*dudrho[1]*dx);
-//	return(ce[0]*dudv[0] + ce[1]*dudvdrho[0]*dx + ce[2]*dudv[1] + ce[3]*dudvdrho[1]*dx);
 }
 
 double tillCubicInt(TILLMATERIAL *material, double rhoint, double vint) {
 	/*
-	** Use cubicint to interpolate u for a given rho and v.
-	*/
+     * Use cubicint to interpolate u for a given rho and v.
+     */
 	double dv, A, B;
 	int i, j;
 	double *u, *dudrho, *dudv, *dudvdrho, *rho, *intvalues;
@@ -1113,3 +1096,42 @@ double tillColdULookup(TILLMATERIAL *material,double rho)
 	return(tillCubicIntRho(material, rho, 0));
 }
 
+/*
+ * Return the index i, so that log(rho_i) and log(rho_i+1) bracket log(rho) in the lookup table.
+ */
+int tillLookupIndexLogRho(TILLMATERIAL *material, double logrho)
+{
+    int i;
+
+    // Assume uniform spacing in log(rho).
+    i = floor((logrho-log(material->rhomin))/material->dlogrho);
+
+    // Check if logrho is outside of the table.
+    if (i < 0)
+        return -1;
+
+    if (i >= material->nTableRho)
+        return material->nTableRho;
+
+    return i;
+}
+
+/*
+ * Return the index j, so that v_j and v_j+1 bracket v in the lookup table.
+ */
+int tillLookupIndexV(TILLMATERIAL *material, double v)
+{
+    int j;
+
+    // Assume uniform spacing in v.
+    j = floor(v/material->dv);
+
+    // Check if v is outside of the table.
+    if (j < 0)
+        return -1;
+
+    if (j >= material->nTableV)
+        return material->nTableV;
+
+    return j;
+}
