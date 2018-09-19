@@ -685,9 +685,8 @@ double tillSplineIntv(TILLMATERIAL *material, double v, int irho)
 	a=(material->Lookup[TILL_INDEX(irho,khi)].v-v)/h;
 	b=(v-material->Lookup[TILL_INDEX(irho,klo)])/h;
 */
-	/* Use v=k*material->dv */
-	
-	klo = floor(v/material->dv);
+	/* Use v=k*material->dv */	
+	klo = tillLookupIndexV(material, v);
 	khi = klo+1;
 
 	h = (khi-klo)*material->dv;
@@ -712,7 +711,7 @@ double tillSplineIntU(TILLMATERIAL *material, double v, int irho)
 	double u;
 	
     /* Use v=k*material->dv */
-	klo = floor(v/material->dv);
+	klo = tillLookupIndexV(material, v);
 	khi = klo+1;
 
 	h = (khi-klo)*material->dv;
@@ -737,7 +736,7 @@ double tillSplineIntU1(TILLMATERIAL *material, double v, int irho)
 	double u1;
 	
 	/* Use v=k*material->dv */
-	klo = floor(v/material->dv);
+	klo = tillLookupIndexV(material, v);
 	khi = klo+1;
 
 	h = (khi-klo)*material->dv;
@@ -762,8 +761,8 @@ double tillSplineIntrho(TILLMATERIAL *material, double rho, int iv)
 	double h,b,a;
 	double u;
 
-    /// CR: This does not work!!!!
-	klo = floor(rho/material->drho);
+    /* Use rho = rhomin + i*drho. */
+	klo = tillLookupIndexRho(material, rho);
 	khi = klo+1;
 
 	h = (khi-klo)*material->drho;
@@ -841,25 +840,16 @@ double tillCubicInt(TILLMATERIAL *material, double rhoint, double vint) {
      * For even spaced data points rhoint is between rho[i] and rho[i+1].
      * (CR) 24.11.2017: Keep in mind that one has to account for rhomin.
      */
-	i = floor((rhoint-material->rhomin)/material->drho);
+	i = tillLookupIndexRho(material, rhoint);
 	assert(i < material->nTableRho-1);
 
 	// vint is between v[j] and v[j+1]
-	j = floor(vint/material->dv);
-	// (CR) Debug info
-	// (CR) 15.11.15: Try non uniform spacing in v
-	// j = floor(pow(vint/material->vmax,1.0/material->n)*(material->nTableV-1));
-	//fprintf(stderr,"j: %i\n",j);
-	// (CR) 15.11.15: Until here
+	j = tillLookupIndexV(material, vint);
 	assert(j < material->nTableV-1);
 
 	// dv = v[j+1]-v[j]
 	// Uniform steps in v
 	dv = material->dv;
-	// (CR) 15.11.15: Try non uniform steps in v. Needs work!!
-	//dv = (material->vmax/pow(material->nTableV-1,material->n))*(pow(j+1,material->n)-pow(j,material->n));
-	// (CR) 15.11.15: Done
-
 #if 0
 
     /*
@@ -1038,7 +1028,7 @@ double tillCubicIntRho(TILLMATERIAL *material, double rhoint, int iv) {
      * For even spaced data points rhoint is between rho[i] and rho[i+1].
      * (CR) 24.11.2017: Keep in mind that one has to account for rhomin.
      */
-	i = floor((rhoint-material->rhomin)/material->drho);
+	i = tillLookupIndexRho(material, rhoint);
 	assert(i >= 0 && i < material->nTableRho-1);
 
 	/* Allocate memory */
@@ -1110,8 +1100,8 @@ int tillLookupIndexRho(TILLMATERIAL *material, double rho)
     if (i < 0)
         return -1;
 
-    if (i >= material->nTableRho)
-        return material->nTableRho;
+    if (i >= material->nTableRho-1)
+        return (material->nTableRho-1);
 
     return i;
 }
@@ -1130,8 +1120,8 @@ int tillLookupIndexLogRho(TILLMATERIAL *material, double logrho)
     if (i < 0)
         return -1;
 
-    if (i >= material->nTableRho)
-        return material->nTableRho;
+    if (i >= material->nTableRho-1)
+        return (material->nTableRho-1);
 
     return i;
 }
