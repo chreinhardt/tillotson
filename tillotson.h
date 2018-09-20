@@ -222,6 +222,9 @@ int tillLookupIndexRho(TILLMATERIAL *material, double rho);
 int tillLookupIndexLogRho(TILLMATERIAL *material, double logrho);
 int tillLookupIndexV(TILLMATERIAL *material, double v);
 
+double tillLookupLogRho(TILLMATERIAL *material, int i);
+double tillLookupV(TILLMATERIAL *material, int j);
+
 // A general version of tillLookupU() that can be used as an interface for different EOS
 double eosLookupU(TILLMATERIAL *material,double rho1,double u1,double rho2,int iOrder);
 

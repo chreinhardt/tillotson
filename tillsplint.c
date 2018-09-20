@@ -858,12 +858,18 @@ void cubicint(double u[2],double dudlogrho[2], double dudv[2], double dudvdlogrh
 
 /*
  * Use cubicint to interpolate u for a given rho and v.
+ *
+ * Note: We do a transformation of variables. The actual interpolation is done in logrho.
  */
 double tillCubicInt(TILLMATERIAL *material, double rhoint, double vint) {
 	double dv, A, B;
 	int i, j;
-	double *u, *dudrho, *dudv, *dudvdrho, *rho, *intvalues;
+	double *u, *dudlogrho, *dudv, *dudvdlogrho, *logrho, *intvalues;
+    double logrhoint;
 	double uint;
+
+    /* Transform from rho to logrho. */
+    logrhoint = log(rhoint);
 
 	/* Allocate memory */
 	u = malloc(2*sizeof(double));
@@ -875,10 +881,9 @@ double tillCubicInt(TILLMATERIAL *material, double rhoint, double vint) {
 	intvalues = malloc(4*sizeof(double));
 
     /*
-     * For even spaced data points rhoint is between rho[i] and rho[i+1].
-     * (CR) 24.11.2017: Keep in mind that one has to account for rhomin.
+     * Obtain the index i so that log(rho_i) and log(rho_i+1) bracket rho.
      */
-	i = tillLookupIndexRho(material, rhoint);
+	i = tillLookupIndexRho(material, logrhoint);
 	assert(i < material->nTableRho-1);
 
 	// vint is between v[j] and v[j+1]
@@ -888,27 +893,16 @@ double tillCubicInt(TILLMATERIAL *material, double rhoint, double vint) {
 	// dv = v[j+1]-v[j]
 	// Uniform steps in v
 	dv = material->dv;
-#if 0
 
-    /*
-     * This is risky! Using Lookup(i, 0) only works if rho does not depend on j.
-     */
-//	rho[0] = material->rhomin+i*material->drho;
-//	rho[1] = material->rhomin+(i+1)*material->drho;
-
-    if (fabs(material->rhomin+i*material->drho-material->Lookup[TILL_INDEX(i, 0)].rho) > 1e-10)
-        assert(0);
-#endif
-
-	rho[0] = material->Lookup[TILL_INDEX(i, 0)].rho;
-	rho[1] = material->Lookup[TILL_INDEX(i+1, 0)].rho;
+	logrho[0] = tillLookupLogRho(material, i);
+	logrho[1] = tillLookupLogRho(material, i+1);
 
 	/* Do the spline look up in v. */
 	u[0] = tillSplineIntU(material, vint, i);
 	u[1] = tillSplineIntU(material, vint, i+1);
 
-	dudrho[0] = tillSplineIntU1(material, vint, i);
-	dudrho[1] = tillSplineIntU1(material, vint, i+1);
+	dudlogrho[0] = tillSplineIntU1(material, vint, i);
+	dudlogrho[1] = tillSplineIntU1(material, vint, i+1);
 
 	/*
 	** Calculate dudv from udv2
@@ -919,32 +913,32 @@ double tillCubicInt(TILLMATERIAL *material, double rhoint, double vint) {
 	*/
 
 	/* Calculate dudv from udv2 */
-	A = ((j+1)*material->dv-vint)/dv;
-	B = (vint-material->dv)/dv;
+	A = ((j+1)*material->dv-vint)/material->dv;
+	B = (vint-material->dv)/material->dv;
 	
 	dudv[0] = (material->Lookup[TILL_INDEX(i, j+1)].u-material->Lookup[TILL_INDEX(i, j)].u)/dv-(3.0*A*A-1.0)/6.0*dv*material->Lookup[TILL_INDEX(i, j)].udv2+(3.0*B*B-1.0)/6.0*dv*material->Lookup[TILL_INDEX(i, j+1)].udv2;
 	dudv[1] = (material->Lookup[TILL_INDEX(i+1, j+1)].u-material->Lookup[TILL_INDEX(i+1, j)].u)/dv-(3.0*A*A-1.0)/6.0*dv*material->Lookup[TILL_INDEX(i+1, j)].udv2+(3.0*B*B-1.0)/6.0*dv*material->Lookup[TILL_INDEX(i+1, j+1)].udv2;
 
-	/* Calculate dudvdrho from u1dv2 */
+	/* Calculate dudvdlogrho from u1dv2 */
 	dudvdrho[0] = (material->Lookup[TILL_INDEX(i, j+1)].u1-material->Lookup[TILL_INDEX(i, j)].u1)/dv-(3.0*A*A-1.0)/6.0*dv*material->Lookup[TILL_INDEX(i, j)].u1dv2+(3.0*B*B-1.0)/6.0*dv*material->Lookup[TILL_INDEX(i, j+1)].u1dv2;
 	dudvdrho[1] = (material->Lookup[TILL_INDEX(i+1, j+1)].u1-material->Lookup[TILL_INDEX(i+1, j)].u1)/dv-(3.0*A*A-1.0)/6.0*dv*material->Lookup[TILL_INDEX(i+1, j)].u1dv2+(3.0*B*B-1.0)/6.0*dv*material->Lookup[TILL_INDEX(i+1, j+1)].u1dv2;
 
 	/*
-	** Do the interpolation for u(i,v), u(i+1,v), udrho(i,v), udrho(i+1,v)
-	*/
-	cubicint(u, dudrho, dudv, dudvdrho, rho, rhoint, intvalues);
+	 * Do the interpolation for u(i,v), u(i+1,v), udrho(i,v), udrho(i+1,v)
+	 */
+	cubicint(u, dudrho, dudv, dudvdlogrho, logrho, logrhoint, intvalues);
 	
 	uint = intvalues[0];
 
 	/* Free memory */
 	free(u);
-	free(dudrho);
+	free(dudlogrho);
 	free(dudv);
-	free(dudvdrho);
-	free(rho);
+	free(dudvdlogrho);
+	free(logrho);
 	free(intvalues);
 
-	return(uint);
+	return uint;
 }
 
 /* Prasenjits root finder */
@@ -1143,4 +1137,22 @@ int tillLookupIndexV(TILLMATERIAL *material, double v)
         return material->nTableV;
 
     return j;
+}
+
+/*
+ * Return log(rho(i)).
+ */
+double tillLookupLogRho(TILLMATERIAL *material, int i)
+{
+    // Assume uniform spacing in log(rho).
+    return (log(material->rhomin)+i*material->dlogrho);
+}
+
+/*
+ * Return v(j).
+ */
+double tillLookupV(TILLMATERIAL *material, int j)
+{
+    // Assume uniform spacing in v.
+    return (j*material->dv);
 }
