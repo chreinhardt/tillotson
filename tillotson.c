@@ -1192,7 +1192,19 @@ double tillRhoPU(TILLMATERIAL *material, double P, double u)
 
 double tilldudrho(TILLMATERIAL *material, double rho, double u)
 {
-    return(tillPressure(material,rho,u)/(rho*rho));
+    return (tillPressure(material,rho,u)/(rho*rho));
+}
+
+/*
+ * Calculate the logarithmic derivative of u with respect to rho.
+ *
+ * du/dlogrho = P/rho
+ *
+ */
+double tilldudlogrho(TILLMATERIAL *material, double logrho, double u)
+{
+    double rho = exp(logrho);
+    return (tillPressure(material,rho,u)/(rho));
 }
 
 int tillSolveBC(TILLMATERIAL *mat1, TILLMATERIAL *mat2, double rho1, double u1, double *prho2, double *pu2)

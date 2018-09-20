@@ -22,7 +22,8 @@
 #include "interpol/interpol.h"
 #endif
 
-/* Basic functions:
+/*
+ * Basic functions:
  *
  * tillInitSplines: initialise the cubic splines in u and u1.
  *
@@ -30,16 +31,16 @@
  *
  * tillSplineIntU1: do a cubic spline interpolation of u1 in v.
  *
- * tillCubicInt: interpolate a value (i,i+1) in rho and (j,j+1) in v (uses Joachim's 2D interpolator).
+ * tillCubicInt: interpolate a value (i,i+1) in logrho and (j,j+1) in v (uses Joachim's 2D
+ *               interpolator).
  */
 
 void tillInitSplines(TILLMATERIAL *material)
 {
 	/*
-	** Calculate the second derivatives for u and u1 in v.
-	** For this we use routines from Numerical Recipes.
-	*/
-    /// CR: Debug stuff
+     * Calculate the second derivatives for u and u1 in v. For this we use routines from the
+     * Numerical Recipes.
+	 */
 	tillInitSplineU1(material);
 	tillInitSplineU(material);
 }
@@ -314,7 +315,7 @@ void tillInitSplineRho(TILLMATERIAL *material)
 }
 #endif
 
-void tillInitSplinev(TILLMATERIAL *material)
+void tillInitSplineV(TILLMATERIAL *material)
 {
 	/*
 	** Calculate the second derivatives for u in v.
@@ -326,10 +327,6 @@ void tillInitSplinev(TILLMATERIAL *material)
 	n = material->nTableV;
 	/* Allocate memory for temporary array */
 	u = malloc(n*sizeof(double));
-		
-	// (CR) 15.11.15: Try non uniform steps in v
-	// x[j] =  material->vmax/pow(material->nTableV-1,material->iExpV)*pow(j,material->iExpV);
-	// (CR) 15.11.15: Done
 	
 	/* Set b.c. for natural cubic spline */
 	yp1 = 1e30;
@@ -385,9 +382,9 @@ void tillInitSplinev(TILLMATERIAL *material)
 void tillInitSplineU1(TILLMATERIAL *material)
 {
 	/*
-	** Calculate the second derivatives for u1 in v.
-	** For this we use routines from Numerical Recipes.
-	*/
+     * Calculate the second derivatives for u1 in v. For this we use routines from the
+     * Numerical Recipes.
+     */
 	int i,j,k,n;
 	double yp1, ypn;	// du1dv(v=0) and d1udv(v=n-1)
 	double p,qn,sig,un,*u;
@@ -453,7 +450,7 @@ void tillInitSplineU1(TILLMATERIAL *material)
 
 void tillInitSplineU(TILLMATERIAL *material)
 {
-	tillInitSplinev(material);
+	tillInitSplineV(material);
 }
 
 #if 0
@@ -659,33 +656,17 @@ double tillSplineIntU1(TILLMATERIAL *material, double v, int irho)
 #endif
 
 /*
-** (CR) 10.08.2016: Integrated splint() into the function, allowing to use the
-** TILL_LOOKUP_ENTRY structure for the interpolation.
-*/
-double tillSplineIntv(TILLMATERIAL *material, double v, int irho)
+ * Do a cubic spline interpolation of u in v.
+ *
+ * (CR) 10.08.2016: Integrated splint() into the function, allowing to use the TILL_LOOKUP_ENTRY
+ * structure for the interpolation.
+ */
+double tillSplineIntv(TILLMATERIAL *material, double v, int ilogrho)
 {
-	/*
-	** Do a cubic spline interpolation of u in v.
-	*/
 	int klo,khi,k;
 	double h,b,a;
 	double u;
-/*
-	klo=1;
-	khi=material->nTableV;
-	
-	while (khi-klo > 1) {
-		k=(khi+klo) >> 1;
-		if (material->Lookup[TILL_INDEX(irho,k)].v > v) khi=k;
-		else klo=k;
-	}
-	
-	h=material->Lookup[TILL_INDEX(irho,khi)].v-material->Lookup[TILL_INDEX(irho,klo)].v;
-//	if (h == 0.0) nrerror("Bad xa input to routine splint");
-	assert(h != 0.0);
-	a=(material->Lookup[TILL_INDEX(irho,khi)].v-v)/h;
-	b=(v-material->Lookup[TILL_INDEX(irho,klo)])/h;
-*/
+
 	/* Use v=k*material->dv */	
 	klo = tillLookupIndexV(material, v);
 	khi = klo+1;
@@ -697,12 +678,15 @@ double tillSplineIntv(TILLMATERIAL *material, double v, int irho)
 	a=(khi*material->dv-v)/h;
 	b=(v-klo*material->dv)/h;
 
-	u=a*material->Lookup[TILL_INDEX(irho,klo)].u+b*material->Lookup[TILL_INDEX(irho,khi)].u+((a*a*a-a)*material->Lookup[TILL_INDEX(irho,klo)].udv2+(b*b*b-b)*material->Lookup[TILL_INDEX(irho,khi)].udv2)*(h*h)/6.0;
+	u=a*material->Lookup[TILL_INDEX(ilogrho,klo)].u+b*material->Lookup[TILL_INDEX(ilogrho,khi)].u+((a*a*a-a)*material->Lookup[TILL_INDEX(ilogrho,klo)].udv2+(b*b*b-b)*material->Lookup[TILL_INDEX(ilogrho,khi)].udv2)*(h*h)/6.0;
 
 	return u;
 }
 
-double tillSplineIntU(TILLMATERIAL *material, double v, int irho)
+/*
+ * Do a cubic spline interpolation of u in v.
+ */
+double tillSplineIntU(TILLMATERIAL *material, double v, int ilogrho)
 {
 	/*
 	** Do a cubic spline interpolation of u in v.
@@ -722,16 +706,16 @@ double tillSplineIntU(TILLMATERIAL *material, double v, int irho)
 	a=(khi*material->dv-v)/h;
 	b=(v-klo*material->dv)/h;
 
-	u=a*material->Lookup[TILL_INDEX(irho,klo)].u+b*material->Lookup[TILL_INDEX(irho,khi)].u+((a*a*a-a)*material->Lookup[TILL_INDEX(irho,klo)].udv2+(b*b*b-b)*material->Lookup[TILL_INDEX(irho,khi)].udv2)*(h*h)/6.0;
+	u=a*material->Lookup[TILL_INDEX(ilogrho,klo)].u+b*material->Lookup[TILL_INDEX(ilogrho,khi)].u+((a*a*a-a)*material->Lookup[TILL_INDEX(ilogrho,klo)].udv2+(b*b*b-b)*material->Lookup[TILL_INDEX(ilogrho,khi)].udv2)*(h*h)/6.0;
 
 	return u;
 }
 
-double tillSplineIntU1(TILLMATERIAL *material, double v, int irho)
+/*
+ * Do a cubic spline interpolation of u1 (du/dlogrho) in v.
+ */
+double tillSplineIntU1(TILLMATERIAL *material, double v, int ilogrho)
 {
-	/*
-	** Do a cubic spline interpolation of u1 in v.
-	*/
 	int klo,khi,k;
 	double h,b,a;
 	double u1;
@@ -747,7 +731,7 @@ double tillSplineIntU1(TILLMATERIAL *material, double v, int irho)
 	a=(khi*material->dv-v)/h;
 	b=(v-klo*material->dv)/h;
 	
-	u1=a*material->Lookup[TILL_INDEX(irho,klo)].u1+b*material->Lookup[TILL_INDEX(irho,khi)].u1+((a*a*a-a)*material->Lookup[TILL_INDEX(irho,klo)].u1dv2+(b*b*b-b)*material->Lookup[TILL_INDEX(irho,khi)].u1dv2)*(h*h)/6.0;
+	u1=a*material->Lookup[TILL_INDEX(ilogrho,klo)].u1+b*material->Lookup[TILL_INDEX(ilogrho,khi)].u1+((a*a*a-a)*material->Lookup[TILL_INDEX(ilogrho,klo)].u1dv2+(b*b*b-b)*material->Lookup[TILL_INDEX(ilogrho,khi)].u1dv2)*(h*h)/6.0;
 
 	return u1;
 }
@@ -777,17 +761,22 @@ double tillSplineIntrho(TILLMATERIAL *material, double rho, int iv)
 }
 #endif
 
+#if 0
+/// CR: Joachims bicubic interpolator using rho as a variable.
 /*
-** u[0] = u(v,0)
-** u[1] = u(v,1)
-** dudrho[0] = dudrho(v,0)
-** dudrho[1] = dudrho(v,1)
-** dudv[0] = dudv(v,0)
-** dudv[1] = dudv(v,1)
-** dudvdrho[0] = dudvdrho(v,0)
-** dudvdrho[1] = dudvdrho(v,1)
-** Where v is interpolated between vj and vj+1 using a cubic spline.
-*/
+ * Do a bicubic spline interpolation in logrho and v.
+ *
+ * u[0] = u(v,0)
+ * u[1] = u(v,1)
+ * dudrho[0] = dudrho(v,0)
+ * dudrho[1] = dudrho(v,1)
+ * dudv[0] = dudv(v,0)
+ * dudv[1] = dudv(v,1)
+ * dudvdrho[0] = dudvdrho(v,0)
+ * dudvdrho[1] = dudvdrho(v,1)
+ *
+ * Where v is interpolated between vj and vj+1 using a cubic spline.
+ */
 void cubicint(double u[2],double dudrho[2], double dudv[2], double dudvdrho[2], double rho[2], double rhoint, double *intvalues) {
 	double dx, e, e1;
 	double *ce;
@@ -818,11 +807,59 @@ void cubicint(double u[2],double dudrho[2], double dudv[2], double dudvdrho[2], 
 	// free memory
 	free(ce);
 }
+#endif
+/*
+ * Do a bicubic spline interpolation in logrho and v.
+ *
+ * The variables are:
+ *
+ * u[0] = u(v,0)
+ * u[1] = u(v,1)
+ * dudlogrho[0] = dudlogrho(v,0)
+ * dudlogrho[1] = dudlogrho(v,1)
+ * dudv[0] = dudv(v,0)
+ * dudv[1] = dudv(v,1)
+ * dudvdlogrho[0] = dudvdlogrho(v,0)
+ * dudvdlogrho[1] = dudvdlogrho(v,1)
+ *
+ * where v is interpolated between vj and vj+1 using a cubic spline.
+ */
+void cubicint(double u[2],double dudlogrho[2], double dudv[2], double dudvdlogrho[2],
+              double logrho[2], double logrhoint, double *intvalues) {
+	double dx, e, e1;
+	double *ce;
+	
+	assert(intvalues != NULL);
 
-double tillCubicInt(TILLMATERIAL *material, double rhoint, double vint) {
+	/* Allocate memory */
+	ce = malloc(4*sizeof(double));
+	assert(ce != NULL);
+
+	dx = logrho[1] - logrho[0];
+	e = (logrhoint - logrho[0])/dx;
+	e1 = e - 1;
+
+	// these are the 4 Hermite functions
+	ce[0] = (2*e + 1)*e1*e1;
+	ce[1] = e*e1*e1;
+	ce[2] = e*e*(3 - 2*e);
+	ce[3] = e*e*e1;
+
 	/*
-     * Use cubicint to interpolate u for a given rho and v.
-     */
+	**    = ce[0]*u(v,0) + ce[1]*dudlogrho(v,0)*dx + ce[2]*u(v,1) + ce[3]*dudlogrho(v,1);
+	** the above is written as 4 independent spline lookups in the table v lies between some j and j+1
+	*/
+	intvalues[0] = (ce[0]*u[0] + ce[1]*dudlogrho[0]*dx + ce[2]*u[1] + ce[3]*dudlogrho[1]*dx);
+	intvalues[1] = (ce[0]*dudv[0] + ce[1]*dudvdlogrho[0]*dx + ce[2]*dudv[1] + ce[3]*dudvdlogrho[1]*dx);
+	
+	// free memory
+	free(ce);
+}
+
+/*
+ * Use cubicint to interpolate u for a given rho and v.
+ */
+double tillCubicInt(TILLMATERIAL *material, double rhoint, double vint) {
 	double dv, A, B;
 	int i, j;
 	double *u, *dudrho, *dudv, *dudvdrho, *rho, *intvalues;
@@ -916,12 +953,8 @@ double brent(double (*func)(TILLMATERIAL *,double,double,double),TILLMATERIAL *m
 double tillFindUonIsentrope(TILLMATERIAL *material,double v,double rho)
 {
 	double iv,irho,u;
-	/* Needed for the interpolation function. */
-	//iv = (material->nTableMax-1)*v/material->vmax;
-	//irho = (material->nTableMax-1)*rho/material->rhomax;
-
-//	return InterpolatedValue(material->Lookup,material->nTableMax,material->nTableMax,iv,irho,TILL_SPLINE_DEGREE);
-	return (tillCubicInt(material, rho, v));
+	
+    return tillCubicInt(material, rho, v);
 }
 
 double denergy(TILLMATERIAL *material,double v,double rho,double u)
@@ -935,12 +968,11 @@ double tillFindEntropyCurve(TILLMATERIAL *material,double rho,double u,int iOrde
 	double tol=1e-6;
 
 	return brent(denergy,material,0.0,material->vmax-material->dv,rho,u,tol,iOrder);
-//	return brent(denergy,material,0.0,material->vmax,rho,u,tol,iOrder);
 }
 
-double tillLookupU(TILLMATERIAL *material,double rho1,double u1,double rho2,int iOrder)
+double tillLookupU(TILLMATERIAL *material, double rho1, double u1, double rho2, int iOrder)
 {
-	/* Calculates u2 for a given rho1,u2,rho2. */
+	/* Calculates u2 for a given rho1, u2 and rho2. */
 	double v, u;
     int iRet;
 
@@ -950,8 +982,8 @@ double tillLookupU(TILLMATERIAL *material,double rho1,double u1,double rho2,int 
 	if ((iRet == TILL_LOOKUP_SUCCESS) && (rho2 < material->rhomin) && (rho2 > material->rhomax))
 	{
 		/* Interpolate using the look up table */
-		v = tillFindEntropyCurve(material,rho1,u1,iOrder);
-		u = tillFindUonIsentrope(material,v,rho2);
+		v = tillFindEntropyCurve(material, rho1, u1, iOrder);
+		u = tillFindUonIsentrope(material, v, rho2);
 	} else {
         /* Do direct integration unless the value is below the cold curve. */
 #ifdef TILL_OUTPUT_ALL_WARNINGS
@@ -979,43 +1011,6 @@ double eosLookupU(TILLMATERIAL *material, double rho1, double u1, double rho2, i
         return tillLookupU(material, rho1, u1, rho2, iOrder);
     }
 }
-
-#ifdef TILL_USE_OLD_BCINT
-/*
-** This code uses the old interpolator we used in the first version of the code.
-*/
-double tillFindUonIsentrope(TILLMATERIAL *material,double v,double rho)
-{
-	double iv,irho,u;
-	/* Needed for the interpolation function. */
-	//iv = (material->nTableMax-1)*v/material->vmax;
-	//irho = (material->nTableMax-1)*rho/material->rhomax;
-
-	return InterpolatedValue(material->Lookup,material->nTableMax,material->nTableMax,iv,irho,TILL_SPLINE_DEGREE);
-}
-
-double denergy(TILLMATERIAL *material,double v,double rho,double u)
-{
-	return (tillFindUonIsentrope(material,v,rho)-u);
-}
-
-/* Find isentrope for a given rho and u */
-double tillFindEntropyCurve(TILLMATERIAL *material,double rho,double u,int iOrder)
-{
-	double tol=1e-6;
-	return brent(denergy,material,0,material->vmax,rho,u,tol,iOrder);
-}
-
-double tillLookupU(TILLMATERIAL *material,double rho1,double u1,double rho2,int iOrder)
-{
-	/* Calculates u2 for a given rho1,u2,rho2. */
-	double v;
-
-	v = tillFindEntropyCurve(material,rho1,u1,iOrder);
-
-	return tillFindUonIsentrope(material,v,rho2);
-}
-#endif
 
 double tillCubicIntRho(TILLMATERIAL *material, double rhoint, int iv) {
 	/* Do an interpolation of u in rho for a given isentrope v. */
@@ -1076,7 +1071,10 @@ double tillCubicIntRho(TILLMATERIAL *material, double rhoint, int iv) {
 	return(uint);
 }
 
-double tillColdULookup(TILLMATERIAL *material,double rho)
+/*
+ * Calculate u_cold(rho) from the lookup table.
+ */
+double tillColdULookup(TILLMATERIAL *material, double rho)
 {
 	// (CR) 6.1.2016: Updated the code and tested it!
 	// However we have to still do something in case that we are not inside of the look up table

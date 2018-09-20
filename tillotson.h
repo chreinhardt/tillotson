@@ -176,6 +176,7 @@ double tillRhoPTemp(TILLMATERIAL *material, double P, double T);
 double tillSoundSpeed(TILLMATERIAL *material, double rho, double u);
 double tillRhoPU(TILLMATERIAL *material, double P, double u);
 double tilldudrho(TILLMATERIAL *material, double rho, double u);
+double tilldudlogrho(TILLMATERIAL *material, double logrho, double u);
 int tillSolveBC(TILLMATERIAL *mat1, TILLMATERIAL *mat2, double rho1, double u1, double *prho2, double *pu2);
 
 /*
@@ -184,6 +185,7 @@ int tillSolveBC(TILLMATERIAL *mat1, TILLMATERIAL *mat2, double rho1, double u1, 
 void tillInitColdCurve(TILLMATERIAL *material);
 void tillInitLookup(TILLMATERIAL *material);
 TILL_LOOKUP_ENTRY *tillSolveIsentrope(TILLMATERIAL *material, double v);
+TILL_LOOKUP_ENTRY *tillSolveIsentropeLogRho(TILLMATERIAL *material, double v);
 /* Use bsstep.c from the Numerical Recipes */
 TILL_LOOKUP_ENTRY *tillSolveIsentropeBS(TILLMATERIAL *material, double v);
 double tillCalcU(TILLMATERIAL *material,double rho1,double u1,double rho2);
@@ -195,7 +197,7 @@ int tillIsBelowColdCurve(TILLMATERIAL *material,double rho,double u);
  */
 void tillInitSplines(TILLMATERIAL *material);
 void tillInitSplineRho(TILLMATERIAL *material);
-void tillInitSplinev(TILLMATERIAL *material);
+void tillInitSplineV(TILLMATERIAL *material);
 void tillInitSplineU(TILLMATERIAL *material);
 void tillInitSplineU1(TILLMATERIAL *material);
 // Just for debugging
