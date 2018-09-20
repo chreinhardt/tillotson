@@ -5,17 +5,10 @@
  * The Tillotson EOS (e.g. Benz 1986) is a relatively simple but reliable
  * and convenient to use equation of state that can describe matter over
  * a large range of pressures, densities and internal energies.
- */
-#include <stdlib.h>
-#include <math.h>
-#include <assert.h>
-#include <stdio.h>
-#include "tillotson.h"
-
-/* This will cut the pressure in the cold expanded states for rho/rho0 < 0.8 as suggested in Melosh1989. */
-//#define TILL_PRESS_MELOSH
-
-/* Basic functions:
+ *
+ * tillotson.c:
+ *
+ * Basic functions:
  *
  * tillInit: initialise the library (contains all materials and converts to a given unit system).
  *
@@ -27,18 +20,26 @@
  *
  * tillFinalize: free memory.
  */
+#include <stdlib.h>
+#include <math.h>
+#include <assert.h>
+#include <stdio.h>
+#include "tillotson.h"
 
+/* This will cut the pressure in the cold expanded states for rho/rho0 < 0.8 as suggested in Melosh1989. */
+//#define TILL_PRESS_MELOSH
+
+
+/*
+ * Initialise a material from the Tillotson library
+ *
+ * We do:
+ * Initialize variables
+ * Convert quantities to code units
+ * The memory for the look up table is allocated in tillInitLookup()
+ */
 TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit, int nTableRho, int nTableV, double rhomax, double vmax, int iExpV)
 {
-	/*
-	 * Initialise a material from the Tillotson library
-	 *
-	 * We do:
-	 * Initialize variables
-	 * Convert quantities to code units
-	 * The memory for the look up table is allocated in tillInitLookup()
-	 */
-
     const double KBOLTZ = 1.38e-16;      /* bolzman constant in cgs */
     const double MHYDR = 1.67e-24;       /* mass of hydrogen atom in grams */
     const double MSOLG = 1.99e33;        /* solar mass in grams */
@@ -57,21 +58,45 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
     material->dKpcUnit = 2.06701e-13;
     material->dMsolUnit = 4.80438e-08;
 */
-	/* This two parameters define the unit system we use */
+	/* This two parameters define the unit system we use. */
     material->dKpcUnit = dKpcUnit;
     material->dMsolUnit = dMsolUnit;
+
+    /* Min and max values for the lookup table (in code units). */
 	material->rhomax = rhomax;
 	material->vmax = vmax;
 
-	if (material->vmax == 0)
-	{
-		/* Just as a first step we have equal steps in rho and v. */
-		material->vmax = material->rhomax;
-	}
+    assert(material->rhomax > 0.0);
+    assert(material->vmax > 0.0);
 
-	/* Needs about 800M memory. */
-//	material->nTableMax = 10000;
-	/* Number of grid points for the look up table */
+    /* The stuff below does not have to be done for the ideal gas as there is no lookup table. */
+    if (material->iMaterial == IDEALGAS)
+    {
+        material->rhomin = 0.0;
+        material->n = 0;
+        /* rhomax is set already. */
+        material->drho =  material->rhomax/(material->nTableRho-1);
+    } else {
+        /* Set rhomin */
+        material->rhomin = TILL_RHO_MIN;
+        assert(material->rhomin >= 0.0 && material->rhomin < material->rhomax);
+#if 0
+        /* Set drho so that rho0 lies on the grid. */
+        material->n = floor((material->rho0-material->rhomin)/(material->rhomax-material->rhomin)*material->nTableRho);
+        material->drho =  (material->rho0-material->rhomin)/material->n;
+
+        /* Set the actual rhomax. */ 
+        material->rhomax = material->drho*(material->nTableRho-1);
+#endif
+        /* Set dlogrho so that log(rho0) lies on the grid. */
+        material->n = floor((material->rho0-material->rhomin)/(material->rhomax-material->rhomin)*material->nTableRho);
+        material->dlogrho =  (material->rho0-material->rhomin)/material->n;
+
+        /* Set the actual rhomax. */ 
+        material->rhomax = material->drho*(material->nTableRho-1);
+    }
+
+	/* Number of grid points for the look up table. */
 	material->nTableRho = nTableRho;
 	material->nTableV = nTableV;
 
@@ -97,8 +122,6 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
 		material->dSecUnit = sqrt(1/(material->dGmPerCcUnit*GCGS));
 	}
 
-	/* The memory for the lookup table is allocated when tillInitLookup is called. */
-		
 	/*
 	** Set the Tillotson parameters for the material.
 	*/
@@ -283,25 +306,6 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
     }
 #endif
 
-    /* 
-     * The stuff below does not have to be done for the ideal gas as there is no lookup table. */
-    if (material->iMaterial == IDEALGAS)
-    {
-        material->rhomin = 0.0;
-        material->n = 0;
-        /* rhomax is set already. */
-        material->drho =  material->rhomax/(material->nTableRho-1);
-    } else {
-        /* Set rhomin */
-        material->rhomin = TILL_RHO_MIN;
-
-        /* Set drho so that rho0 lies on the grid. */
-        material->n = floor((material->rho0-material->rhomin)/(material->rhomax-material->rhomin)*material->nTableRho);
-        material->drho =  (material->rho0-material->rhomin)/material->n;
-
-        /* Set the actual rhomax. */ 
-        material->rhomax = material->drho*(material->nTableRho-1);
-    }
 
     /* This is the same for all materials. */
     material->dv = material->vmax/(material->nTableV-1);
@@ -314,7 +318,8 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
     //	material->n = 5;
     material->iExpV = iExpV;
     // (CR) 15.11.15: Change this back later
-    return(material);
+
+    return material;
 }
 
 void tillFinalizeMaterial(TILLMATERIAL *material)
