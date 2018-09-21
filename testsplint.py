@@ -48,12 +48,13 @@ data2 = loadtxt('testsplint.txt')
 
 # Plot the lookup table
 for i in range(1,size(data[0,:]),1):
-#		plot(data[:,0],data[:,i],'-',color='red',markersize=1,label='Table')
-		semilogx(data[:,0],data[:,i],'-',color='red',markersize=1,label='Table')
+		plot(data[:,0],data[:,i],'-',color='red',markersize=1,label='Table')
+#		semilogx(data[:,0],data[:,i],'-',color='red',markersize=1,label='Table')
+
 # Plot the interpolated data
 for i in range(1,size(data2[0,:]),1):
-#		plot(data2[:,0],data2[:,i],'-',color='green',markersize=1,label='Lookup')
-		semilogx(data2[:,0],data2[:,i],'-',color='green',markersize=1,label='Lookup')
+		plot(data2[:,0],data2[:,i],'-',color='green',markersize=1,label='Lookup')
+#		semilogx(data2[:,0],data2[:,i],'-',color='green',markersize=1,label='Lookup')
 
 xmax = 25
 ymax = 25

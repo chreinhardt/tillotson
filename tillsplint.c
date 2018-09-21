@@ -883,7 +883,7 @@ double tillCubicInt(TILLMATERIAL *material, double rhoint, double vint) {
     /*
      * Obtain the index i so that log(rho_i) and log(rho_i+1) bracket rho.
      */
-	i = tillLookupIndexRho(material, logrhoint);
+	i = tillLookupIndexLogRho(material, logrhoint);
 	assert(i < material->nTableRho-1);
 
 	// vint is between v[j] and v[j+1]
@@ -923,6 +923,8 @@ double tillCubicInt(TILLMATERIAL *material, double rhoint, double vint) {
 	dudvdlogrho[0] = (material->Lookup[TILL_INDEX(i, j+1)].u1-material->Lookup[TILL_INDEX(i, j)].u1)/dv-(3.0*A*A-1.0)/6.0*dv*material->Lookup[TILL_INDEX(i, j)].u1dv2+(3.0*B*B-1.0)/6.0*dv*material->Lookup[TILL_INDEX(i, j+1)].u1dv2;
 	dudvdlogrho[1] = (material->Lookup[TILL_INDEX(i+1, j+1)].u1-material->Lookup[TILL_INDEX(i+1, j)].u1)/dv-(3.0*A*A-1.0)/6.0*dv*material->Lookup[TILL_INDEX(i+1, j)].u1dv2+(3.0*B*B-1.0)/6.0*dv*material->Lookup[TILL_INDEX(i+1, j+1)].u1dv2;
 
+
+    fprintf(stderr, "CR: Calling cubicint.\n");
 	/*
 	 * Do the interpolation for u(i,v), u(i+1,v), udlogrho(i,v), udlogrho(i+1,v)
 	 */
@@ -938,6 +940,7 @@ double tillCubicInt(TILLMATERIAL *material, double rhoint, double vint) {
 	free(logrho);
 	free(intvalues);
 
+    fprintf(stderr, "CR: Done.\n");
 	return uint;
 }
 
