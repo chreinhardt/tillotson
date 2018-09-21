@@ -62,46 +62,12 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
     material->dKpcUnit = dKpcUnit;
     material->dMsolUnit = dMsolUnit;
 
-	/* Number of grid points for the look up table. */
-	material->nTableRho = nTableRho;
-	material->nTableV = nTableV;
-
     /* Min and max values for the lookup table (in code units). */
 	material->rhomax = rhomax;
 	material->vmax = vmax;
 
     assert(material->rhomax > 0.0);
     assert(material->vmax > 0.0);
-
-    /* The stuff below does not have to be done for the ideal gas as there is no lookup table. */
-    if (material->iMaterial == IDEALGAS)
-    {
-        material->rhomin = 0.0;
-        material->n = 0;
-        /* rhomax is set already. */
-#if 0
-        material->drho =  material->rhomax/(material->nTableRho-1);
-#endif
-        material->drho =  material->rhomax/(material->nTableRho-1);
-    } else {
-        /* Set rhomin */
-        material->rhomin = TILL_RHO_MIN;
-        assert(material->rhomin >= 0.0 && material->rhomin < material->rhomax);
-#if 0
-        /* Set drho so that rho0 lies on the grid. */
-        material->n = floor((material->rho0-material->rhomin)/(material->rhomax-material->rhomin)*material->nTableRho);
-        material->drho =  (material->rho0-material->rhomin)/material->n;
-
-        /* Set the actual rhomax. */ 
-        material->rhomax = material->drho*(material->nTableRho-1);
-#endif
-        /* Set dlogrho so that log(rho0) lies on the grid. */
-        material->n = floor((log(material->rho0)-log(material->rhomin))/(log(material->rhomax)-log(material->rhomin))*material->nTableRho);
-        material->dlogrho = (log(material->rho0)-log(material->rhomin))/material->n;
-
-        /* Set the actual rhomax. */ 
-        material->rhomax = material->dlogrho*(material->nTableRho-1);
-    }
 
 	if (dKpcUnit <= 0.0 && dMsolUnit <= 0.0)
 	{
@@ -308,6 +274,50 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
         fprintf(stderr, "Ideal gas: cv= %g\n in code units.\n", material->cv);
     }
 #endif
+
+	/* Number of grid points for the look up table. */
+	material->nTableRho = nTableRho;
+	material->nTableV = nTableV;
+
+    /* The stuff below does not have to be done for the ideal gas as there is no lookup table. */
+    if (material->iMaterial == IDEALGAS)
+    {
+        material->rhomin = 0.0;
+        material->n = 0;
+        /* rhomax is set already. */
+#if 0
+        material->drho =  material->rhomax/(material->nTableRho-1);
+#endif
+        material->drho =  material->rhomax/(material->nTableRho-1);
+    } else {
+        /* Set rhomin */
+        material->rhomin = TILL_RHO_MIN;
+
+        /* rhomin has to be larger than zero otherwise the logarithmic spacing does not work. */
+        assert(material->rhomin > 0.0 && material->rhomin < material->rhomax);
+#if 0
+        /* Set drho so that rho0 lies on the grid. */
+        material->n = floor((material->rho0-material->rhomin)/(material->rhomax-material->rhomin)*material->nTableRho);
+        material->drho =  (material->rho0-material->rhomin)/material->n;
+
+        /* Set the actual rhomax. */ 
+        material->rhomax = material->drho*(material->nTableRho-1);
+#endif
+        /* Set dlogrho so that log(rho0) lies on the grid. */
+        material->n = floor((log(material->rho0)-log(material->rhomin))/(log(material->rhomax)-log(material->rhomin))*material->nTableRho);
+        material->dlogrho = (log(material->rho0)-log(material->rhomin))/material->n;
+
+        /// CR
+        fprintf(stderr, "Log(rho0)= %g Log(rhomin)= %g Log(rhomax)= %g.\n", log(material->rho0), log(material->rhomin), log(material->rhomax));
+
+        /* Set the actual rhomax (note that rhomax can differ more after the correction when using log(rho) as variable. */ 
+        material->rhomax = tillLookupRho(material, material->nTableRho-1);
+    }
+
+//#ifdef TILL_VERBOSE
+    fprintf(stderr, "tillInitialize: iMat= %i n= %i dlogrho= %g dv= %g.\n", material->iMaterial, material->n, material->dlogrho, material->dv);
+    fprintf(stderr, "tillInitialize: nTableRho= %i nTableV= %i.\n", material->nTableRho, material->nTableV);
+//#endif
 
 
     /* This is the same for all materials. */

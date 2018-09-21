@@ -55,9 +55,9 @@ enum till_error
 #define MIN(A,B) ((A) > (B) ? (B) : (A))
 
 /* Define a minimum density for the look up table */
-//#define TILL_RHO_MIN 1e-2
+#define TILL_RHO_MIN 1e-2
 //#define TILL_RHO_MIN 5e-1
-#define TILL_RHO_MIN 0.0
+//#define TILL_RHO_MIN 0.0
 
 /* Define FALSE and TRUE. */
 //const int FALSE = 0;
@@ -222,6 +222,7 @@ int tillLookupIndexRho(TILLMATERIAL *material, double rho);
 int tillLookupIndexLogRho(TILLMATERIAL *material, double logrho);
 int tillLookupIndexV(TILLMATERIAL *material, double v);
 
+double tillLookupRho(TILLMATERIAL *material, int i);
 double tillLookupLogRho(TILLMATERIAL *material, int i);
 double tillLookupV(TILLMATERIAL *material, int j);
 

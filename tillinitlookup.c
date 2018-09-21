@@ -74,13 +74,19 @@ void tillInitLookup(TILLMATERIAL *material)
 	//dv = material->vmax/(material->nTableMax-1);
 	dv = material->dv;
 
+	fprintf(stderr,"tillInitLookup: Solving ODEs.\n");
+    
 	/*
      * Integrate the isentropes for different v.
      */
 	for (j=0; j<material->nTableV; j++)
 	{
+//        fprintf(stderr,"tillInitLookup: v= %g.\n", v);
+
 		isentrope = tillSolveIsentropeLogRho(material,v);
 		
+//        fprintf(stderr,"tillInitLookup: Copy data (v= %g).\n", v);
+
 		/* Copy one row to the look up table. This is of course not efficient at all. */
 		for (i=0; i<material->nTableRho; i++)
 		{
@@ -92,9 +98,8 @@ void tillInitLookup(TILLMATERIAL *material)
 		v += dv;
 	}
 
-	fprintf(stderr,"tillInitLookup: Init splines.\n");
-
     /* Solve splines for both u and u1 in v storing the 2nd derivatives wrt v */
+	fprintf(stderr,"tillInitLookup: Init splines.\n");
 	tillInitSplines(material);
 	fprintf(stderr,"tillInitLookup: Splines initialised.\n");	
 }

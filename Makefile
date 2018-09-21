@@ -52,6 +52,12 @@ testsplint: testsplint.o $(objects)
 	cc -o testsplint testsplint.o $(objects) -lm
 
 #
+# Code for debugging the new logarithmic lookup table.
+#
+testsplintlogrho: testsplintlogrho.o $(objects)
+	cc -o testsplintlogrho testsplintlogrho.o $(objects) -lm
+
+#
 # Pretty much the same but it compares the old with the new interpolator.
 #
 testnewsplint: testnewsplint.o $(objects)

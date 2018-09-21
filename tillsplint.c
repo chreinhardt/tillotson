@@ -1140,6 +1140,15 @@ int tillLookupIndexV(TILLMATERIAL *material, double v)
 }
 
 /*
+ * Return rho(i).
+ */
+double tillLookupRho(TILLMATERIAL *material, int i)
+{
+    // Assume uniform spacing in log(rho).
+    return (material->rhomin*exp(i*material->dlogrho));
+}
+
+/*
  * Return log(rho(i)).
  */
 double tillLookupLogRho(TILLMATERIAL *material, int i)
