@@ -875,7 +875,7 @@ double tillCubicInt(TILLMATERIAL *material, double rhoint, double vint) {
 	u = malloc(2*sizeof(double));
 	dudlogrho = malloc(2*sizeof(double));
 	dudv = malloc(2*sizeof(double));
-	dudvdrho = malloc(2*sizeof(double));
+	dudvdlogrho = malloc(2*sizeof(double));
 	logrho = malloc(2*sizeof(double));
 
 	intvalues = malloc(4*sizeof(double));
@@ -920,13 +920,13 @@ double tillCubicInt(TILLMATERIAL *material, double rhoint, double vint) {
 	dudv[1] = (material->Lookup[TILL_INDEX(i+1, j+1)].u-material->Lookup[TILL_INDEX(i+1, j)].u)/dv-(3.0*A*A-1.0)/6.0*dv*material->Lookup[TILL_INDEX(i+1, j)].udv2+(3.0*B*B-1.0)/6.0*dv*material->Lookup[TILL_INDEX(i+1, j+1)].udv2;
 
 	/* Calculate dudvdlogrho from u1dv2 */
-	dudvdrho[0] = (material->Lookup[TILL_INDEX(i, j+1)].u1-material->Lookup[TILL_INDEX(i, j)].u1)/dv-(3.0*A*A-1.0)/6.0*dv*material->Lookup[TILL_INDEX(i, j)].u1dv2+(3.0*B*B-1.0)/6.0*dv*material->Lookup[TILL_INDEX(i, j+1)].u1dv2;
-	dudvdrho[1] = (material->Lookup[TILL_INDEX(i+1, j+1)].u1-material->Lookup[TILL_INDEX(i+1, j)].u1)/dv-(3.0*A*A-1.0)/6.0*dv*material->Lookup[TILL_INDEX(i+1, j)].u1dv2+(3.0*B*B-1.0)/6.0*dv*material->Lookup[TILL_INDEX(i+1, j+1)].u1dv2;
+	dudvdlogrho[0] = (material->Lookup[TILL_INDEX(i, j+1)].u1-material->Lookup[TILL_INDEX(i, j)].u1)/dv-(3.0*A*A-1.0)/6.0*dv*material->Lookup[TILL_INDEX(i, j)].u1dv2+(3.0*B*B-1.0)/6.0*dv*material->Lookup[TILL_INDEX(i, j+1)].u1dv2;
+	dudvdlogrho[1] = (material->Lookup[TILL_INDEX(i+1, j+1)].u1-material->Lookup[TILL_INDEX(i+1, j)].u1)/dv-(3.0*A*A-1.0)/6.0*dv*material->Lookup[TILL_INDEX(i+1, j)].u1dv2+(3.0*B*B-1.0)/6.0*dv*material->Lookup[TILL_INDEX(i+1, j+1)].u1dv2;
 
 	/*
-	 * Do the interpolation for u(i,v), u(i+1,v), udrho(i,v), udrho(i+1,v)
+	 * Do the interpolation for u(i,v), u(i+1,v), udlogrho(i,v), udlogrho(i+1,v)
 	 */
-	cubicint(u, dudrho, dudv, dudvdlogrho, logrho, logrhoint, intvalues);
+	cubicint(u, dudlogrho, dudv, dudvdlogrho, logrho, logrhoint, intvalues);
 	
 	uint = intvalues[0];
 
