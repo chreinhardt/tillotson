@@ -62,6 +62,10 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
     material->dKpcUnit = dKpcUnit;
     material->dMsolUnit = dMsolUnit;
 
+	/* Number of grid points for the look up table. */
+	material->nTableRho = nTableRho;
+	material->nTableV = nTableV;
+
     /* Min and max values for the lookup table (in code units). */
 	material->rhomax = rhomax;
 	material->vmax = vmax;
@@ -75,6 +79,9 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
         material->rhomin = 0.0;
         material->n = 0;
         /* rhomax is set already. */
+#if 0
+        material->drho =  material->rhomax/(material->nTableRho-1);
+#endif
         material->drho =  material->rhomax/(material->nTableRho-1);
     } else {
         /* Set rhomin */
@@ -89,16 +96,12 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
         material->rhomax = material->drho*(material->nTableRho-1);
 #endif
         /* Set dlogrho so that log(rho0) lies on the grid. */
-        material->n = floor((material->rho0-material->rhomin)/(material->rhomax-material->rhomin)*material->nTableRho);
-        material->dlogrho =  (material->rho0-material->rhomin)/material->n;
+        material->n = floor((log(material->rho0)-log(material->rhomin))/(log(material->rhomax)-log(material->rhomin))*material->nTableRho);
+        material->dlogrho = (log(material->rho0)-log(material->rhomin))/material->n;
 
         /* Set the actual rhomax. */ 
-        material->rhomax = material->drho*(material->nTableRho-1);
+        material->rhomax = material->dlogrho*(material->nTableRho-1);
     }
-
-	/* Number of grid points for the look up table. */
-	material->nTableRho = nTableRho;
-	material->nTableV = nTableV;
 
 	if (dKpcUnit <= 0.0 && dMsolUnit <= 0.0)
 	{

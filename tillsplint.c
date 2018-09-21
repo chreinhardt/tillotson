@@ -873,10 +873,10 @@ double tillCubicInt(TILLMATERIAL *material, double rhoint, double vint) {
 
 	/* Allocate memory */
 	u = malloc(2*sizeof(double));
-	dudrho = malloc(2*sizeof(double));
+	dudlogrho = malloc(2*sizeof(double));
 	dudv = malloc(2*sizeof(double));
 	dudvdrho = malloc(2*sizeof(double));
-	rho = malloc(2*sizeof(double));
+	logrho = malloc(2*sizeof(double));
 
 	intvalues = malloc(4*sizeof(double));
 
