@@ -25,12 +25,12 @@ void main(int argc, char **argv) {
 	double rhomax = 100.0;
 	double vmax = 1200.0;
 	// For vmax=rhomax=25 and nTableV=100, nTableRho=1000 we get excellent results.
-	int nTableRho = 1000;
-	int nTableV = 1000;
+//	int nTableRho = 1000;
+//	int nTableV = 1000;
 //	double rhomax = 25.0;
 //	double vmax = 25.0;
-//	int nTableRho = 100;
-//	int nTableV = 100;
+	int nTableRho = 100;
+	int nTableV = 100;
 	double rho, v, u;
     double rho1, rho2;
 	FILE *fp = NULL;
@@ -117,7 +117,7 @@ void main(int argc, char **argv) {
 
 	fprintf(stderr, "Evolve a particle along an isentrope...\n");
 
-	for (j=0;j<tillMat->nTableV-2;j+=1)
+	for (j=0;j<tillMat->nTableV-1;j+=1)
 	{
         rho1 = tillLookupRho(tillMat, 1);
         v = tillMat->dv*(j+0.5);
@@ -128,7 +128,7 @@ void main(int argc, char **argv) {
         
         rho2 = tillLookupRho(tillMat, tillMat->nTableRho-2);
 
-	    fprintf(stderr, "i= %i rho1=%g u1= %g rho2= %g\n", j, rho1, u, rho2);
+	    fprintf(stderr, "i= %i rho1=%g u1= %g rho2= %g v= %g\n", j, rho1, u, rho2, v);
 
         u = tillLookupU(tillMat, rho1, u, rho2, 0);
 

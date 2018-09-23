@@ -960,8 +960,11 @@ double denergy(TILLMATERIAL *material,double v,double rho,double u)
 double tillFindEntropyCurve(TILLMATERIAL *material,double rho,double u,int iOrder)
 {
 	double tol=1e-6;
-
-	return brent(denergy,material,0.0,material->vmax-material->dv,rho,u,tol,iOrder);
+    double eps = 1e-8;
+    
+    /// CR: Why 0 < v <= vmax-dv????? We want v < vmax
+	return brent(denergy,material,0.0,material->vmax-eps,rho,u,tol,iOrder);
+//	return brent(denergy,material,0.0,material->vmax-material->dv,rho,u,tol,iOrder);
 }
 
 double tillLookupU(TILLMATERIAL *material, double rho1, double u1, double rho2, int iOrder)
