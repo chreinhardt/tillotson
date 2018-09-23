@@ -56,6 +56,7 @@ enum till_error
 
 /* Define a minimum density for the look up table */
 #define TILL_RHO_MIN 1e-2
+#define TILL_RHO_MIN 1e-4
 //#define TILL_RHO_MIN 5e-1
 //#define TILL_RHO_MIN 0.0
 

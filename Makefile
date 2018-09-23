@@ -58,6 +58,12 @@ testsplintlogrho: testsplintlogrho.o $(objects)
 	cc -o testsplintlogrho testsplintlogrho.o $(objects) -lm
 
 #
+# Code for debugging tillLookupU using the new logarithmic lookup table.
+#
+testlookupulogrho: testlookupulogrho.o $(objects)
+	cc -o testlookupulogrho testlookupulogrho.o $(objects) -lm
+
+#
 # Pretty much the same but it compares the old with the new interpolator.
 #
 testnewsplint: testnewsplint.o $(objects)

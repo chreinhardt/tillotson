@@ -923,8 +923,6 @@ double tillCubicInt(TILLMATERIAL *material, double rhoint, double vint) {
 	dudvdlogrho[0] = (material->Lookup[TILL_INDEX(i, j+1)].u1-material->Lookup[TILL_INDEX(i, j)].u1)/dv-(3.0*A*A-1.0)/6.0*dv*material->Lookup[TILL_INDEX(i, j)].u1dv2+(3.0*B*B-1.0)/6.0*dv*material->Lookup[TILL_INDEX(i, j+1)].u1dv2;
 	dudvdlogrho[1] = (material->Lookup[TILL_INDEX(i+1, j+1)].u1-material->Lookup[TILL_INDEX(i+1, j)].u1)/dv-(3.0*A*A-1.0)/6.0*dv*material->Lookup[TILL_INDEX(i+1, j)].u1dv2+(3.0*B*B-1.0)/6.0*dv*material->Lookup[TILL_INDEX(i+1, j+1)].u1dv2;
 
-
-    fprintf(stderr, "CR: Calling cubicint.\n");
 	/*
 	 * Do the interpolation for u(i,v), u(i+1,v), udlogrho(i,v), udlogrho(i+1,v)
 	 */
@@ -940,7 +938,6 @@ double tillCubicInt(TILLMATERIAL *material, double rhoint, double vint) {
 	free(logrho);
 	free(intvalues);
 
-    fprintf(stderr, "CR: Done.\n");
 	return uint;
 }
 
@@ -976,7 +973,7 @@ double tillLookupU(TILLMATERIAL *material, double rho1, double u1, double rho2, 
     iRet = tillIsInTable(material, rho1, u1);
 
 	/* Check if the starting and end point are inside of the look up table */
-	if ((iRet == TILL_LOOKUP_SUCCESS) && (rho2 < material->rhomin) && (rho2 > material->rhomax))
+	if ((iRet == TILL_LOOKUP_SUCCESS) && (rho2 > material->rhomin) && (rho2 < material->rhomax))
 	{
 		/* Interpolate using the look up table */
 		v = tillFindEntropyCurve(material, rho1, u1, iOrder);

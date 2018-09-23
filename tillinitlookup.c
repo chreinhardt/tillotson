@@ -365,7 +365,7 @@ double tillCalcU(TILLMATERIAL *material,double rho1,double u1,double rho2)
 	return u;
 }
 
-int tillIsInTable(TILLMATERIAL *material,double rho,double u)
+int tillIsInTable(TILLMATERIAL *material, double rho, double u)
 {
 	/*
      * This function checks if a given (rho,u) is in the look up table or not.
@@ -386,7 +386,7 @@ int tillIsInTable(TILLMATERIAL *material,double rho,double u)
 	}
 
     /* Now find rho_i and rho_i+1 so that rho is bracketed (only works for equal spaced grid). */
-	i = tillLookupIndexRho(material, rho);
+	i = tillLookupIndexLogRho(material, rho);
 	assert(i >= 0 && i < material->nTableRho-1);
 
     /* Check if v(rho, u) < v_max. */
