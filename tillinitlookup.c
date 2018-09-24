@@ -325,7 +325,8 @@ TILL_LOOKUP_ENTRY *tillSolveIsentropeLogRho(TILLMATERIAL *material, double v)
  *
  * du/dlogrho = P/rho
  *
- * with initial conitions (rho1, u1).
+ * with initial conitions (rho1, u1). Note that the integration is done in log(rho) because thhe
+ * ODE is very stiff for small rho otherwise.
  */
 double tillCalcU(TILLMATERIAL *material, double rho1, double u1, double rho2)
 {
@@ -338,33 +339,35 @@ double tillCalcU(TILLMATERIAL *material, double rho1, double u1, double rho2)
 
 	logrho = rho1;
 	u = u1;
+    logrho2 = log(rho2);
 
 	/* Make smaller steps than we used for look up table. */
 	h = material->dlogrho/100.0;
 
 	if (rho1 < rho2)
 	{
-		while (logrho < rho2) {
+		while (logrho < logrho2) {
 			/*
 			** Midpoint Runga-Kutta (4nd order).
 			*/
-			k1u = h*tilldudrho(material,rho,u);
-			k2u = h*tilldudrho(material,rho+0.5*h,u+0.5*k1u);
-			k3u = h*tilldudrho(material,rho+0.5*h,u+0.5*k2u);
-			k4u = h*tilldudrho(material,rho+h,u+k3u);
+			k1u = h*tilldudlogrho(material, logrho, u);
+			k2u = h*tilldudlogrho(material, logrho+0.5*h, u+0.5*k1u);
+			k3u = h*tilldudlogrho(material, logrho+0.5*h, u+0.5*k2u);
+			k4u = h*tilldudlogrho(material, logrho+h, u+k3u);
 
 			u += k1u/6.0+k2u/3.0+k3u/3.0+k4u/6.0;
 			rho += h;
 		}
+        /// CR: We should step back to log(rho) == log(rho2) as we do in ballic.
 	} else if (rho1 > rho2) {
-		while (rho > rho2) {
+		while (logrho > logrho2) {
 			/*
 			** Midpoint Runga-Kutta (4nd order).
 			*/
-			k1u = h*tilldudrho(material,rho,u);
-			k2u = h*tilldudrho(material,rho+0.5*h,u+0.5*k1u);
-			k3u = h*tilldudrho(material,rho+0.5*h,u+0.5*k2u);
-			k4u = h*tilldudrho(material,rho+h,u+k3u);
+			k1u = h*tilldudlogrho(material, logrho, u);
+			k2u = h*tilldudlogrho(material, logrho+0.5*h, u+0.5*k1u);
+			k3u = h*tilldudlogrho(material, logrho+0.5*h, u+0.5*k2u);
+			k4u = h*tilldudlogrho(material, logrho+h, u+k3u);
 
 			u -= k1u/6.0+k2u/3.0+k3u/3.0+k4u/6.0;
 			rho -= h;
