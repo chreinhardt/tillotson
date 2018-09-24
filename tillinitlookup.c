@@ -334,16 +334,21 @@ double tillCalcU(TILLMATERIAL *material, double rho1, double u1, double rho2)
     double logrho;
     double logrho2;
     double u;
-    double k1u,k2u,k3u,k4u;
+    double k1u, k2u, k3u, k4u;
 	double h;
 
-	logrho = rho1;
+	logrho = log(rho1);
 	u = u1;
     logrho2 = log(rho2);
 
 	/* Make smaller steps than we used for look up table. */
 	h = material->dlogrho/100.0;
+    
+    /// CR: Try same as lookup table.
+	h = material->dlogrho/100.0;
+    fprintf(stderr, "tillCalcU: Solving ODE (rho1= %g u1= %g rho= %g).\n", rho1, u1, rho2);
 
+    fprintf(stderr, "tillCalcU: Solving ODE (rho= %g u= %g logrho= %g).\n", exp(logrho), u, logrho);
 	if (rho1 < rho2)
 	{
 		while (logrho < logrho2) {
@@ -356,10 +361,14 @@ double tillCalcU(TILLMATERIAL *material, double rho1, double u1, double rho2)
 			k4u = h*tilldudlogrho(material, logrho+h, u+k3u);
 
 			u += k1u/6.0+k2u/3.0+k3u/3.0+k4u/6.0;
-			rho += h;
+			logrho += h;
 		}
         /// CR: We should step back to log(rho) == log(rho2) as we do in ballic.
+        fprintf(stderr, "logrho= %g rho= %g rho2= %g logrho2= %g u1= %g u2= %g\n", logrho,
+                exp(logrho), rho2, logrho2, u1, u);
 	} else if (rho1 > rho2) {
+        /// CR: just for testing
+        assert(0);
 		while (logrho > logrho2) {
 			/*
 			** Midpoint Runga-Kutta (4nd order).
@@ -370,7 +379,7 @@ double tillCalcU(TILLMATERIAL *material, double rho1, double u1, double rho2)
 			k4u = h*tilldudlogrho(material, logrho+h, u+k3u);
 
 			u -= k1u/6.0+k2u/3.0+k3u/3.0+k4u/6.0;
-			rho -= h;
+			logrho -= h;
 		}
 	}
 	return u;
