@@ -146,6 +146,10 @@ typedef struct tillMaterial
 TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit, int nTableRho, int nTableV, double rhomax, double vmax, int iExpV);
 void tillFinalizeMaterial(TILLMATERIAL *material);
 
+void tilliMatString(TILLMATERIAL *material, char *MatName);
+void tillErrorString(int iError, char *ErrorString);
+void tillPrintMat(TILLMATERIAL *material);
+
 // Some functions that provide a general interface for EOS calls where other EOS, e.g., an ideal gas EOS can be implemented
 double eosPressureSound(TILLMATERIAL *material, double rho, double u, double *pcSound);
 double eosPressure(TILLMATERIAL *material, double rho, double u);

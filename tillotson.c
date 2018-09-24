@@ -378,6 +378,35 @@ void tilliMatString(TILLMATERIAL *material, char *MatName)
 }
 
 /*
+ * This function returns an error message for each error code.
+ */
+void tillErrorString(int iError, char *ErrorString)
+{
+    assert(ErrorString != NULL);
+
+    switch(iError)
+    {
+        case TILL_LOOKUP_SUCCESS:
+            sprintf(ErrorString, "TILL_LOOKUP_SUCCESS");
+            break;
+        case TILL_LOOKUP_OUTSIDE_RHOMIN:
+            sprintf(ErrorString, "TILL_LOOKUP_OUTSIDE_RHOMIN");
+            break;
+        case TILL_LOOKUP_OUTSIDE_RHOMAX:
+            sprintf(ErrorString, "TILL_LOOKUP_OUTSIDE_RHOMAX");
+            break;
+        case TILL_LOOKUP_OUTSIDE_VMIN:
+            sprintf(ErrorString, "TILL_LOOKUP_OUTSIDE_VMIN");
+            break;
+        case TILL_LOOKUP_OUTSIDE_VMAX:
+            sprintf(ErrorString, "TILL_LOOKUP_OUTSIDE_VMAX");
+            break;
+        default:
+            sprintf(ErrorString, "UNKNOWN ERROR");
+    } 
+}
+
+/*
  * This function prints the material constants for a given material.
  */
 void tillPrintMat(TILLMATERIAL *material)

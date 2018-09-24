@@ -362,11 +362,7 @@ double tillCalcU(TILLMATERIAL *material, double rho1, double u1, double rho2)
 			logrho += h;
 		}
         /// CR: We should step back to log(rho) == log(rho2) as we do in ballic.
-        fprintf(stderr, "logrho= %g rho= %g rho2= %g logrho2= %g u1= %g u2= %g\n", logrho,
-                exp(logrho), rho2, logrho2, u1, u);
 	} else if (rho1 > rho2) {
-        /// CR: just for testing
-        assert(0);
 		while (logrho > logrho2) {
 			/*
 			** Midpoint Runga-Kutta (4nd order).
@@ -383,13 +379,13 @@ double tillCalcU(TILLMATERIAL *material, double rho1, double u1, double rho2)
 	return u;
 }
 
+/*
+ * This function checks if a given (rho, u) is in the look up table or not.
+ * 
+ * Returns TILL_LOOKUP_SUCCESS if (rho, u) is in the table and an error code if not.
+ */
 int tillIsInTable(TILLMATERIAL *material, double rho, double u)
 {
-	/*
-     * This function checks if a given (rho,u) is in the look up table or not.
-     * 
-     * Returns TILL_LOOKUP_SUCCESS if (rho,u) is in the table and an error code if not.
-     */
     int i;
 
 	/* Check if rho < rhomin or rho >= rhomax */
@@ -404,7 +400,8 @@ int tillIsInTable(TILLMATERIAL *material, double rho, double u)
 	}
 
     /* Now find rho_i and rho_i+1 so that rho is bracketed (only works for equal spaced grid). */
-	i = tillLookupIndexLogRho(material, rho);
+	i = tillLookupIndexLogRho(material, log(rho));
+    fprintf(stderr, "tillIsInTable: i= %i rho= %g\n", i, rho);
 	assert(i >= 0 && i < material->nTableRho-1);
 
     /* Check if v(rho, u) < v_max. */
