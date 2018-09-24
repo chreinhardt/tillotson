@@ -120,7 +120,7 @@ void main(int argc, char **argv) {
 
 	fprintf(stderr, "Evolve a particle along an isentrope (direct integration)...\n");
     
-    /* First along the lookup table. */
+    /* First along the isentropes in the lookup table. */
 	for (j=0; j<tillMat->nTableV-1; j+=1)
 	{
         rho1 = tillLookupRho(tillMat, 1);
