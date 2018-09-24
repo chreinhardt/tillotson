@@ -215,7 +215,7 @@ TILL_LOOKUP_ENTRY *tillSolveIsentrope(TILLMATERIAL *material, double v)
 
 /*
  * Integrate one isentrope for the look up table using a log(rho) as a variable. The parameter v
- * corresponds to u(rho=rho0) so v=0 gives the cold curve.
+ * corresponds to u(log(rho)=log(rho0)) so v=0 gives the cold curve.
  */
 TILL_LOOKUP_ENTRY *tillSolveIsentropeLogRho(TILLMATERIAL *material, double v)
 {
@@ -321,22 +321,31 @@ TILL_LOOKUP_ENTRY *tillSolveIsentropeLogRho(TILLMATERIAL *material, double v)
 	return isentrope;
 }
 
-double tillCalcU(TILLMATERIAL *material,double rho1,double u1,double rho2)
+/*
+ * Calculate u2(rho2) by solving the ODE
+ *
+ * du/dlogrho = P/rho
+ *
+ * with initial conitions (rho1, u1).
+ */
+double tillCalcU(TILLMATERIAL *material, double rho1, double u1, double rho2)
 {
 	/* Calculate u2 by solving the ODE */
-    double rho;
+    double logrho;
+    double logrho2;
     double u;
     double k1u,k2u,k3u,k4u;
 	double h;
 
-	rho = rho1;
+	logrho = rho1;
 	u = u1;
+
 	/* Make smaller steps than we used for look up table. */
-	h = material->drho/100.0;
+	h = material->dlogrho/100.0;
 
 	if (rho1 < rho2)
 	{
-		while (rho < rho2) {
+		while (logrho < rho2) {
 			/*
 			** Midpoint Runga-Kutta (4nd order).
 			*/
