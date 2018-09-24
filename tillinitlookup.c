@@ -5,6 +5,12 @@
  * The Tillotson EOS (e.g. Benz 1986) is a relatively simple but reliable
  * and convenient to use equation of state that can describe matter over
  * a large range of pressures, densities and internal energies.
+ * 
+ * Basic functions:
+ *
+ * tillInitLookup: generate the look up table for the isentropes (allocate memory!)
+ *
+ * tillSolveIsentrope: solve the ODE du/drho=P/(rho*rho) for a given initial value v=u(rho0).
  */
 #include <stdlib.h>
 #include <math.h>
@@ -14,13 +20,6 @@
 
 /* Use Runge-Kutta 4th order to solve the ODEs */
 #define TILL_USE_RK4
-
-/* Basic functions:
- *
- * tillInitLookup: generate the look up table for the isentropes (allocate memory!)
- *
- * tillSolveIsentrope: solve the ODE du/drho=P/(rho*rho) for a given initial value v=u(rho0).
- */
 
 int comparerho(const void* a, const void* b)
 /*
