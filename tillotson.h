@@ -60,6 +60,9 @@ enum till_error
 //#define TILL_RHO_MIN 5e-1
 //#define TILL_RHO_MIN 0.0
 
+/* Define eps so that v <= v_max-eps. */
+#define V_EPS 1e-8
+
 /* Define FALSE and TRUE. */
 //const int FALSE = 0;
 //const int TRUE = 1;

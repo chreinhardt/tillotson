@@ -386,6 +386,8 @@ double tillCalcU(TILLMATERIAL *material, double rho1, double u1, double rho2)
  */
 int tillIsInTable(TILLMATERIAL *material, double rho, double u)
 {
+    double logrho;
+    double v_eps = V_EPS;
     int i;
 
 	/* Check if rho < rhomin or rho >= rhomax */
@@ -401,17 +403,31 @@ int tillIsInTable(TILLMATERIAL *material, double rho, double u)
 
     /* Now find rho_i and rho_i+1 so that rho is bracketed (only works for equal spaced grid). */
 	i = tillLookupIndexLogRho(material, log(rho));
-    fprintf(stderr, "tillIsInTable: i= %i rho= %g\n", i, rho);
 	assert(i >= 0 && i < material->nTableRho-1);
+    fprintf(stderr, "\n");
+    fprintf(stderr, "i= %i\n", i);
 
-    /* Check if v(rho, u) < v_max. */
+    /* Check if v(rho, u) < v_max. This requires interpolation. */
+#if 0
+    if ((u < tillSplineIntU(material, material->vmax-v_eps, i)) &&
+        (u < tillSplineIntU(material, material->vmax-v_eps, i+1)))
+#endif
+//#if 0    
     if ((u < material->Lookup[TILL_INDEX(i,material->nTableV-1)].u) &&
         (u < material->Lookup[TILL_INDEX(i+1,material->nTableV-1)].u))
+//#endif
     {
         /* Check if v(rho, u) > v_0 (so if u > u(rho, 0)). */
         if ((u > material->Lookup[TILL_INDEX(i,0)].u) && (u > material->Lookup[TILL_INDEX(i+1,0)].u))
         {
             /* u(rho, v) is definitely inside of the lookup table. */
+
+        fprintf(stderr, "rho= %15.7E u= %15.7E i= %i i+1= %i\n", rho, u, i, i+1);
+        fprintf(stderr, "u_i= %15.7E u_i+1= %15.7E\n", material->Lookup[TILL_INDEX(i,material->nTableV-1)].u, material->Lookup[TILL_INDEX(i+1,material->nTableV-1)].u);
+        fprintf(stderr, "u_i= %15.7E u_i+1= %15.7E\n", tillSplineIntU(material, material->vmax-v_eps, i), tillSplineIntU(material, material->vmax-v_eps, i+1));
+
+        fprintf(stderr, "du_i= %15.7E du_i+1= %15.7E\n", material->Lookup[TILL_INDEX(i,material->nTableV-1)].u-tillSplineIntU(material, material->vmax-v_eps, i), material->Lookup[TILL_INDEX(i+1,material->nTableV-1)].u-tillSplineIntU(material, material->vmax-v_eps, i+1));
+
             return TILL_LOOKUP_SUCCESS;
         } else {
             /* u(rho, v) is below the cold curve. */
@@ -422,6 +438,9 @@ int tillIsInTable(TILLMATERIAL *material, double rho, double u)
         }
     } else {
         /* u(rho, v) is larger than u(rho, v_max) so the lookup table has to be extended. */
+        fprintf(stderr, "rho= %15.7E u= %15.7E i= %i i+1= %i\n", rho, u, i, i+1);
+        fprintf(stderr, "u_i= %15.7E u_i+1= %15.7E\n", material->Lookup[TILL_INDEX(i,material->nTableV-1)].u, material->Lookup[TILL_INDEX(i+1,material->nTableV-1)].u);
+        fprintf(stderr, "u_i= %15.7E u_i+1= %15.7E\n", tillSplineIntU(material, material->vmax-v_eps, i), tillSplineIntU(material, material->vmax-v_eps, i+1));
         return TILL_LOOKUP_OUTSIDE_VMAX;
     }
 }

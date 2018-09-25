@@ -954,10 +954,10 @@ double denergy(TILLMATERIAL *material,double v,double rho,double u)
 double tillFindEntropyCurve(TILLMATERIAL *material,double rho,double u,int iOrder)
 {
 	double tol=1e-6;
-    double eps = 1e-8;
+    double v_eps = V_EPS;
     
     /// CR: Why 0 < v <= vmax-dv????? We want v < vmax
-	return brent(denergy,material,0.0,material->vmax-eps,rho,u,tol,iOrder);
+	return brent(denergy,material,0.0,material->vmax-v_eps,rho,u,tol,iOrder);
 //	return brent(denergy,material,0.0,material->vmax-material->dv,rho,u,tol,iOrder);
 }
 
@@ -1003,65 +1003,6 @@ double eosLookupU(TILLMATERIAL *material, double rho1, double u1, double rho2, i
     }
 }
 
-double tillCubicIntRho(TILLMATERIAL *material, double rhoint, int iv) {
-	/* Do an interpolation of u in rho for a given isentrope v. */
-	double dx, e, e1;
-	double *ce;
-	double *u, *dudrho;
-	double uint;
-	int i;
-
-    /*
-     * For even spaced data points rhoint is between rho[i] and rho[i+1].
-     * (CR) 24.11.2017: Keep in mind that one has to account for rhomin.
-     */
-	i = tillLookupIndexRho(material, rhoint);
-	assert(i >= 0 && i < material->nTableRho-1);
-
-	/* Allocate memory */
-	ce = malloc(4*sizeof(double));
-	assert(ce != NULL);
-
-	u = malloc(2*sizeof(double));
-	assert(u != NULL);
-
-	dudrho = malloc(2*sizeof(double));
-	assert(dudrho != NULL);
-
-	/* Get u and dudrho from the lookup table */
-	u[0] = material->Lookup[TILL_INDEX(i, iv)].u;
-	u[1] = material->Lookup[TILL_INDEX(i+1, iv)].u;
-	dudrho[0] = material->Lookup[TILL_INDEX(i, iv)].u1;
-	dudrho[1] = material->Lookup[TILL_INDEX(i+1, iv)].u1;
-	
-	//dx = rho[1] - rho[0];
-	//e = (rhoint - rho[0])/dx;
-	//e1 = e - 1;
-	
-	// Only works for uniform steps in rho (do I have to change this for rhomin too?)
-	dx = material->drho;
-	e = (rhoint - (material->rhomin+i*material->drho))/dx;
-	e1 = e - 1;
-
-	// these are the 4 Hermite functions
-	ce[0] = (2*e + 1)*e1*e1;
-	ce[1] = e*e1*e1;
-	ce[2] = e*e*(3 - 2*e);
-	ce[3] = e*e*e1;
-
-	/*
-	**    = ce[0]*u(v,0) + ce[1]*dudrho(v,0)*dx + ce[2]*u(v,1) + ce[3]*dudrho(v,1);
-	** the above is written as 4 independent spline lookups in the table v lies between some j and j+1
-	*/
-	uint = (ce[0]*u[0] + ce[1]*dudrho[0]*dx + ce[2]*u[1] + ce[3]*dudrho[1]*dx);
-	
-	// free memory
-	free(ce);
-	free(u);
-	free(dudrho);
-	return(uint);
-}
-
 /*
  * Calculate u_cold(rho) from the lookup table.
  */
@@ -1073,7 +1014,10 @@ double tillColdULookup(TILLMATERIAL *material, double rho)
 	assert(material->Lookup != NULL);
 
 	// iv = 0 corresponds to the cold curve
-	return(tillCubicIntRho(material, rho, 0));
+    //
+    //// CR: Needs to be changed for logrho.
+//	return(tillCubicIntRho(material, rho, 0));
+    assert(0);
 }
 
 /*
@@ -1098,13 +1042,16 @@ int tillLookupIndexRho(TILLMATERIAL *material, double rho)
 
 /*
  * Return the index i, so that log(rho_i) and log(rho_i+1) bracket log(rho) in the lookup table.
+ *
+ * Note: The index of rho(i) is i-1. Since the value of rho is still bracketed by i and i+1 this
+ *       should be fine.
  */
 int tillLookupIndexLogRho(TILLMATERIAL *material, double logrho)
 {
     int i;
 
     // Assume uniform spacing in log(rho).
-    i = floor((logrho-log(material->rhomin))/material->dlogrho);
+    i = (int) floor((logrho-log(material->rhomin))/material->dlogrho);
 
     // Check if logrho is outside of the table.
     if (i < 0)
@@ -1124,7 +1071,7 @@ int tillLookupIndexV(TILLMATERIAL *material, double v)
     int j;
 
     // Assume uniform spacing in v.
-    j = floor(v/material->dv);
+    j = (int) floor(v/material->dv);
 
     // Check if v is outside of the table.
     if (j < 0)

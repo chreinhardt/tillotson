@@ -118,23 +118,28 @@ void main(int argc, char **argv) {
      * Now check if points on last isentrope are treated correctly.
      */
     v = tillLookupV(tillMat, tillMat->nTableV-1);
-    j = tillMat->nTableV-1;
+    v -= 1e-8;
+    j = tillLookupIndexV(tillMat, v);
 
 	for (i=0; i<tillMat->nTableRho; i+=1)
 	{
-        fprintf(stderr, "i= %i\n", i);
 		rho = tillLookupRho(tillMat, i);
         u = tillMat->Lookup[INDEX(i, j)].u;
 
-        fprintf(stderr,"i= %i j= %i: Testing rho=%g, u=%g (v= %g)!\n", i, j, rho, u, v);
+        fprintf(stderr, "\n");
+        fprintf(stderr,"i= %i j= %i: Testing rho=%g, u=%g (v= %g)! index= %g = %i\n", i, j, rho, u, v, (log(rho)-log(tillMat->rhomin))/tillMat->dlogrho, (int) floor((log(rho)-log(tillMat->rhomin))/tillMat->dlogrho));
+
 
 		iRet = tillIsInTable(tillMat, rho, u);
 
 		if (iRet != TILL_LOOKUP_SUCCESS)
         {
             tillErrorString(iRet, ErrorString);
-            fprintf(stderr,"i= %i j= %i: rho=%g, u=%g (v= %g) not in table (Error %s)!\n", i, j, rho, u, v, ErrorString);
+            fprintf(stderr,"i= %i j= %i: rho=%15.7E, u=%15.7E (v= %15.7E) not in table (Error %s)!\n", i, j, rho, u, v, ErrorString);
 //			fprintf(fp, "%15.7E %15.7E\n", rho, u);
+        } else {
+            fprintf(stderr,"i= %i j= %i: rho=%15.7E, u=%15.7E (v= %15.7E) is in table.\n", i, j, rho, u, v);
+            assert(0);
         }
 	}
 
