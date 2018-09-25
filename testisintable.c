@@ -151,10 +151,17 @@ void main(int argc, char **argv) {
         }
 	}
 #endif
-	for (i=0; i<tillMat->nTableRho; i+=1)
+    v = tillLookupV(tillMat, tillMat->nTableV-1);
+    v -= 1e-8;
+//    v -= 2.5*tillMat->dv;
+    j = tillLookupIndexV(tillMat, v);
+
+	for (i=0; i<tillMat->nTableRho-1; i+=1)
 	{
         // Choose a point between the grid points (logarithmic spacing)
 		rho = tillMat->rhomin*exp((i + 0.5)*tillMat->dlogrho);
+
+        // Note that this requires v < vmax.
         u = tillCubicInt(tillMat, rho, v);
 
         fprintf(stderr, "\n");
