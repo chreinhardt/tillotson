@@ -1015,7 +1015,7 @@ double tillColdULookup(TILLMATERIAL *material, double rho)
 
     if ((rho <= material->rhomin) || (rho >= material->rhomax))
     {
-        fprintf(stderr, "tillColdULookup: rho= %g outside of the lookup table.\n");
+        fprintf(stderr, "tillColdULookup: rho= %g outside of the lookup table.\n", rho);
         assert(0);
     }
 
