@@ -1024,7 +1024,7 @@ double tillColdULookup(TILLMATERIAL *material, double rho)
     //// CR: Needs to be changed for logrho.
 //	return(tillCubicIntRho(material, rho, 0));
     return tillCubicInt(material, rho, 0.0);
-    assert(0);
+//    assert(0);
 }
 
 /*
