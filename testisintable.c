@@ -152,7 +152,7 @@ void main(int argc, char **argv) {
 	}
 #endif
     v = tillLookupV(tillMat, tillMat->nTableV-1);
-    v -= 1e-8;
+    v -= 1e-10;
 //    v -= 2.5*tillMat->dv;
     j = tillLookupIndexV(tillMat, v);
 

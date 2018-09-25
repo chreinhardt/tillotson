@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2014-2018 Christian Reinhardt and Joachim Stadel.
- **
+ *
  * This file provides all the functions for the Tillotson EOS library.
  * The Tillotson EOS (e.g. Benz 1986) is a relatively simple but reliable
  * and convenient to use equation of state that can describe matter over
@@ -1065,9 +1065,8 @@ double tillURhoTemp(TILLMATERIAL *material, double rho, double T)
 double tillRhoPTemp(TILLMATERIAL *material, double P, double T)
 {
     /* 
-     * Calculate rho(P,T) for a material. Because thermodynamical consistency
-     * requires (dP/drho)_T > 0 this should always work except where we do the
-     * pressure cutoff.
+     * Calculate rho(P,T) for a material. Because thermodynamical consistency requires
+     * (dP/drho)_T > 0 this should always work except where we do the pressure cutoff.
      */
     double a, ua, Pa, b, ub, Pb, c, uc, Pc;
 
