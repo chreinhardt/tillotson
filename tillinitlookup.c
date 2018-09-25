@@ -387,9 +387,9 @@ double tillCalcU(TILLMATERIAL *material, double rho1, double u1, double rho2)
                 h = logrho-logrho2;
             }
 
+		}
         fprintf(stderr, "tillCalcU: rho1= %g rho= %g rho2= %g (rho-rho2)= %g\n", rho1, exp(logrho),
                 rho2, exp(logrho)-rho2);
-		}
 	}
 	return u;
 }
