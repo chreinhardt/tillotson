@@ -42,7 +42,7 @@ fig, ax = subplots(1,1)
 fig.set_size_inches(8.27*0.39,8.27*(6./8.)*0.39)
 
 # Load the cold curve
-data = loadtxt('coldcurve.txt')
+data1 = loadtxt('coldcurve.txt')
 
 # Load interpolated values
 data2 = loadtxt('testtillcoldu.txt')
