@@ -381,6 +381,14 @@ double tillCalcU(TILLMATERIAL *material, double rho1, double u1, double rho2)
 
 			u -= k1u/6.0+k2u/3.0+k3u/3.0+k4u/6.0;
 			logrho -= h;
+
+            /* For the last step we set h so that rho == rho2. */
+            if (fabs(logrho-logrho2) < h) {
+                h = logrho2-logrho;
+            }
+
+        fprintf(stderr, "tillCalcU: rho1= %g rho= %g rho2= %g (rho-rho2)= %g\n", rho1, exp(logrho),
+                rho2, exp(logrho)-rho2);
 		}
 	}
 	return u;
