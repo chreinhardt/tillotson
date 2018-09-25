@@ -237,58 +237,5 @@ double tillLookupV(TILLMATERIAL *material, int j);
 // A general version of tillLookupU() that can be used as an interface for different EOS
 double eosLookupU(TILLMATERIAL *material,double rho1,double u1,double rho2,int iOrder);
 
-void tillBSderivs(TILLMATERIAL *material, float x, float y[], float dydx[]);
-
-
-
-
-/* Defines for the Numerical Recipes routines */
-
-/*
-** Modified midpoint method.
-**
-** y[]:			dependent variable (vector if we solve more dim. problems)
-** dydx[]:		its first derivatives at the starting value x
-** nvar:		number of dependent variables y1,...,yn
-** xs:			Starting point x
-** htot:		total step to be made
-** nstep:		number of sub steps
-** yout[]:		vector containing the result
-** derivs:		function to calculate the right hand side derivatives
-*/
-void mmid(float y[], float dydx[], int nvar, float xs, float htot, int nstep,
-	float yout[], void (*derivs)(float, float[], float[]));
-
-/*
-** Polynomial extrapolation routine from the Numerical Recipes.
-**
-** iest:		number of the call in the sequence of calls
-** xest:		input values for x
-** yest[]:		input value for y1,..,yn
-** yz[]:		extrapolated function values at x=0
-** dy[]:		extrapolation errors
-** nv:			number of functions
-*/
-void pzextr(int iest, float xest, float yest[], float yz[], float dy[],
-		int nv);
-
-/*
-** Bulirsch-Stoer method to integrate ODEs.
-**
-** y[]:			dependent variable
-** dydx[]:		its first derivative at the starting value x
-** nv:			number of variables y1,...,yn
-** xx:			
-** htry:		step size (the algorithm can use a smaller value if needed)
-** eps:			required accuracy
-** yscal[]:		vector to scale the error
-** hdid:		return actual step size
-** hnext:		return estimated next step size
-** derivs:		function to calculate the right hand side derivatives
-*/
-void bsstep(float y[], float dydx[], int nv, float *xx, float htry, float eps,
-	float yscal[], float *hdid, float *hnext,
-	void (*derivs)(TILLMATERIAL*, float, float [], float []));
-
 #endif
 

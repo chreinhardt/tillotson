@@ -1013,7 +1013,11 @@ double tillColdULookup(TILLMATERIAL *material, double rho)
 	// Make sure that the look up table is initialized.
 	assert(material->Lookup != NULL);
 
-    if ((rho <= material->rhomin) || (rho >= material->rhomax))
+    // In case of a liquid there is not cold term in the expanded states.
+    if (rho < material->rho0)
+        return 0.0;
+
+    if ((rho < material->rhomin) || (rho >= material->rhomax))
     {
         fprintf(stderr, "tillColdULookup: rho= %g outside of the lookup table.\n", rho);
         assert(0);
