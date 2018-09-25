@@ -21,34 +21,32 @@
 #define INDEX(i, j) (((i)*tillMat->nTableV) + (j))
 
 void main(int argc, char **argv) {
-	/*
-	** Debug tillCubicIntRho(). 
-	*/
+    // Tillotson EOS library
+	TILLMATERIAL *tillMat;
 	double dKpcUnit = 2.06701e-13;
 	double dMsolUnit = 4.80438e-08;
 	double rhomax = 100.0;
 	double vmax = 1200.0;
-	// For vmax=rhomax=25 and nTableV=100, nTableRho=1000 we get excellent results.
-	// vmax=25.0, rhomax=100.0, nTableV=10, nTableRho=4000
-	//int nTableMax = 1000;
 	int nTableRho = 100;
 	int nTableV = 100;
 	double rho, v, u;
 	double umax;
     char ErrorString[256]; 
     int iRet;
-
+	FILE *fp = NULL;
 	int i = 0;
 	int j = 0;
 	int n = 1;
 
-	TILLMATERIAL *tillMat;
-
+#ifdef TILL_PRESS_NP
+	fprintf(stderr, "TILL_PRESS_NP.\n");
+#endif
 	fprintf(stderr, "Initializing material...\n");
 
 	tillMat = tillInitMaterial(GRANITE, dKpcUnit, dMsolUnit, nTableRho, nTableV, rhomax, vmax, n);
 	
 	fprintf(stderr, "Initializing the look up table...\n");
+
 	/* Solve ODE and splines */
 	tillInitLookup(tillMat);
 	fprintf(stderr, "Done.\n");
@@ -62,8 +60,6 @@ void main(int argc, char **argv) {
 	rho = 0.0;
 	u = 0.0;
 
-	/* Create an output file for the look up table */
-	FILE *fp = NULL;
 	
 	/*
 	 * Print the look up table to a file first.
@@ -73,12 +69,13 @@ void main(int argc, char **argv) {
 
 	for (i=0; i<tillMat->nTableRho; i+=1)
 	{
-		rho = i*tillMat->drho;
-		fprintf(fp,"%g",rho);
+		rho = tillLookupRho(tillMat, i);
+		fprintf(fp, "%15.7E",rho);
+
 		for (j=0; j<tillMat->nTableV; j+=1)
 		{
 			u = tillMat->Lookup[INDEX(i, j)].u;
-			fprintf(fp,"  %g", u);
+			fprintf(fp,"  %15.7E", u);
 		}
 		fprintf(fp,"\n");
 	}
@@ -118,7 +115,8 @@ void main(int argc, char **argv) {
      * Now check if points on last isentrope are treated correctly.
      */
     v = tillLookupV(tillMat, tillMat->nTableV-1);
-    v -= 1e-8;
+//    v -= 1e-8;
+//    v -= 2.5*tillMat->dv;
     j = tillLookupIndexV(tillMat, v);
 
 	for (i=0; i<tillMat->nTableRho; i+=1)
@@ -136,9 +134,19 @@ void main(int argc, char **argv) {
         {
             tillErrorString(iRet, ErrorString);
             fprintf(stderr,"i= %i j= %i: rho=%15.7E, u=%15.7E (v= %15.7E) not in table (Error %s)!\n", i, j, rho, u, v, ErrorString);
+
+            fprintf(stderr, "Calling tillLookupU.\n");
+            fprintf(stderr, "rho1= %g u1= %g rho2= %g ", rho, u, tillMat->rhomin*exp((i + 0.5)*tillMat->dlogrho));
+            u = tillLookupU(tillMat, rho, u, tillMat->rhomin*exp((i + 0.5)*tillMat->dlogrho), 0);
+            fprintf(stderr, "u2= %g\n", u);
+
 //			fprintf(fp, "%15.7E %15.7E\n", rho, u);
         } else {
-            fprintf(stderr,"i= %i j= %i: rho=%15.7E, u=%15.7E (v= %15.7E) is in table.\n", i, j, rho, u, v);
+            fprintf(stderr, "i= %i j= %i: rho=%15.7E, u=%15.7E (v= %15.7E) is in table.\n", i, j, rho, u, v);
+            fprintf(stderr, "Calling tillLookupU.\n");
+            fprintf(stderr, "rho1= %g u1= %g rho2= %g ", rho, u, tillMat->rhomin*exp((i + 0.5)*tillMat->dlogrho));
+            u = tillLookupU(tillMat, rho, u, tillMat->rhomin*exp((i + 0.5)*tillMat->dlogrho), 0);
+            fprintf(stderr, "u2= %g\n", u);
             assert(0);
         }
 	}

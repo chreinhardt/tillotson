@@ -390,7 +390,7 @@ int tillIsInTable(TILLMATERIAL *material, double rho, double u)
     double v_eps = V_EPS;
     int i;
 
-	/* Check if rho < rhomin or rho >= rhomax */
+	/* Check if rho <= rhomin or rho >= rhomax */
 	if (rho <= material->rhomin)
 	{
 		return TILL_LOOKUP_OUTSIDE_RHOMIN;
@@ -408,25 +408,27 @@ int tillIsInTable(TILLMATERIAL *material, double rho, double u)
     fprintf(stderr, "i= %i\n", i);
 
     /* Check if v(rho, u) < v_max. This requires interpolation. */
-#if 0
+//#if 0
     if ((u < tillSplineIntU(material, material->vmax-v_eps, i)) &&
         (u < tillSplineIntU(material, material->vmax-v_eps, i+1)))
-#endif
-//#if 0    
+//#endif
+#if 0    
     if ((u < material->Lookup[TILL_INDEX(i,material->nTableV-1)].u) &&
         (u < material->Lookup[TILL_INDEX(i+1,material->nTableV-1)].u))
-//#endif
+#endif
     {
         /* Check if v(rho, u) > v_0 (so if u > u(rho, 0)). */
         if ((u > material->Lookup[TILL_INDEX(i,0)].u) && (u > material->Lookup[TILL_INDEX(i+1,0)].u))
         {
             /* u(rho, v) is definitely inside of the lookup table. */
-
-        fprintf(stderr, "rho= %15.7E u= %15.7E i= %i i+1= %i\n", rho, u, i, i+1);
+//        v_eps = 0.5*material->dv;
+        fprintf(stderr, "rho= %15.7E u= %15.7E i= %i i+1= %i eps= %15.7E\n", rho, u, i, i+1, v_eps);
         fprintf(stderr, "u_i= %15.7E u_i+1= %15.7E\n", material->Lookup[TILL_INDEX(i,material->nTableV-1)].u, material->Lookup[TILL_INDEX(i+1,material->nTableV-1)].u);
         fprintf(stderr, "u_i= %15.7E u_i+1= %15.7E\n", tillSplineIntU(material, material->vmax-v_eps, i), tillSplineIntU(material, material->vmax-v_eps, i+1));
 
         fprintf(stderr, "du_i= %15.7E du_i+1= %15.7E\n", material->Lookup[TILL_INDEX(i,material->nTableV-1)].u-tillSplineIntU(material, material->vmax-v_eps, i), material->Lookup[TILL_INDEX(i+1,material->nTableV-1)].u-tillSplineIntU(material, material->vmax-v_eps, i+1));
+
+        fprintf(stderr, "u_i-2= %15.7E u_i-1= %15.7E\n", material->Lookup[TILL_INDEX(i-2,material->nTableV-1)].u, material->Lookup[TILL_INDEX(i-1,material->nTableV-1)].u);
 
             return TILL_LOOKUP_SUCCESS;
         } else {

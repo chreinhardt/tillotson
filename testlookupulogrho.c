@@ -1,6 +1,9 @@
 /*
  * This is a simple program to test the Tillotson EOS library.
  *
+ * Author: Christian Reinhardt
+ * Date:   23.09.2018
+ *
  * Test the function tillLookupU(). First a table is generated and printed to a file, then values
  * between the isentropes are interpolated and a particles evolution along each isentrope is 
  * calculated. The results can be plotted with testlookupulogrho.py.
