@@ -119,8 +119,9 @@ void main(int argc, char **argv) {
 	assert(fp != NULL);
 
 	fprintf(stderr, "Evolve a particle along an isentrope (direct integration)...\n");
-    
-    /* First along the isentropes in the lookup table. */
+
+#if 0
+    /* First along the isentropes in the lookup table from rhomin to rhomax. */
 	for (j=0; j<tillMat->nTableV-1; j+=1)
 	{
         rho1 = tillLookupRho(tillMat, 1);
@@ -140,10 +141,11 @@ void main(int argc, char **argv) {
 
         fprintf(fp, "%15.7E%15.7E\n", rho2, u);
 	}
-#if 0
+#endif
+    /* Then along the isentropes in the lookup table from rhomax to rhomin. */
 	for (j=0; j<tillMat->nTableV-1; j+=1)
 	{
-        rho1 = tillLookupRho(tillMat, 1);
+        rho1 = tillLookupRho(tillMat, tillMat->nTableRho-2);
 
         // Linear spacing
         v = tillMat->dv*(j+0.5);
@@ -152,7 +154,7 @@ void main(int argc, char **argv) {
         
         fprintf(fp, "%15.7E%15.7E", rho1, u);
         
-        rho2 = tillLookupRho(tillMat, tillMat->nTableRho-2);
+        rho2 = tillLookupRho(tillMat, 1);
 
 	    fprintf(stderr, "i= %i rho1=%g u1= %g rho2= %g v= %g\n", j, rho1, u, rho2, v);
 
@@ -160,7 +162,6 @@ void main(int argc, char **argv) {
 
         fprintf(fp, "%15.7E%15.7E\n", rho2, u);
 	}
-#endif
 	fclose(fp);
 
 	fprintf(stderr,"Done.\n");

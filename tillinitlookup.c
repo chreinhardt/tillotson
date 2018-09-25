@@ -384,7 +384,7 @@ double tillCalcU(TILLMATERIAL *material, double rho1, double u1, double rho2)
 
             /* For the last step we set h so that rho == rho2. */
             if (fabs(logrho-logrho2) < h) {
-                h = logrho2-logrho;
+                h = logrho-logrho2;
             }
 
         fprintf(stderr, "tillCalcU: rho1= %g rho= %g rho2= %g (rho-rho2)= %g\n", rho1, exp(logrho),
