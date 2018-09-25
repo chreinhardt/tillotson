@@ -366,8 +366,6 @@ double tillCalcU(TILLMATERIAL *material, double rho1, double u1, double rho2)
                 h = logrho2-logrho;
             }
 		}
-//        fprintf(stderr, "tillCalcU: rho1= %g rho= %g rho2= %g (rho-rho2)= %g\n", rho1, exp(logrho),
-//                rho2, exp(logrho)-rho2);
 	} else if (rho1 > rho2) {
 		while (logrho > logrho2) {
 			/*
@@ -387,8 +385,6 @@ double tillCalcU(TILLMATERIAL *material, double rho1, double u1, double rho2)
             }
 
 		}
-//        fprintf(stderr, "tillCalcU: rho1= %g rho= %g rho2= %g (rho-rho2)= %g\n", rho1, exp(logrho),
-//                rho2, exp(logrho)-rho2);
 	}
 	return u;
 }

@@ -118,7 +118,7 @@ void main(int argc, char **argv) {
 //    v -= 1e-8;
 //    v -= 2.5*tillMat->dv;
     j = tillLookupIndexV(tillMat, v);
-
+#if 0
 	for (i=0; i<tillMat->nTableRho; i+=1)
 	{
 		rho = tillLookupRho(tillMat, i);
@@ -150,7 +150,39 @@ void main(int argc, char **argv) {
             assert(0);
         }
 	}
+#endif
+	for (i=0; i<tillMat->nTableRho; i+=1)
+	{
+        // Choose a point between the grid points (logarithmic spacing)
+		rho = tillMat->rhomin*exp((i + 0.5)*tillMat->dlogrho);
+        u = tillCubicInt(tillMat, rho, v);
 
+        fprintf(stderr, "\n");
+        fprintf(stderr,"i= %i j= %i: Testing rho=%g, u=%g (v= %g)! index= %g = %i\n", i, j, rho, u, v, (log(rho)-log(tillMat->rhomin))/tillMat->dlogrho, (int) floor((log(rho)-log(tillMat->rhomin))/tillMat->dlogrho));
+
+
+		iRet = tillIsInTable(tillMat, rho, u);
+
+		if (iRet != TILL_LOOKUP_SUCCESS)
+        {
+            tillErrorString(iRet, ErrorString);
+            fprintf(stderr,"i= %i j= %i: rho=%15.7E, u=%15.7E (v= %15.7E) not in table (Error %s)!\n", i, j, rho, u, v, ErrorString);
+
+            fprintf(stderr, "Calling tillLookupU.\n");
+            fprintf(stderr, "rho1= %g u1= %g rho2= %g ", rho, u, tillMat->rhomin*exp((i + 0.5)*tillMat->dlogrho));
+            u = tillLookupU(tillMat, rho, u, tillMat->rhomin*exp((i + 0.5)*tillMat->dlogrho), 0);
+            fprintf(stderr, "u2= %g\n", u);
+
+//			fprintf(fp, "%15.7E %15.7E\n", rho, u);
+        } else {
+            fprintf(stderr, "i= %i j= %i: rho=%15.7E, u=%15.7E (v= %15.7E) is in table.\n", i, j, rho, u, v);
+            fprintf(stderr, "Calling tillLookupU.\n");
+            fprintf(stderr, "rho1= %g u1= %g rho2= %g ", rho, u, tillMat->rhomin*exp((i + 0.5)*tillMat->dlogrho));
+            u = tillLookupU(tillMat, rho, u, tillMat->rhomin*exp((i + 0.5)*tillMat->dlogrho), 0);
+            fprintf(stderr, "u2= %g\n", u);
+            assert(0);
+        }
+	}
 	fprintf(stderr,"Done.\n");
 	tillFinalizeMaterial(tillMat);
 }
