@@ -360,8 +360,15 @@ double tillCalcU(TILLMATERIAL *material, double rho1, double u1, double rho2)
 
 			u += k1u/6.0+k2u/3.0+k3u/3.0+k4u/6.0;
 			logrho += h;
+
+            /* For the last step we set h so that rho == rho2. */
+            if (fabs(logrho-logrho2) < h) {
+                h = logrho2-logrho;
+            }
 		}
         /// CR: We should step back to log(rho) == log(rho2) as we do in ballic.
+        fprintf(stderr, "tillCalcU: rho1= %g rho= %g rho2= %g (rho-rho2)= %g\n", rho1, exp(logrho),
+                rho2, exp(logrho)-rho2);
 	} else if (rho1 > rho2) {
 		while (logrho > logrho2) {
 			/*
