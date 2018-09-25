@@ -1005,18 +1005,25 @@ double eosLookupU(TILLMATERIAL *material, double rho1, double u1, double rho2, i
 
 /*
  * Calculate u_cold(rho) from the lookup table.
+ *
+ * 25.09.2018: Adapted it for the logarithmic lookup table.
  */
 double tillColdULookup(TILLMATERIAL *material, double rho)
 {
-	// (CR) 6.1.2016: Updated the code and tested it!
-	// However we have to still do something in case that we are not inside of the look up table
 	// Make sure that the look up table is initialized.
 	assert(material->Lookup != NULL);
 
+    if ((rho <= material->rhomin) || (rho >= material->rhomax))
+    {
+        fprintf(stderr, "tillColdULookup: rho= %g outside of the lookup table.\n");
+        assert(0);
+    }
+
 	// iv = 0 corresponds to the cold curve
-    //
+
     //// CR: Needs to be changed for logrho.
 //	return(tillCubicIntRho(material, rho, 0));
+    return tillCubicInt(material, rho, 0.0);
     assert(0);
 }
 
