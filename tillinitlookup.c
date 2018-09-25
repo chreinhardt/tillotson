@@ -366,9 +366,8 @@ double tillCalcU(TILLMATERIAL *material, double rho1, double u1, double rho2)
                 h = logrho2-logrho;
             }
 		}
-        /// CR: We should step back to log(rho) == log(rho2) as we do in ballic.
-        fprintf(stderr, "tillCalcU: rho1= %g rho= %g rho2= %g (rho-rho2)= %g\n", rho1, exp(logrho),
-                rho2, exp(logrho)-rho2);
+//        fprintf(stderr, "tillCalcU: rho1= %g rho= %g rho2= %g (rho-rho2)= %g\n", rho1, exp(logrho),
+//                rho2, exp(logrho)-rho2);
 	} else if (rho1 > rho2) {
 		while (logrho > logrho2) {
 			/*
@@ -388,8 +387,8 @@ double tillCalcU(TILLMATERIAL *material, double rho1, double u1, double rho2)
             }
 
 		}
-        fprintf(stderr, "tillCalcU: rho1= %g rho= %g rho2= %g (rho-rho2)= %g\n", rho1, exp(logrho),
-                rho2, exp(logrho)-rho2);
+//        fprintf(stderr, "tillCalcU: rho1= %g rho= %g rho2= %g (rho-rho2)= %g\n", rho1, exp(logrho),
+//                rho2, exp(logrho)-rho2);
 	}
 	return u;
 }
