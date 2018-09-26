@@ -1030,12 +1030,6 @@ double tillSoundSpeed(TILLMATERIAL *material, double rho, double u)
     return (c);
 }
 
-double tillDensRatio(TILLMATERIAL material1, TILLMATERIAL material2, double P, double T)
-{
-    /* From Woolfson 2007 */
-    assert(0);
-}
-
 /* 
  * Calculate rho(P,u) by doing a root finding using bisection.
  */
