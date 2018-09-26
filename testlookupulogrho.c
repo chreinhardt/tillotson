@@ -1,8 +1,9 @@
 /*
  * This is a simple program to test the Tillotson EOS library.
  *
- * Author: Christian Reinhardt
- * Date:   23.09.2018
+ * Author:   Christian Reinhardt
+ * Date:     23.09.2018
+ * Modified: 26.09.2018
  *
  * Test the function tillLookupU(). First a table is generated and printed to a file, then values
  * between the isentropes are interpolated and a particles evolution along each isentrope is 
@@ -47,7 +48,7 @@ void main(int argc, char **argv) {
 #endif
 	fprintf(stderr, "Initializing material...\n");
 
-	tillMat = tillInitMaterial(GRANITE, dKpcUnit, dMsolUnit, nTableRho, nTableV, rhomax, vmax, 1);
+	tillMat = tillInitMaterial(GRANITE, dKpcUnit, dMsolUnit, nTableRho, nTableV, rhomax, vmax);
 	
 	fprintf(stderr, "Initializing the look up table...\n");
 
