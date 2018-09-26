@@ -55,9 +55,13 @@ enum till_error
 #define MIN(A,B) ((A) > (B) ? (B) : (A))
 
 /* Define a minimum density for the look up table */
-//#define TILL_RHO_MIN 1e-2
+#define TILL_RHO_MIN 1e-2
+#define TILL_RHO_MIN 1e-4
 //#define TILL_RHO_MIN 5e-1
-#define TILL_RHO_MIN 0.0
+//#define TILL_RHO_MIN 0.0
+
+/* Define eps so that v <= v_max-eps. */
+#define V_EPS 1e-8
 
 /* Define FALSE and TRUE. */
 //const int FALSE = 0;
@@ -67,19 +71,19 @@ typedef struct till_lookup_entry
 {
 	double u;
 	double rho;
+    double logrho;
 	double v;
     double u1;		// du/drho
     /*
-    ** The following 2 variables are the second derivatives of the above
-    ** variables (u and u1) with respect to v (which is the value of the
-    ** constant entropy curve (adiabat) at rho_0). Both of these are obtained
-    ** by fitting splines to u and u1 runs in the v axis.
-    */
+     * The following 2 variables are the second derivatives of the above variables (u and u1) with
+     * respect to v (which is the value of the constant entropy curve (adiabat) at rho_0). Both of
+     * these are obtained by fitting splines to u and u1 runs in the v axis.
+     */
     double udv2; 	// d2u/dv2
     double u1dv2;	// d2/dv2(du/drho)
 #ifdef TILL_DEBUG_SPLINT
 	// Only for debugging
-	double udrho2;
+	double udrho2;  // d2u/drho2
 #endif
 } TILL_LOOKUP_ENTRY;
 
@@ -130,8 +134,8 @@ typedef struct tillMaterial
 
 	/* The cold curve */	
 	TILL_LOOKUP_ENTRY *cold;
-//	double delta;
 	double drho;
+	double dlogrho;
 	double dv;
 
 	/* A look up table for u(rho) along an isentrope */
@@ -139,9 +143,15 @@ typedef struct tillMaterial
 	TILL_LOOKUP_ENTRY *Lookup;	// this is an array of pointers
 } TILLMATERIAL;
 
-//TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit, int nTableMax, double rhomax, double vmax);
+/*
+ * Tillotson.c
+ */
 TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit, int nTableRho, int nTableV, double rhomax, double vmax, int iExpV);
 void tillFinalizeMaterial(TILLMATERIAL *material);
+
+void tilliMatString(TILLMATERIAL *material, char *MatName);
+void tillErrorString(int iError, char *ErrorString);
+void tillPrintMat(TILLMATERIAL *material);
 
 // Some functions that provide a general interface for EOS calls where other EOS, e.g., an ideal gas EOS can be implemented
 double eosPressureSound(TILLMATERIAL *material, double rho, double u, double *pcSound);
@@ -174,23 +184,28 @@ double tillRhoPTemp(TILLMATERIAL *material, double P, double T);
 double tillSoundSpeed(TILLMATERIAL *material, double rho, double u);
 double tillRhoPU(TILLMATERIAL *material, double P, double u);
 double tilldudrho(TILLMATERIAL *material, double rho, double u);
+double tilldudlogrho(TILLMATERIAL *material, double logrho, double u);
 int tillSolveBC(TILLMATERIAL *mat1, TILLMATERIAL *mat2, double rho1, double u1, double *prho2, double *pu2);
 
-// Moved to tillinitlookup.h
+/*
+ * tillinitlookup.c
+ */
 void tillInitColdCurve(TILLMATERIAL *material);
 void tillInitLookup(TILLMATERIAL *material);
 TILL_LOOKUP_ENTRY *tillSolveIsentrope(TILLMATERIAL *material, double v);
+TILL_LOOKUP_ENTRY *tillSolveIsentropeLogRho(TILLMATERIAL *material, double v);
 /* Use bsstep.c from the Numerical Recipes */
 TILL_LOOKUP_ENTRY *tillSolveIsentropeBS(TILLMATERIAL *material, double v);
 double tillCalcU(TILLMATERIAL *material,double rho1,double u1,double rho2);
 int tillIsInTable(TILLMATERIAL *material,double rho,double u);
 int tillIsBelowColdCurve(TILLMATERIAL *material,double rho,double u);
 
-// Moved to tillsplint.h
-/* Stuff for the cubic spline interpolator */
+/*
+ * tillsplint.c
+ */
 void tillInitSplines(TILLMATERIAL *material);
 void tillInitSplineRho(TILLMATERIAL *material);
-void tillInitSplinev(TILLMATERIAL *material);
+void tillInitSplineV(TILLMATERIAL *material);
 void tillInitSplineU(TILLMATERIAL *material);
 void tillInitSplineU1(TILLMATERIAL *material);
 // Just for debugging
@@ -211,61 +226,16 @@ double tillLookupU(TILLMATERIAL *material,double rho1,double u1,double rho2,int 
 double tillCubicIntRho(TILLMATERIAL *material, double rhoint, int iv);
 double tillColdULookup(TILLMATERIAL *material,double rho);
 
+int tillLookupIndexRho(TILLMATERIAL *material, double rho);
+int tillLookupIndexLogRho(TILLMATERIAL *material, double logrho);
+int tillLookupIndexV(TILLMATERIAL *material, double v);
+
+double tillLookupRho(TILLMATERIAL *material, int i);
+double tillLookupLogRho(TILLMATERIAL *material, int i);
+double tillLookupV(TILLMATERIAL *material, int j);
+
 // A general version of tillLookupU() that can be used as an interface for different EOS
 double eosLookupU(TILLMATERIAL *material,double rho1,double u1,double rho2,int iOrder);
-
-void tillBSderivs(TILLMATERIAL *material, float x, float y[], float dydx[]);
-
-
-
-
-/* Defines for the Numerical Recipes routines */
-
-/*
-** Modified midpoint method.
-**
-** y[]:			dependent variable (vector if we solve more dim. problems)
-** dydx[]:		its first derivatives at the starting value x
-** nvar:		number of dependent variables y1,...,yn
-** xs:			Starting point x
-** htot:		total step to be made
-** nstep:		number of sub steps
-** yout[]:		vector containing the result
-** derivs:		function to calculate the right hand side derivatives
-*/
-void mmid(float y[], float dydx[], int nvar, float xs, float htot, int nstep,
-	float yout[], void (*derivs)(float, float[], float[]));
-
-/*
-** Polynomial extrapolation routine from the Numerical Recipes.
-**
-** iest:		number of the call in the sequence of calls
-** xest:		input values for x
-** yest[]:		input value for y1,..,yn
-** yz[]:		extrapolated function values at x=0
-** dy[]:		extrapolation errors
-** nv:			number of functions
-*/
-void pzextr(int iest, float xest, float yest[], float yz[], float dy[],
-		int nv);
-
-/*
-** Bulirsch-Stoer method to integrate ODEs.
-**
-** y[]:			dependent variable
-** dydx[]:		its first derivative at the starting value x
-** nv:			number of variables y1,...,yn
-** xx:			
-** htry:		step size (the algorithm can use a smaller value if needed)
-** eps:			required accuracy
-** yscal[]:		vector to scale the error
-** hdid:		return actual step size
-** hnext:		return estimated next step size
-** derivs:		function to calculate the right hand side derivatives
-*/
-void bsstep(float y[], float dydx[], int nv, float *xx, float htry, float eps,
-	float yscal[], float *hdid, float *hnext,
-	void (*derivs)(TILLMATERIAL*, float, float [], float []));
 
 #endif
 

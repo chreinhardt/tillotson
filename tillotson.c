@@ -1,21 +1,14 @@
 /*
  * Copyright (c) 2014-2018 Christian Reinhardt and Joachim Stadel.
- **
+ *
  * This file provides all the functions for the Tillotson EOS library.
  * The Tillotson EOS (e.g. Benz 1986) is a relatively simple but reliable
  * and convenient to use equation of state that can describe matter over
  * a large range of pressures, densities and internal energies.
- */
-#include <stdlib.h>
-#include <math.h>
-#include <assert.h>
-#include <stdio.h>
-#include "tillotson.h"
-
-/* This will cut the pressure in the cold expanded states for rho/rho0 < 0.8 as suggested in Melosh1989. */
-//#define TILL_PRESS_MELOSH
-
-/* Basic functions:
+ *
+ * tillotson.c:
+ *
+ * Basic functions:
  *
  * tillInit: initialise the library (contains all materials and converts to a given unit system).
  *
@@ -27,18 +20,26 @@
  *
  * tillFinalize: free memory.
  */
+#include <stdlib.h>
+#include <math.h>
+#include <assert.h>
+#include <stdio.h>
+#include "tillotson.h"
 
+/* This will cut the pressure in the cold expanded states for rho/rho0 < 0.8 as suggested in Melosh1989. */
+//#define TILL_PRESS_MELOSH
+
+
+/*
+ * Initialise a material from the Tillotson library
+ *
+ * We do:
+ * Initialize variables
+ * Convert quantities to code units
+ * The memory for the look up table is allocated in tillInitLookup()
+ */
 TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit, int nTableRho, int nTableV, double rhomax, double vmax, int iExpV)
 {
-	/*
-	 * Initialise a material from the Tillotson library
-	 *
-	 * We do:
-	 * Initialize variables
-	 * Convert quantities to code units
-	 * The memory for the look up table is allocated in tillInitLookup()
-	 */
-
     const double KBOLTZ = 1.38e-16;      /* bolzman constant in cgs */
     const double MHYDR = 1.67e-24;       /* mass of hydrogen atom in grams */
     const double MSOLG = 1.99e33;        /* solar mass in grams */
@@ -57,23 +58,16 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
     material->dKpcUnit = 2.06701e-13;
     material->dMsolUnit = 4.80438e-08;
 */
-	/* This two parameters define the unit system we use */
+	/* This two parameters define the unit system we use. */
     material->dKpcUnit = dKpcUnit;
     material->dMsolUnit = dMsolUnit;
+
+    /* Min and max values for the lookup table (in code units). */
 	material->rhomax = rhomax;
 	material->vmax = vmax;
 
-	if (material->vmax == 0)
-	{
-		/* Just as a first step we have equal steps in rho and v. */
-		material->vmax = material->rhomax;
-	}
-
-	/* Needs about 800M memory. */
-//	material->nTableMax = 10000;
-	/* Number of grid points for the look up table */
-	material->nTableRho = nTableRho;
-	material->nTableV = nTableV;
+    assert(material->rhomax > 0.0);
+    assert(material->vmax > 0.0);
 
 	if (dKpcUnit <= 0.0 && dMsolUnit <= 0.0)
 	{
@@ -97,8 +91,6 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
 		material->dSecUnit = sqrt(1/(material->dGmPerCcUnit*GCGS));
 	}
 
-	/* The memory for the lookup table is allocated when tillInitLookup is called. */
-		
 	/*
 	** Set the Tillotson parameters for the material.
 	*/
@@ -283,25 +275,50 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
     }
 #endif
 
-    /* 
-     * The stuff below does not have to be done for the ideal gas as there is no lookup table. */
+	/* Number of grid points for the look up table. */
+	material->nTableRho = nTableRho;
+	material->nTableV = nTableV;
+
+    /* The stuff below does not have to be done for the ideal gas as there is no lookup table. */
     if (material->iMaterial == IDEALGAS)
     {
         material->rhomin = 0.0;
         material->n = 0;
         /* rhomax is set already. */
+#if 0
+        material->drho =  material->rhomax/(material->nTableRho-1);
+#endif
         material->drho =  material->rhomax/(material->nTableRho-1);
     } else {
         /* Set rhomin */
         material->rhomin = TILL_RHO_MIN;
 
+        /* rhomin has to be larger than zero otherwise the logarithmic spacing does not work. */
+        assert(material->rhomin > 0.0 && material->rhomin < material->rhomax);
+#if 0
         /* Set drho so that rho0 lies on the grid. */
         material->n = floor((material->rho0-material->rhomin)/(material->rhomax-material->rhomin)*material->nTableRho);
         material->drho =  (material->rho0-material->rhomin)/material->n;
 
         /* Set the actual rhomax. */ 
         material->rhomax = material->drho*(material->nTableRho-1);
+#endif
+        /* Set dlogrho so that log(rho0) lies on the grid. */
+        material->n = floor((log(material->rho0)-log(material->rhomin))/(log(material->rhomax)-log(material->rhomin))*material->nTableRho);
+        material->dlogrho = (log(material->rho0)-log(material->rhomin))/material->n;
+
+        /// CR
+        fprintf(stderr, "Log(rho0)= %g Log(rhomin)= %g Log(rhomax)= %g.\n", log(material->rho0), log(material->rhomin), log(material->rhomax));
+
+        /* Set the actual rhomax (note that rhomax can differ more after the correction when using log(rho) as variable. */ 
+        material->rhomax = tillLookupRho(material, material->nTableRho-1);
     }
+
+//#ifdef TILL_VERBOSE
+    fprintf(stderr, "tillInitialize: iMat= %i n= %i dlogrho= %g dv= %g.\n", material->iMaterial, material->n, material->dlogrho, material->dv);
+    fprintf(stderr, "tillInitialize: nTableRho= %i nTableV= %i.\n", material->nTableRho, material->nTableV);
+//#endif
+
 
     /* This is the same for all materials. */
     material->dv = material->vmax/(material->nTableV-1);
@@ -314,7 +331,8 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
     //	material->n = 5;
     material->iExpV = iExpV;
     // (CR) 15.11.15: Change this back later
-    return(material);
+
+    return material;
 }
 
 void tillFinalizeMaterial(TILLMATERIAL *material)
@@ -356,6 +374,35 @@ void tilliMatString(TILLMATERIAL *material, char *MatName)
         default:
             /* Unknown material */
             assert(0);
+    } 
+}
+
+/*
+ * This function returns an error message for each error code.
+ */
+void tillErrorString(int iError, char *ErrorString)
+{
+    assert(ErrorString != NULL);
+
+    switch(iError)
+    {
+        case TILL_LOOKUP_SUCCESS:
+            sprintf(ErrorString, "TILL_LOOKUP_SUCCESS");
+            break;
+        case TILL_LOOKUP_OUTSIDE_RHOMIN:
+            sprintf(ErrorString, "TILL_LOOKUP_OUTSIDE_RHOMIN");
+            break;
+        case TILL_LOOKUP_OUTSIDE_RHOMAX:
+            sprintf(ErrorString, "TILL_LOOKUP_OUTSIDE_RHOMAX");
+            break;
+        case TILL_LOOKUP_OUTSIDE_VMIN:
+            sprintf(ErrorString, "TILL_LOOKUP_OUTSIDE_VMIN");
+            break;
+        case TILL_LOOKUP_OUTSIDE_VMAX:
+            sprintf(ErrorString, "TILL_LOOKUP_OUTSIDE_VMAX");
+            break;
+        default:
+            sprintf(ErrorString, "UNKNOWN ERROR");
     } 
 }
 
@@ -1018,9 +1065,8 @@ double tillURhoTemp(TILLMATERIAL *material, double rho, double T)
 double tillRhoPTemp(TILLMATERIAL *material, double P, double T)
 {
     /* 
-     * Calculate rho(P,T) for a material. Because thermodynamical consistency
-     * requires (dP/drho)_T > 0 this should always work except where we do the
-     * pressure cutoff.
+     * Calculate rho(P,T) for a material. Because thermodynamical consistency requires
+     * (dP/drho)_T > 0 this should always work except where we do the pressure cutoff.
      */
     double a, ua, Pa, b, ub, Pb, c, uc, Pc;
 
@@ -1192,7 +1238,19 @@ double tillRhoPU(TILLMATERIAL *material, double P, double u)
 
 double tilldudrho(TILLMATERIAL *material, double rho, double u)
 {
-    return(tillPressure(material,rho,u)/(rho*rho));
+    return (tillPressure(material,rho,u)/(rho*rho));
+}
+
+/*
+ * Calculate the logarithmic derivative of u with respect to rho.
+ *
+ * du/dlogrho = P/rho
+ *
+ */
+double tilldudlogrho(TILLMATERIAL *material, double logrho, double u)
+{
+    double rho = exp(logrho);
+    return (tillPressure(material,rho,u)/(rho));
 }
 
 int tillSolveBC(TILLMATERIAL *mat1, TILLMATERIAL *mat2, double rho1, double u1, double *prho2, double *pu2)

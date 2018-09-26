@@ -1,6 +1,6 @@
 #!/usr/bin/env python2
 """
-This script plots the data from testisintable.c.
+This script produces a plot of the cold curve for the Tillotson EOS.
 """
 from matplotlib import *
 from matplotlib.pyplot import *
@@ -41,21 +41,23 @@ ax = gca()
 fig, ax = subplots(1,1)
 fig.set_size_inches(8.27*0.39,8.27*(6./8.)*0.39)
 
-# Load the whole lookup table
-data = loadtxt('lookup.txt')
+# Load the cold curve
+data1 = loadtxt('coldcurve.txt')
 
-# Load data points
-data2 = loadtxt('testisintable.txt')
+# Load interpolated values
+data2 = loadtxt('testtillcoldu.txt')
 
-rho = data2[:,0]
-u = data2[:,1]
+rho_cold = data1[:,0]
+u_cold   = data1[:,1]
+
+rho      = data2[:,0]
+u        = data2[:,1]
 
 # Plot the lookup table
-for i in range(1,size(data[:,0]),1):
-		plot(data[:,0],data[:,i],'-',color='red',markersize=1,label='Table')
+plot(rho_cold, u_cold, '-', color='red', markersize=1, label='Table')
 
-scatter(rho, u, s=16,color='blue')
-
+# Plot the interpolated data
+plot(rho, u, '--', color='blue', markersize=1, label='Table')
 
 xmax = 25
 ymax = 25
@@ -66,6 +68,5 @@ ymax = 25
 xlabel('Density')
 ylabel('Internal energy')
 
-savefig('testisintable.png', dpi=300, bbox_inches='tight')
+savefig('testtillcoldu.png', dpi=300, bbox_inches='tight')
 show()
-

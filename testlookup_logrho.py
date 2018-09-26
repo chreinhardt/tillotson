@@ -41,19 +41,20 @@ ax = gca()
 fig, ax = subplots(1,1)
 fig.set_size_inches(8.27*0.39,8.27*(6./8.)*0.39)
 
-# Load the whole lookup table
-data = loadtxt('lookup.txt')
-# Load interpolated values
-data2 = loadtxt('testsplint.txt')
+# Load the old lookup table generated using rho as variable
+data = loadtxt('lookup.rho.txt')
 
-# Plot the lookup table
+# Load the new lookup table generated using log(rho) as variable
+data2 = loadtxt('lookup.txt')
+
+# Plot the old lookup table
 for i in range(1,size(data[0,:]),1):
-		plot(data[:,0],data[:,i],'-',color='red',markersize=1,label='Table')
+		plot(data[:,0],data[:,i],'-',color='red',markersize=1,label='Rho')
 #		semilogx(data[:,0],data[:,i],'-',color='red',markersize=1,label='Table')
 
-# Plot the interpolated data
+# Plot the new lookup table
 for i in range(1,size(data2[0,:]),1):
-		plot(data2[:,0],data2[:,i],'-',color='green',markersize=1,label='Lookup')
+		plot(data2[:,0],data2[:,i],'--',color='green',markersize=1,label='Log(rho)')
 #		semilogx(data2[:,0],data2[:,i],'-',color='green',markersize=1,label='Lookup')
 
 xmax = 25
@@ -79,5 +80,5 @@ ylabel('Internal energy')
 #xticks([0,rho0],[r'$0$',r'$\rho_0$'],size='large')
 #yticks([0,us,us2],[r'$0$',r'$u_{IV}$',r'$u_{CV}$'],size='large')
 
-savefig('testsplint.png', dpi=300, bbox_inches='tight')
+savefig('testlookup_logrho.png', dpi=300, bbox_inches='tight')
 show()

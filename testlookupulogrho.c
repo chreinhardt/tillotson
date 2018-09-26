@@ -1,9 +1,12 @@
 /*
  * This is a simple program to test the Tillotson EOS library.
  *
- * Test the bicubic interpolation tillCubicInt() in the lookup table. First a table is generated
- * and printed to a file, then values between the isentropes are interpolated. The results can be
- * plotted with testsplint.py.
+ * Author: Christian Reinhardt
+ * Date:   23.09.2018
+ *
+ * Test the function tillLookupU(). First a table is generated and printed to a file, then values
+ * between the isentropes are interpolated and a particles evolution along each isentrope is 
+ * calculated. The results can be plotted with testlookupulogrho.py.
  */
 #include <math.h>
 #include <stdio.h>
@@ -22,17 +25,17 @@ void main(int argc, char **argv) {
 	TILLMATERIAL *tillMat;
 	double dKpcUnit = 2.06701e-13;
 	double dMsolUnit = 4.80438e-08;
-//	double rhomax = 100.0;
-//	double vmax = 1200.0;
-	double rhomax = 25.0;
-	double vmax = 25.0;
-	int nTableRho = 100;
-	int nTableV = 100;
+	double rhomax = 100.0;
+	double vmax = 1200.0;
 	// For vmax=rhomax=25 and nTableV=100, nTableRho=1000 we get excellent results.
 //	int nTableRho = 1000;
 //	int nTableV = 1000;
+//	double rhomax = 25.0;
+//	double vmax = 25.0;
+	int nTableRho = 100;
+	int nTableV = 100;
 	double rho, v, u;
-	struct lookup *isentrope;
+    double rho1, rho2;
 	FILE *fp = NULL;
 	int i, j;
 
@@ -56,7 +59,8 @@ void main(int argc, char **argv) {
 	fprintf(stderr,"rhomax: %g, vmax: %g \n", tillMat->rhomax, tillMat->vmax);
 	fprintf(stderr,"nTableRho: %i, nTableV: %i \n", tillMat->nTableRho, tillMat->nTableV);
 	fprintf(stderr,"drho: %g, dv: %g \n", tillMat->drho, tillMat->dv);
-	
+	fprintf(stderr,"\n");
+
 	rho = 0.0;
 	v = 0.0;
 	u = 0.0;
@@ -69,12 +73,7 @@ void main(int argc, char **argv) {
 
 	for (i=0; i<tillMat->nTableRho; i+=1)
 	{
-        /*
-         * Careful, its better to use Lookup[i, j].rho.
-		 * rho = i*tillMat->drho;
-         */
-        rho = tillMat->Lookup[INDEX(i, j)].rho;
-		rho = tillMat->rhomin+i*tillMat->drho;
+		rho = tillLookupRho(tillMat, i);
 		fprintf(fp, "%15.7E", rho);
 
 		for (j=0;j<tillMat->nTableV;j+=1)
@@ -93,14 +92,14 @@ void main(int argc, char **argv) {
 	fp = fopen("testsplint.txt","w");
 	assert(fp != NULL);
 
-	for (i=2; i<tillMat->nTableRho-1; i+=1)
-	{
-		rho = tillMat->rhomin+(i + 0.5)*tillMat->drho;
-        fprintf(stderr, "rho= %15.7E, ", rho);
-		rho = tillMat->Lookup[INDEX(i, 0)].rho+tillMat->drho*0.5;
-        fprintf(stderr, "rho= %15.7E\n", rho);
+	fprintf(stderr, "Interpolating isentropes...\n");
 
+	for (i=0; i<tillMat->nTableRho-1; i+=1)
+	{
+        // Logarithmic spacing
+		rho = tillMat->rhomin*exp((i + 0.5)*tillMat->dlogrho);
 		fprintf(fp, "%15.7E", rho);
+
 		for (j=0;j<tillMat->nTableV-1;j+=1)
 		{
             v = tillMat->dv*(j+0.5);
@@ -111,47 +110,34 @@ void main(int argc, char **argv) {
 
 		fprintf(fp,"\n");
 	}
+	fclose(fp);
 
-#if 0
-	/* Interpolate values between the isentropes */
-	for (i=0;i<tillMat->nTableRho-2;i+=1)
+	/*
+     * Evolve particles along the isentropes.
+     */
+	fp = fopen("testlookupu.txt","w");
+	assert(fp != NULL);
+
+	fprintf(stderr, "Evolve a particle along an isentrope...\n");
+
+	for (j=0;j<tillMat->nTableV-1;j+=1)
 	{
-		// Middle of the interval (i,i+1)
-		//rho = (i + 0.5)*tillMat->drho;
-		l = 0.0;
-		while (l < 0.9)
-		{
-			// Try
-			rho = tillMat->rhomin+(i + l)*tillMat->drho;
-			//rho = tillMat->Lookup[INDEX(i, 0)].rho;
-			//rho += l*fabs((tillMat->Lookup[INDEX(i, 0)].rho-tillMat->Lookup[INDEX(i+1, 0)].rho));
+        rho1 = tillLookupRho(tillMat, 1);
+        v = tillMat->dv*(j+0.5);
 
-			printf("%g", rho);
-			for (j=0;j<tillMat->nTableV-1;j+=1)
-			{
-				// Middle of the interval (i,i+1)
-				// v = (j + 0.5)*tillMat->dv;
-				k = 0.5;
-				while (k < 0.9)
-				{
-					// This does not work for non uniform steps in v
-					//v = (j + k)*tillMat->dv;
-					v = tillMat->vmax/pow(tillMat->nTableV-1,n)*pow(j+k,n);
+        u = tillCubicInt(tillMat, rho1, v);
+        
+        fprintf(fp, "%15.7E%15.7E", rho1, u);
+        
+        rho2 = tillLookupRho(tillMat, tillMat->nTableRho-2);
 
-					v = tillMat->vmax/tillMat->dv*(j+k);
+	    fprintf(stderr, "i= %i rho1=%g u1= %g rho2= %g v= %g\n", j, rho1, u, rho2, v);
 
-					u = tillCubicInt(tillMat, rho, v);
+        u = tillLookupU(tillMat, rho1, u, rho2, 0);
 
-					//fprintf(stderr,"i: %i, j: %i, v: %g, u: %g\n",i,j,v,u);
-					printf("  %.8g", u);
-					k+=0.5;
-				}
-			}
-		printf("\n");
-		l+=0.5;
-		}
+        fprintf(fp, "%15.7E%15.7E\n", rho2, u);
 	}
-#endif
+	fclose(fp);
 
 	fprintf(stderr,"Done.\n");
 	tillFinalizeMaterial(tillMat);
