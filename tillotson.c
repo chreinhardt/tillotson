@@ -1083,6 +1083,12 @@ double tillRhoPU(TILLMATERIAL *material, double P, double u)
     return (c);
 }
 
+/*
+ * Calculate the derivative of u with respect to rho.
+ *
+ * du/drho = P/rho^2
+ *
+ */
 double tilldudrho(TILLMATERIAL *material, double rho, double u)
 {
     return (tillPressure(material,rho,u)/(rho*rho));
