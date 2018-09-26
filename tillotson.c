@@ -613,7 +613,7 @@ double eosGamma(TILLMATERIAL *material, double rho, double u)
  */
 double tilldPdrho_s(TILLMATERIAL *material, double rho, double u)
 {
-    return (1.0/(rho*rho)*(tillSoundSpeed2old(material,rho, u)-2.0*tillPressure(material,rho,u)/rho));
+    return (1.0/(rho*rho)*(tillSoundSpeed(material,rho, u)-2.0*tillPressure(material,rho,u)/rho));
 }
 
 /*
