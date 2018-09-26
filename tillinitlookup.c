@@ -411,11 +411,16 @@ int tillIsInTable(TILLMATERIAL *material, double rho, double u)
 		return TILL_LOOKUP_OUTSIDE_RHOMAX;
 	}
 
-    /* Now find rho_i and rho_i+1 so that rho is bracketed (only works for equal spaced grid). */
+    /*
+     * Now find rho_i and rho_i+1 so that rho is bracketed (only works for equal spaced grid).
+     * 
+     * CR: Note that if rho lies on a grid point this can be problematic as, e.g., rho_i can either
+     *     be in the interval [i-1, i] or [i, i+1] which is rare cases affects wether or not a
+     *     a point close to vmax is in the table. Tests however show, that even if it fails (is in
+     *     the table when it should not be) the brent rootfinder still works
+     */
 	i = tillLookupIndexLogRho(material, log(rho));
 	assert(i >= 0 && i < material->nTableRho-1);
-    fprintf(stderr, "\n");
-    fprintf(stderr, "i= %i\n", i);
 
     /* Check if v(rho, u) < v_max. This requires interpolation. */
 //#if 0
