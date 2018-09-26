@@ -706,7 +706,7 @@ double tillPressureSound(TILLMATERIAL *material, double rho, double u, double *p
         return (Pc);
     } else if (u > material->us2) {
         /*
-         ** Expanded hot states (rho < rho0 and u > us2).
+         * Expanded hot states (rho < rho0 and u > us2).
          */
         Gammae = material->a + material->b/w0*exp(-material->beta*z*z);
         Pe = Gammae*u*rho + material->A*mu*exp(-(material->alpha*z+material->beta*z*z));
@@ -723,7 +723,7 @@ double tillPressureSound(TILLMATERIAL *material, double rho, double u, double *p
         return (Pe);
     } else {
         /*
-         **  intermediate states (rho < rho0 and us < u < us2)
+         *  intermediate states (rho < rho0 and us < u < us2)
          */
         y = (u - material->us)/(material->us2 - material->us);
 
@@ -761,9 +761,11 @@ double tillPressureSound(TILLMATERIAL *material, double rho, double u, double *p
     }
 }
 
+/* 
+ * Calculate the pressure from the Tillotson EOS for a material.
+ */
 double tillPressure(TILLMATERIAL *material, double rho, double u)
 {
-    /* Calculate the pressure from the Tillotson EOS for a material */
     double P = tillPressureSound(material, rho, u, NULL);
 
 #ifdef TILL_PRESS_NP
@@ -771,7 +773,7 @@ double tillPressure(TILLMATERIAL *material, double rho, double u)
     if (P < 0.0 ) P = 0.0;
 #endif
 
-    return (P);
+    return P;
 }
 
 double tillPressureNP(TILLMATERIAL *material, double rho, double u)
