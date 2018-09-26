@@ -145,7 +145,7 @@ typedef struct tillMaterial
 /*
  * Tillotson.c
  */
-TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit, int nTableRho, int nTableV, double rhomax, double vmax);
+TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit);
 void tillFinalizeMaterial(TILLMATERIAL *material);
 
 void tilliMatString(TILLMATERIAL *material, char *MatName);
@@ -165,8 +165,6 @@ double eosPhi(TILLMATERIAL *material, double rho, double u);
 double eosGamma(TILLMATERIAL *material, double rho, double u);
 
 double tilldPdrho(TILLMATERIAL *material, double rho, double u);
-double tillSoundSpeed2old(TILLMATERIAL *material, double rho, double u);
-double tillPressureSoundold(TILLMATERIAL *material, double rho, double u, double *pcSound);
 double tillPressureSound(TILLMATERIAL *material, double rho, double u, double *pcSound);
 double tillPressure(TILLMATERIAL *material, double rho, double u);
 double tillPressureNP(TILLMATERIAL *material, double rho, double u);
@@ -190,7 +188,7 @@ int tillSolveBC(TILLMATERIAL *mat1, TILLMATERIAL *mat2, double rho1, double u1, 
  * tillinitlookup.c
  */
 void tillInitColdCurve(TILLMATERIAL *material);
-void tillInitLookup(TILLMATERIAL *material);
+void tillInitLookup(TILLMATERIAL *material, int nTableRho, int nTableV, double rhomax, double vmax);
 TILL_LOOKUP_ENTRY *tillSolveIsentrope(TILLMATERIAL *material, double v);
 TILL_LOOKUP_ENTRY *tillSolveIsentropeLogRho(TILLMATERIAL *material, double v);
 /* Use bsstep.c from the Numerical Recipes */

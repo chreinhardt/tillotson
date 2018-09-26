@@ -54,15 +54,56 @@ void tillInitColdCurve(TILLMATERIAL *material)
 /*
  * Generate the look up table for the isentropic evolution of the internal energy.
  */
-void tillInitLookup(TILLMATERIAL *material)
+void tillInitLookup(TILLMATERIAL *material, int nTableRho, int nTableV, double rhomin, double rhomax, double vmax)
 {
-
 	TILL_LOOKUP_ENTRY *isentrope;
 	double v, dv;
     int i, j;
 
     /* Check if the material is properly initialized. */
     assert(material != NULL);
+
+    /* Min and max values for the lookup table (in code units). */
+    material->rhomin = rhomin;
+	material->rhomax = rhomax;
+	material->vmax = vmax;
+
+    /* rhomin has to be larger than zero otherwise the logarithmic spacing does not work. */
+    assert(material->rhomin > 0.0 && material->rhomin < material->rhomax);
+        
+    assert(material->rhomax > 0.0);
+    assert(material->vmax > 0.0);
+
+	/* Number of grid points for the look up table. */
+	material->nTableRho = nTableRho;
+	material->nTableV = nTableV;
+
+    assert(material->nTableRho > 0);
+    assert(material->nTableV > 0);
+
+    /* The stuff below does not have to be done for the ideal gas as there is no lookup table. */
+    if (material->iMaterial == IDEALGAS)
+    {
+        material->rhomin = 0.0;
+        material->n = 0;
+        /* rhomax is set already. */
+        material->dlogrho = 0.0;
+    } else {
+        /* Set dlogrho so that log(rho0) lies on the grid. */
+        material->n = floor((log(material->rho0)-log(material->rhomin))/(log(material->rhomax)-log(material->rhomin))*material->nTableRho);
+        material->dlogrho = (log(material->rho0)-log(material->rhomin))/material->n;
+
+        /* Set the actual rhomax (note that rhomax can differ more after the correction when using log(rho) as variable. */ 
+        material->rhomax = tillLookupRho(material, material->nTableRho-1);
+    }
+
+    /* This is the same for all materials. */
+    material->dv = material->vmax/(material->nTableV-1);
+
+#ifdef TILL_VERBOSE
+    fprintf(stderr, "tillInitLookup: iMat= %i n= %i dlogrho= %g dv= %g.\n", material->iMaterial, material->n, material->dlogrho, material->dv);
+    fprintf(stderr, "tillInitLookup: nTableRho= %i nTableV= %i.\n", material->nTableRho, material->nTableV);
+#endif
 
 	/* We arrange the look up table as a 1D array with Lookup[i][j] = Lookup[i*Ntable+j] */
     material->Lookup = calloc(material->nTableRho*material->nTableV, sizeof(TILL_LOOKUP_ENTRY));

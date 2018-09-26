@@ -37,7 +37,7 @@
  * Convert quantities to code units
  * The memory for the look up table is allocated in tillInitLookup()
  */
-TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit, int nTableRho, int nTableV, double rhomax, double vmax)
+TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit)
 {
     const double KBOLTZ = 1.38e-16;      /* bolzman constant in cgs */
     const double MHYDR = 1.67e-24;       /* mass of hydrogen atom in grams */
@@ -57,12 +57,13 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
     material->dKpcUnit = dKpcUnit;
     material->dMsolUnit = dMsolUnit;
 
-    /* Min and max values for the lookup table (in code units). */
-	material->rhomax = rhomax;
-	material->vmax = vmax;
+    material->rhomin = 0.0;
+	material->rhomax = 0.0;
+	material->vmax = 0.0;
 
-    assert(material->rhomax > 0.0);
-    assert(material->vmax > 0.0);
+    material->n = 0;
+    material->dlogrho = 0.0;
+    material->dv = 0.0;
 
 	if (dKpcUnit <= 0.0 && dMsolUnit <= 0.0)
 	{
@@ -268,40 +269,6 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
     {
         fprintf(stderr, "Ideal gas: cv= %g\n in code units.\n", material->cv);
     }
-#endif
-
-	/* Number of grid points for the look up table. */
-	material->nTableRho = nTableRho;
-	material->nTableV = nTableV;
-
-    /* The stuff below does not have to be done for the ideal gas as there is no lookup table. */
-    if (material->iMaterial == IDEALGAS)
-    {
-        material->rhomin = 0.0;
-        material->n = 0;
-        /* rhomax is set already. */
-        material->dlogrho = 0.0;
-    } else {
-        /* Set rhomin */
-        material->rhomin = TILL_RHO_MIN;
-
-        /* rhomin has to be larger than zero otherwise the logarithmic spacing does not work. */
-        assert(material->rhomin > 0.0 && material->rhomin < material->rhomax);
-        
-        /* Set dlogrho so that log(rho0) lies on the grid. */
-        material->n = floor((log(material->rho0)-log(material->rhomin))/(log(material->rhomax)-log(material->rhomin))*material->nTableRho);
-        material->dlogrho = (log(material->rho0)-log(material->rhomin))/material->n;
-
-        /* Set the actual rhomax (note that rhomax can differ more after the correction when using log(rho) as variable. */ 
-        material->rhomax = tillLookupRho(material, material->nTableRho-1);
-    }
-
-    /* This is the same for all materials. */
-    material->dv = material->vmax/(material->nTableV-1);
-
-#ifdef TILL_VERBOSE
-    fprintf(stderr, "tillInitialize: iMat= %i n= %i dlogrho= %g dv= %g.\n", material->iMaterial, material->n, material->dlogrho, material->dv);
-    fprintf(stderr, "tillInitialize: nTableRho= %i nTableV= %i.\n", material->nTableRho, material->nTableV);
 #endif
 
     return material;
