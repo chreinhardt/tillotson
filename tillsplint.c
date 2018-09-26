@@ -117,10 +117,6 @@ void tillInitSplineU1(TILLMATERIAL *material)
 	/* Allocate memory for temporary array */
 	u = malloc(n*sizeof(double));
 		
-	// (CR) 15.11.15: Try non uniform steps in v
-	// x[j] =  material->vmax/pow(material->nTableV-1,material->iExpV)*pow(j,material->iExpV);
-	// (CR) 15.11.15: Done
-	
 	/* Set b.c. for natural cubic spline */
 	yp1 = 1e30;
 	ypn = 1e30;
