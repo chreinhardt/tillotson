@@ -779,7 +779,7 @@ double tillPressure(TILLMATERIAL *material, double rho, double u)
 double tilldPdrho(TILLMATERIAL *material, double rho, double u)
 {
     /*
-     ** Calculate dP/drho at u=const.
+     * Calculate dP/drho at u=const.
      */
     double eta, mu;
     double dPcdrho, dPedrho;
@@ -791,24 +791,24 @@ double tilldPdrho(TILLMATERIAL *material, double rho, double u)
     w0 = u/(material->u0*eta*eta)+1.0;
 
     /*
-     ** Here we evaluate, which part of the equation of state we need.
+     * Here we evaluate, which part of the equation of state we need.
      */
     if (rho >= material->rho0 || u < material->us) {
         /*
-         ** Condensed (rho > rho0) or cold expanded states (rho < rho0 and u < us).
+         * Condensed (rho > rho0) or cold expanded states (rho < rho0 and u < us).
          */
         dPcdrho = material->a*u + material->b*u/(w0*w0)*(3.0*w0-2.0) + (material->A+2.0*material->B*mu)/material->rho0;
 
         return (dPcdrho);
     } else if (u > material->us2) {
         /*
-         ** Expanded hot states (rho < rho0 and u > us2).
+         * Expanded hot states (rho < rho0 and u > us2).
          */
         dPedrho = (material->a + material->b/w0*exp(-material->beta*z*z)*(2.0*material->beta*z/eta+3.0-2.0/w0))*u+material->A/material->rho0*exp(-(material->alpha*z+material->beta*z*z))*(1.0+mu/(eta*eta)*(material->alpha+2.0*material->beta*z-eta));		
         return (dPedrho);
     } else {
         /*
-         **  Intermediate states (rho < rho0 and us < u < us2).
+         *  Intermediate states (rho < rho0 and us < u < us2).
          */
         y = (u - material->us)/(material->us2 - material->us);
 
