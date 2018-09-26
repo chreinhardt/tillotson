@@ -36,6 +36,7 @@ int comparerho(const void* a, const void* b)
 /// CR: Needs to be adapted for the logrho table
 void tillInitColdCurve(TILLMATERIAL *material)
 {
+    assert(0);
 	/* Generate the look up table for the cold curve */
 	TILL_LOOKUP_ENTRY *isentrope;
 

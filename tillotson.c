@@ -29,9 +29,8 @@
 /* This will cut the pressure in the cold expanded states for rho/rho0 < 0.8 as suggested in Melosh1989. */
 //#define TILL_PRESS_MELOSH
 
-
 /*
- * Initialise a material from the Tillotson library
+ * Initialize a material from the Tillotson library
  *
  * We do:
  * Initialize variables
