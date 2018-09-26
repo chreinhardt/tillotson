@@ -1,6 +1,10 @@
 /*
  * This is a simple program to test the Tillotson EOS library.
  *
+ * Author:   Christian Reinhardt
+ * Date:     19.09.2018
+ * Modified: 26.09.2018
+ *
  * Test the bicubic interpolation tillCubicInt() in the lookup table. First a table is generated
  * and printed to a file, then values between the isentropes are interpolated. The results can be
  * plotted with testsplint.py.
@@ -44,7 +48,7 @@ void main(int argc, char **argv) {
 #endif
 	fprintf(stderr, "Initializing material...\n");
 
-	tillMat = tillInitMaterial(GRANITE, dKpcUnit, dMsolUnit, nTableRho, nTableV, rhomax, vmax, 1);
+	tillMat = tillInitMaterial(GRANITE, dKpcUnit, dMsolUnit, nTableRho, nTableV, rhomax, vmax);
 	
 	fprintf(stderr, "Initializing the look up table...\n");
 
