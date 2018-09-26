@@ -292,9 +292,6 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
         material->n = floor((log(material->rho0)-log(material->rhomin))/(log(material->rhomax)-log(material->rhomin))*material->nTableRho);
         material->dlogrho = (log(material->rho0)-log(material->rhomin))/material->n;
 
-        /// CR
-        fprintf(stderr, "Log(rho0)= %g Log(rhomin)= %g Log(rhomax)= %g.\n", log(material->rho0), log(material->rhomin), log(material->rhomax));
-
         /* Set the actual rhomax (note that rhomax can differ more after the correction when using log(rho) as variable. */ 
         material->rhomax = tillLookupRho(material, material->nTableRho-1);
     }
