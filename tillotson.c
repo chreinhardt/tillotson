@@ -296,14 +296,13 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
         material->rhomax = tillLookupRho(material, material->nTableRho-1);
     }
 
-//#ifdef TILL_VERBOSE
-    fprintf(stderr, "tillInitialize: iMat= %i n= %i dlogrho= %g dv= %g.\n", material->iMaterial, material->n, material->dlogrho, material->dv);
-    fprintf(stderr, "tillInitialize: nTableRho= %i nTableV= %i.\n", material->nTableRho, material->nTableV);
-//#endif
-
-
     /* This is the same for all materials. */
     material->dv = material->vmax/(material->nTableV-1);
+
+#ifdef TILL_VERBOSE
+    fprintf(stderr, "tillInitialize: iMat= %i n= %i dlogrho= %g dv= %g.\n", material->iMaterial, material->n, material->dlogrho, material->dv);
+    fprintf(stderr, "tillInitialize: nTableRho= %i nTableV= %i.\n", material->nTableRho, material->nTableV);
+#endif
 
     return material;
 }
