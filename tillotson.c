@@ -290,14 +290,7 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
 
         /* rhomin has to be larger than zero otherwise the logarithmic spacing does not work. */
         assert(material->rhomin > 0.0 && material->rhomin < material->rhomax);
-#if 0
-        /* Set drho so that rho0 lies on the grid. */
-        material->n = floor((material->rho0-material->rhomin)/(material->rhomax-material->rhomin)*material->nTableRho);
-        material->drho =  (material->rho0-material->rhomin)/material->n;
-
-        /* Set the actual rhomax. */ 
-        material->rhomax = material->drho*(material->nTableRho-1);
-#endif
+        
         /* Set dlogrho so that log(rho0) lies on the grid. */
         material->n = floor((log(material->rho0)-log(material->rhomin))/(log(material->rhomax)-log(material->rhomin))*material->nTableRho);
         material->dlogrho = (log(material->rho0)-log(material->rhomin))/material->n;
