@@ -187,18 +187,14 @@ TILL_LOOKUP_ENTRY *tillSolveIsentrope(TILLMATERIAL *material, double v)
 	    isentrope[i].rho = rho;
 		isentrope[i].v = v;
 		isentrope[i].u1 = tilldudrho(material, rho, u);
-//#if 0
+
         /*
          * Avoid issues because P/rho^2 is diverging for rho=0.
          */
 		if (i == 0)
 		{
-//			fprintf(stderr,"i=%i,rho(0)=%g,u(0)=%g,u1(0)=%g",i,isentrope[i].rho,isentrope[i].u,isentrope[i].u1);
-//			fprintf(stderr,"  tilldudrho=%g P=%g\n",tilldudrho(material, rho, u),tillPressure(material, rho, u));
-//			isentrope[i].u1 = 0.0;
 			isentrope[i].u1 = isentrope[i+1].u1; // Set u1(0)=u1(drho)
 		}
-//#endif
 	}
 	
 	return isentrope;
