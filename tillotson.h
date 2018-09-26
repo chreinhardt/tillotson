@@ -1,5 +1,5 @@
 /*
- ** The header file for the Tillotson EOS library.
+ * The header file for the Tillotson EOS library.
  */
 #ifndef TILLOTSON_HINCLUDED
 #define TILLOTSON_HINCLUDED

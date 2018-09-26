@@ -37,7 +37,7 @@
  * Convert quantities to code units
  * The memory for the look up table is allocated in tillInitLookup()
  */
-TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit)
+TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit, int nTableRho, int nTableV, double rhomax, double vmax)
 {
     const double KBOLTZ = 1.38e-16;      /* bolzman constant in cgs */
     const double MHYDR = 1.67e-24;       /* mass of hydrogen atom in grams */
@@ -53,10 +53,6 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit)
 
 	material->iMaterial = iMaterial;
 
-/*
-    material->dKpcUnit = 2.06701e-13;
-    material->dMsolUnit = 4.80438e-08;
-*/
 	/* This two parameters define the unit system we use. */
     material->dKpcUnit = dKpcUnit;
     material->dMsolUnit = dMsolUnit;
@@ -91,8 +87,8 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit)
 	}
 
 	/*
-	** Set the Tillotson parameters for the material.
-	*/
+	 * Set the Tillotson parameters for the material.
+	 */
 	switch(iMaterial)
 	{
         case IDEALGAS:
@@ -139,8 +135,8 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit)
 			break;
 		case GRANITE:
 			/*
-			** Material parameters from Benz et al. (1986).
-			*/
+			 * Material parameters from Benz et al. (1986).
+			 */
 			material->a = 0.5;
 			material->b = 1.3;
 			material->u0 = 1.6e11;		/* in ergs/g */
@@ -155,8 +151,8 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit)
 			break;
 		case IRON:
 			/*
-			** Material parameters from Benz et al. (1987).
-			*/
+			 * Material parameters from Benz et al. (1987).
+			 */
 			material->a = 0.5;
 			material->b = 1.5;
 			material->u0 = 9.5e10;		/* in ergs/g */
@@ -171,8 +167,8 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit)
 			break;
 		case BASALT:
 			/*
-			** Material parameters from Benz & Asphaug (1999).
-			*/
+			 ** Material parameters from Benz & Asphaug (1999).
+			 */
 			material->a = 0.5;
 			material->b = 1.5;
 			material->u0 = 4.87e12;		/* in ergs/g */
@@ -187,8 +183,8 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit)
 			break;
 		case ICE:
 			/*
-			** Material parameters from Benz & Asphaug (1999).
-			*/
+			 * Material parameters from Benz & Asphaug (1999).
+			 */
 			material->a = 0.3;
 			material->b = 0.1;
 			material->u0 = 1.0e11;		/* in ergs/g */
@@ -208,8 +204,8 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit)
 			break;
 		case WATER:
 			/*
-			** Material parameters from Woolfson (2007).
-			*/
+			 * Material parameters from Woolfson (2007).
+			 */
 			material->a = 0.5;
 			material->b = 0.9;
 			material->u0 = 2.0e10;		/* in ergs/g */
@@ -225,8 +221,8 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit)
 			break;
 		case DUNITE:
 			/*
-			** Material parameters that imitate dunite in ANEOS (Thompson 1972).
-			*/
+			 * Material parameters that imitate dunite in ANEOS (Thompson 1972).
+			 */
 			material->a = 0.5;
 			material->b = 1.5;
 			material->u0 = 4.87e12;		/* in ergs/g */
@@ -246,8 +242,8 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit)
 	}
 
     /*
-    ** Convert energies and densities to code units!
-    */
+     * Convert energies and densities to code units!
+     */
     material->u0 /= material->dErgPerGmUnit;
     material->us /= material->dErgPerGmUnit;
     material->us2 /= material->dErgPerGmUnit;

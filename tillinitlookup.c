@@ -230,8 +230,8 @@ TILL_LOOKUP_ENTRY *tillSolveIsentropeLogRho(TILLMATERIAL *material, double v)
 	isentrope[i].u1 = tilldudlogrho(material, logrho, u); // du/drho
 	
 	/*
-	** Integrate the condensed and expanded states separately.
-	*/
+	 * Integrate the condensed and expanded states separately.
+	 */
 	for (i=material->n+1;i<material->nTableRho;i++)
 	{
 		double hs = h/10.0;
