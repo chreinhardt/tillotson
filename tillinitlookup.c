@@ -18,9 +18,6 @@
 #include <stdio.h>
 #include "tillotson.h"
 
-/* Use Runge-Kutta 4th order to solve the ODEs */
-#define TILL_USE_RK4
-
 int comparerho(const void* a, const void* b)
 /*
 ** This function compares two entries in the look up table
