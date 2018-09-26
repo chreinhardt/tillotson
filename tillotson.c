@@ -818,11 +818,11 @@ double tilldPdrho(TILLMATERIAL *material, double rho, double u)
     }
 }
 
+/*
+ * Calculate dP/du at rho=const.
+ */
 double tilldPdu(TILLMATERIAL *material, double rho, double u)
 {
-    /*
-     * Calculate dP/du at rho=const.
-     */
     double eta, mu;
     double dPcdu, dPedu;
     double w0, y, z;
