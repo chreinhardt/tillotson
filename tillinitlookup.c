@@ -298,9 +298,6 @@ TILL_LOOKUP_ENTRY *tillSolveIsentropeLogRho(TILLMATERIAL *material, double v)
          */
 		if (i == 0)
 		{
-//			fprintf(stderr,"i=%i,rho(0)=%g,u(0)=%g,u1(0)=%g",i,isentrope[i].rho,isentrope[i].u,isentrope[i].u1);
-//			fprintf(stderr,"  tilldudrho=%g P=%g\n",tilldudrho(material, rho, u),tillPressure(material, rho, u));
-//			isentrope[i].u1 = 0.0;
 			isentrope[i].u1 = isentrope[i+1].u1; // Set u1(0)=u1(dlogrho)
 		}
 	}
