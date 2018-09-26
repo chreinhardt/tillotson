@@ -821,7 +821,7 @@ double tilldPdrho(TILLMATERIAL *material, double rho, double u)
 double tilldPdu(TILLMATERIAL *material, double rho, double u)
 {
     /*
-     ** Calculate dP/du at rho=const.
+     * Calculate dP/du at rho=const.
      */
     double eta, mu;
     double dPcdu, dPedu;
@@ -833,24 +833,24 @@ double tilldPdu(TILLMATERIAL *material, double rho, double u)
     w0 = u/(material->u0*eta*eta)+1.0;
 
     /*
-     **  Here we evaluate, which part of the equation of state we need.
+     *  Here we evaluate, which part of the equation of state we need.
      */
     if (rho >= material->rho0 || u < material->us) {
         /*
-         ** Condensed (rho > rho0) or cold expanded states (rho < rho0 and u < us).
+         * Condensed (rho > rho0) or cold expanded states (rho < rho0 and u < us).
          */
         dPcdu = material->a*rho + material->b*rho/(w0*w0);
 
         return (dPcdu);
     } else if (u > material->us2) {
         /*
-         ** Expanded hot states (rho < rho0 and u > us2).
+         * Expanded hot states (rho < rho0 and u > us2).
          */
         dPedu = (material->a + material->b/(w0*w0)*exp(-material->beta*z*z))*rho;		
         return (dPedu);
     } else {
         /*
-         ** Intermediate states (rho < rho0 and us < u < us2).
+         * Intermediate states (rho < rho0 and us < u < us2).
          */
         y = (u - material->us)/(material->us2 - material->us);
 
@@ -864,17 +864,17 @@ double tilldPdu(TILLMATERIAL *material, double rho, double u)
 double tilldTdrho(TILLMATERIAL *material, double rho, double u)
 {
     /*
-     ** Calculate dT/drho at u=const.
+     * Calculate dT/drho at u=const.
      */
     assert(material->cv > 0.0);
     return (-1.0/material->cv*tillPressure(material,rho,tillColdULookup(material,rho))*(rho*rho));
 }
 
+/*
+ * Calculate dT/du at rho=const.
+ */
 double tilldTdu(TILLMATERIAL *material, double rho, double u)
 {
-    /*
-     ** Calculate dT/du at rho=const.
-     */
 
     assert(material->cv > 0.0);
     return (-1.0/material->cv);
@@ -886,34 +886,39 @@ double tillPressureRhoU(TILLMATERIAL material, double rho, double u)
     assert(0);
 }
 
+/*
+ * Calculate T(rho,u) for a material. As an approximation
+ * we use u(rho,T) = uc(rho) + cv*T.
+ */
 double tillTempRhoU(TILLMATERIAL *material, double rho, double u)
 {
-    /*
-     ** Calculate T(rho,u) for a material. As an approximation
-     ** we use u(rho,T) = uc(rho) + cv*T.
-     */
+
     assert(material->cv > 0.0);
     return ((u-tillColdULookup(material,rho))/material->cv);
 }
 
+/*
+ * Calculate T(rho,P) for a material.
+ */
 double tillTempRhoP(TILLMATERIAL *material, double rho, double P)
 {
-    /* Calculate T(rho,P) for a material */
     assert(0);
 }
 
+/*
+ * Calculate u(rho,T) for a material.
+ */
 double tillURhoTemp(TILLMATERIAL *material, double rho, double T)
 {
-    /* Calculate u(rho,T) for a material */
     return(tillColdULookup(material, rho) + material->cv*T);
 }
 
+/* 
+ * Calculate rho(P,T) for a material. Because thermodynamical consistency requires
+ * (dP/drho)_T > 0 this should always work except where we do the pressure cutoff.
+ */
 double tillRhoPTemp(TILLMATERIAL *material, double P, double T)
 {
-    /* 
-     * Calculate rho(P,T) for a material. Because thermodynamical consistency requires
-     * (dP/drho)_T > 0 this should always work except where we do the pressure cutoff.
-     */
     double a, ua, Pa, b, ub, Pb, c, uc, Pc;
 
     Pc = 0.0;
@@ -1014,9 +1019,11 @@ double tillRhoPTemp(TILLMATERIAL *material, double P, double T)
     return c;
 }
 
+/*
+ * Calculate sound speed for a material.
+ */
 double tillSoundSpeed(TILLMATERIAL *material, double rho, double u)
 {
-    /* Calculate sound speed for a material */
     double c;
 
     tillPressureSound(material, rho, u, &c);
