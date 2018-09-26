@@ -1,0 +1,12 @@
+# Ignore all object files
+*.o
+
+# Ignore temporary files
+.*
+
+# Ignore text files
+.txt
+
+# Ignore .png files
+.png
+
