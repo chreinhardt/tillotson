@@ -740,6 +740,9 @@ double tillSplineIntrho(TILLMATERIAL *material, double rho, int iv)
 	double h,b,a;
 	double u;
 
+    /// CR: Not yet adapted for logrho.
+    assert(0);
+
     /* Use rho = rhomin + i*drho. */
 	klo = tillLookupIndexRho(material, rho);
 	khi = klo+1;
