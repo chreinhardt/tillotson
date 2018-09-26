@@ -418,9 +418,8 @@ void tillPrintMat(TILLMATERIAL *material)
 }
 
 /*
- * These functions provide a more general interface for EOS calls
- * so the user can in principle add different EOS (e.g., an ideal
- * gas).
+ * These functions provide a more general interface for EOS calls so the user can in principle add
+ * different EOS (e.g., an ideal gas).
  */
 double eosPressureSound(TILLMATERIAL *material, double rho, double u, double *pcSound)
 {
@@ -498,15 +497,15 @@ double eosdPdu(TILLMATERIAL *material, double rho, double u)
     }
 }
 
+/*
+ * Calculate T(rho,u) for a material. As an approximation we use
+ *
+ * u(rho,T) = uc(rho) + cv*T
+ *
+ * for condensed materials.
+ */
 double eosTempRhoU(TILLMATERIAL *material, double rho, double u)
 {
-    /*
-     * Calculate T(rho,u) for a material. As an approximation we use
-     *
-     * u(rho,T) = uc(rho) + cv*T
-     *
-     * for condensed materials.
-     */
     assert(material->cv > 0.0);
 
     /*
@@ -642,12 +641,11 @@ double eosGamma(TILLMATERIAL *material, double rho, double u)
     return(1.0/rho*eosdPdu(material, rho, u));
 }
 
+/*
+ * Calculate dP/drho at constant entropy.
+ */
 double tilldPdrho_s(TILLMATERIAL *material, double rho, double u)
 {
-    /*
-     ** Calculate dP/drho at constant entropy.
-     */
-
     return (1.0/(rho*rho)*(tillSoundSpeed2old(material,rho, u)-2.0*tillPressure(material,rho,u)/rho));
 }
 
@@ -776,11 +774,11 @@ double tillPressure(TILLMATERIAL *material, double rho, double u)
     return P;
 }
 
+/*
+ * Calculate dP/drho at u=const.
+ */
 double tilldPdrho(TILLMATERIAL *material, double rho, double u)
 {
-    /*
-     * Calculate dP/drho at u=const.
-     */
     double eta, mu;
     double dPcdrho, dPedrho;
     double w0, y, z;
