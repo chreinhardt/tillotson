@@ -651,67 +651,6 @@ double tilldPdrho_s(TILLMATERIAL *material, double rho, double u)
     return (1.0/(rho*rho)*(tillSoundSpeed2old(material,rho, u)-2.0*tillPressure(material,rho,u)/rho));
 }
 
-double tillPressureSoundold(TILLMATERIAL *material, double rho, double u, double *pcSound)
-{
-    /*
-     ** Calculate the pressure and sound speed from the Tillotson EOS for a material.
-     ** Set pcSound = NULL to only calculate the pressure forces. Here we used the old
-     ** function that was originally implemented in Gasoline.
-     */
-
-    double eta, mu;
-    double P,c2;
-    double Gamma, epsilon0, y, x;
-
-    eta = rho/material->rho0;
-    mu = eta - 1.0;
-    x  = 1.0 - eta;
-
-    /*
-     **  Here we evaluate, which part of the equation of state we need.
-     */
-    if (rho >= material->rho0) {
-        /*
-         **  condensed states (rho > rho0)
-         */
-        y = 0.0;
-    } else if (u < material->us) {
-        /* 
-         ** cold expanded states (rho < rho0 and u < us)
-         ** P is like for the condensed states
-         */
-        y = 0.0;
-    } else if (u > material->us2) {
-        /*
-         ** expanded hot states (rho < rho0 and u > us2)
-         */
-        y = 1.0;
-    } else {
-        /*
-         **  intermediate states (rho < rho0 and us < u < us2)
-         */
-        y = (u - material->us)/(material->us2 - material->us);
-    }
-
-    Gamma = material->a + material->b/(u/(material->u0*eta*eta)+1.0)*((1.0-y) + y*exp(-material->beta*x*x/eta/eta));
-    epsilon0 = 1.0/(Gamma*rho)*((material->A*mu + material->B*mu*mu)*(1.0-y)+y*material->A*mu*exp(-(material->alpha*x/eta + material->beta*x*x/eta/eta)));
-    P = Gamma*rho*(u + epsilon0);
-
-    if (pcSound != NULL)
-    {
-        /* calculate the sound speed */
-        c2 = (Gamma+1.0)*P/rho + 1.0/rho*((material->A+material->B*(eta*eta-1.0))*(1.0-y)+y*material->A*exp(-(material->alpha*x/eta+material->beta*x*x/eta/eta))*(1+mu/eta*(material->alpha+2*material->beta*x/eta)));
-        /* make sure that c^2 > 0 for rho < rho0 */
-        if (c2 < material->A/material->rho0){
-            c2 = material->A/material->rho0;
-        }
-
-        *pcSound = sqrt(c2);
-    }
-
-    return (P);
-}
-
 double tillPressureSound(TILLMATERIAL *material, double rho, double u, double *pcSound)
 {
     /*
