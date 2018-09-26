@@ -188,7 +188,7 @@ int tillSolveBC(TILLMATERIAL *mat1, TILLMATERIAL *mat2, double rho1, double u1, 
  * tillinitlookup.c
  */
 void tillInitColdCurve(TILLMATERIAL *material);
-void tillInitLookup(TILLMATERIAL *material, int nTableRho, int nTableV, double rhomax, double vmax);
+void tillInitLookup(TILLMATERIAL *material, int nTableRho, int nTableV, double rhomin, double rhomax, double vmax);
 TILL_LOOKUP_ENTRY *tillSolveIsentrope(TILLMATERIAL *material, double v);
 TILL_LOOKUP_ENTRY *tillSolveIsentropeLogRho(TILLMATERIAL *material, double v);
 /* Use bsstep.c from the Numerical Recipes */
