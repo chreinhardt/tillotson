@@ -776,14 +776,6 @@ double tillPressure(TILLMATERIAL *material, double rho, double u)
     return P;
 }
 
-double tillPressureNP(TILLMATERIAL *material, double rho, double u)
-{
-    /* Calculate the pressure from the Tillotson EOS for a material */
-    double P = tillPressureSound(material, rho, u, NULL);
-
-    return (P);
-}
-
 double tilldPdrho(TILLMATERIAL *material, double rho, double u)
 {
     /*
