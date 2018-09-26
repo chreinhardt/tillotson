@@ -1100,19 +1100,19 @@ double tilldudlogrho(TILLMATERIAL *material, double logrho, double u)
     return (tillPressure(material,rho,u)/(rho));
 }
 
+/*
+ * Given rho1, u1 (material 1) solve for rho2, u2 (material 2) at the interface between two material.
+ *
+ * The b.c. are:
+ *
+ * P1(rho1,u1)=P2(rho2,u2) and T1(rho1,u1)=T2(rho2,u2)
+ *
+ * Since P = P(rho, T) and T1=T2 we solve for P2(rho2)-P1=0.
+ *
+ * Returns 0 if successful or -1 if not.
+ */
 int tillSolveBC(TILLMATERIAL *mat1, TILLMATERIAL *mat2, double rho1, double u1, double *prho2, double *pu2)
 {
-    /*
-     * Given rho1, u1 (material 1) solve for rho2, u2 (material 2) at the interface between two material.
-     *
-     * The b.c. are:
-     *
-     * P1(rho1,u1)=P2(rho2,u2) and T1(rho1,u1)=T2(rho2,u2)
-     *
-     * Since P = P(rho, T) and T1=T2 we solve for P2(rho2)-P1=0.
-     *
-     * Returns 0 if successful or -1 if not.
-     */
     double P, T;
     double a, ua, Pa, b, ub, Pb, c, uc, Pc;
     int iRet;
