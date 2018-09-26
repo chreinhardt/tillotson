@@ -20,10 +20,9 @@
 
 int comparerho(const void* a, const void* b)
 /*
-** This function compares two entries in the look up table
-** and returns -1 if a1.rho < a2.rho, 1 if a1.rho > a2.rho or 0 if
-** they are equal (needed to sort the particles with qsort).
-*/
+ * This function compares two entries in the look up table and returns -1 if a1.rho < a2.rho,
+ * 1 if a1.rho > a2.rho or 0 if they are equal (needed to sort the particles with qsort).
+ */
 {
 	TILL_LOOKUP_ENTRY a1 = *(const TILL_LOOKUP_ENTRY*)(a);
     TILL_LOOKUP_ENTRY a2 = *(const TILL_LOOKUP_ENTRY*)(b);
@@ -126,8 +125,8 @@ TILL_LOOKUP_ENTRY *tillSolveIsentrope(TILLMATERIAL *material, double v)
 	isentrope[i].u1 = tilldudrho(material, rho, u); // du/drho
 	
 	/*
-	** Integrate the condensed and expanded states separately.
-	*/
+	 * Integrate the condensed and expanded states separately.
+	 */
 	for (i=material->n+1;i<material->nTableRho;i++)
 	{
 		double hs = h/10.0;
@@ -136,8 +135,8 @@ TILL_LOOKUP_ENTRY *tillSolveIsentrope(TILLMATERIAL *material, double v)
 		for (s=0;s<10;s++)
 		{
 			/*
-			** Midpoint Runga-Kutta (4nd order).
-			*/
+			 * Midpoint Runga-Kutta (4nd order).
+			 */
 			k1u = hs*tilldudrho(material,rho,u);
 			k2u = hs*tilldudrho(material,rho+0.5*hs,u+0.5*k1u);
 			k3u = hs*tilldudrho(material,rho+0.5*hs,u+0.5*k2u);
@@ -158,8 +157,8 @@ TILL_LOOKUP_ENTRY *tillSolveIsentrope(TILLMATERIAL *material, double v)
 	}
 
 	/*
-	** Now the expanded states. Careful about the negative sign.
-	*/
+	 * Now the expanded states. Careful about the negative sign.
+	 */
 	rho = material->rho0;
 	u = v;
 
@@ -171,8 +170,8 @@ TILL_LOOKUP_ENTRY *tillSolveIsentrope(TILLMATERIAL *material, double v)
 		for (s=0;s<10;s++)
 		{
 			/*
-			** Midpoint Runga-Kutta (4nd order).
-			*/
+			 * Midpoint Runga-Kutta (4nd order).
+			 */
 			k1u = hs*-tilldudrho(material,rho,u);
 			k2u = hs*-tilldudrho(material,rho+0.5*hs,u+0.5*k1u);
 			k3u = hs*-tilldudrho(material,rho+0.5*hs,u+0.5*k2u);
@@ -241,8 +240,8 @@ TILL_LOOKUP_ENTRY *tillSolveIsentropeLogRho(TILLMATERIAL *material, double v)
 		for (s=0;s<10;s++)
 		{
 			/*
-			** Midpoint Runga-Kutta (4nd order).
-			*/
+             * Midpoint Runga-Kutta (4nd order).
+			 */
 			k1u = hs*tilldudlogrho(material,logrho,u);
 			k2u = hs*tilldudlogrho(material,logrho+0.5*hs,u+0.5*k1u);
 			k3u = hs*tilldudlogrho(material,logrho+0.5*hs,u+0.5*k2u);
@@ -263,8 +262,8 @@ TILL_LOOKUP_ENTRY *tillSolveIsentropeLogRho(TILLMATERIAL *material, double v)
 	}
 
 	/*
-	** Now the expanded states. Careful about the negative sign.
-	*/
+     * Now the expanded states. Careful about the negative sign.
+	 */
 	logrho = log(material->rho0);
 	u = v;
 
@@ -276,8 +275,8 @@ TILL_LOOKUP_ENTRY *tillSolveIsentropeLogRho(TILLMATERIAL *material, double v)
 		for (s=0;s<10;s++)
 		{
 			/*
-			** Midpoint Runga-Kutta (4nd order).
-			*/
+			 * Midpoint Runga-Kutta (4nd order).
+			 */
 			k1u = hs*-tilldudlogrho(material,logrho,u);
 			k2u = hs*-tilldudlogrho(material,logrho+0.5*hs,u+0.5*k1u);
 			k3u = hs*-tilldudlogrho(material,logrho+0.5*hs,u+0.5*k2u);
@@ -339,8 +338,8 @@ double tillCalcU(TILLMATERIAL *material, double rho1, double u1, double rho2)
 	{
 		while (logrho < logrho2) {
 			/*
-			** Midpoint Runga-Kutta (4nd order).
-			*/
+			 * Midpoint Runga-Kutta (4nd order).
+			 */
 			k1u = h*tilldudlogrho(material, logrho, u);
 			k2u = h*tilldudlogrho(material, logrho+0.5*h, u+0.5*k1u);
 			k3u = h*tilldudlogrho(material, logrho+0.5*h, u+0.5*k2u);
@@ -357,8 +356,8 @@ double tillCalcU(TILLMATERIAL *material, double rho1, double u1, double rho2)
 	} else if (rho1 > rho2) {
 		while (logrho > logrho2) {
 			/*
-			** Midpoint Runga-Kutta (4nd order).
-			*/
+			 * Midpoint Runga-Kutta (4nd order).
+			 */
 			k1u = h*tilldudlogrho(material, logrho, u);
 			k2u = h*tilldudlogrho(material, logrho+0.5*h, u+0.5*k1u);
 			k3u = h*tilldudlogrho(material, logrho+0.5*h, u+0.5*k2u);

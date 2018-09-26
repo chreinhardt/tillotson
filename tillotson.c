@@ -37,7 +37,7 @@
  * Convert quantities to code units
  * The memory for the look up table is allocated in tillInitLookup()
  */
-TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit, int nTableRho, int nTableV, double rhomax, double vmax)
+TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit)
 {
     const double KBOLTZ = 1.38e-16;      /* bolzman constant in cgs */
     const double MHYDR = 1.67e-24;       /* mass of hydrogen atom in grams */
