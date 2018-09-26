@@ -13,9 +13,9 @@
 /*
  * Version.
  */
-#define TILL_VERSION_TEXT    "2.1.0"
-#define TILL_VERSION_MAJOR   2
-#define TILL_VERSION_MINOR   1
+#define TILL_VERSION_TEXT    "3.0.0"
+#define TILL_VERSION_MAJOR   3
+#define TILL_VERSION_MINOR   0
 #define TILL_VERSION_PATCH   0
 
 /*
@@ -99,7 +99,6 @@ typedef struct tillMaterial
 	double rhomin;	/* Min value for the lookup table */
 	double rhomax;	/* Max value for the lookup table */
 	double vmax;	/* Max value for the lookup table */
-	double iExpV;	/* Set to 1 for uniform steps in v */
 	/* Unit convertion factors */
 	double dKpcUnit;
 	double dMsolUnit;
@@ -146,7 +145,7 @@ typedef struct tillMaterial
 /*
  * Tillotson.c
  */
-TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit, int nTableRho, int nTableV, double rhomax, double vmax, int iExpV);
+TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit, int nTableRho, int nTableV, double rhomax, double vmax);
 void tillFinalizeMaterial(TILLMATERIAL *material);
 
 void tilliMatString(TILLMATERIAL *material, char *MatName);
