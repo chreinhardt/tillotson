@@ -651,12 +651,12 @@ double tilldPdrho_s(TILLMATERIAL *material, double rho, double u)
     return (1.0/(rho*rho)*(tillSoundSpeed2old(material,rho, u)-2.0*tillPressure(material,rho,u)/rho));
 }
 
+/*
+ * Calculate the pressure and sound speed from the Tillotson EOS for a material. Set pcSound = NULL
+ * to only calculate the pressure forces.
+ */
 double tillPressureSound(TILLMATERIAL *material, double rho, double u, double *pcSound)
 {
-    /*
-     ** Calculate the pressure and sound speed from the Tillotson EOS for a material.
-     ** Set pcSound = NULL to only calculate the pressure forces.
-     */
 
     double eta, mu;
     double Pc, Pe;
@@ -669,11 +669,11 @@ double tillPressureSound(TILLMATERIAL *material, double rho, double u, double *p
     w0 = u/(material->u0*eta*eta)+1.0;
 
     /*
-     **  Here we evaluate, which part of the equation of state we need.
+     *  Here we evaluate, which part of the equation of state we need.
      */
     if (rho >= material->rho0 || u < material->us) {
         /*
-         **  Condensed states (rho > rho0) or expanded cold states.
+         *  Condensed states (rho > rho0) or expanded cold states.
          */
         Gammac = material->a + material->b/w0;
         Pc = Gammac*u*rho + material->A*mu + material->B*mu*mu;
