@@ -22,6 +22,7 @@ void main(int argc, char **argv) {
 	TILLMATERIAL *tillMat;
 	double dKpcUnit = 2.06701e-13;
 	double dMsolUnit = 4.80438e-08;
+	double rhomin = TILL_RHO_MIN;
 	double rhomax = 100.0;
 	double vmax = 1200.0;
 	// For vmax=rhomax=25 and nTableV=100, nTableRho=1000 we get excellent results.
@@ -44,12 +45,12 @@ void main(int argc, char **argv) {
 #endif
 	fprintf(stderr, "Initializing material...\n");
 
-	tillMat = tillInitMaterial(GRANITE, dKpcUnit, dMsolUnit, nTableRho, nTableV, rhomax, vmax, 1);
+	tillMat = tillInitMaterial(GRANITE, dKpcUnit, dMsolUnit);
 	
 	fprintf(stderr, "Initializing the look up table...\n");
 
 	/* Solve ODE and splines */
-	tillInitLookup(tillMat);
+	tillInitLookup(tillMat, nTableRho, nTableV, rhomin, rhomax, vmax);
 	fprintf(stderr, "Done.\n");
 
 	fprintf(stderr,"\n");

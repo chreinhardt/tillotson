@@ -1,5 +1,5 @@
 /*
- ** The header file for the Tillotson EOS library.
+ * The header file for the Tillotson EOS library.
  */
 #ifndef TILLOTSON_HINCLUDED
 #define TILLOTSON_HINCLUDED
@@ -13,9 +13,9 @@
 /*
  * Version.
  */
-#define TILL_VERSION_TEXT    "2.1.0"
-#define TILL_VERSION_MAJOR   2
-#define TILL_VERSION_MINOR   1
+#define TILL_VERSION_TEXT    "3.0.0"
+#define TILL_VERSION_MAJOR   3
+#define TILL_VERSION_MINOR   0
 #define TILL_VERSION_PATCH   0
 
 /*
@@ -99,7 +99,6 @@ typedef struct tillMaterial
 	double rhomin;	/* Min value for the lookup table */
 	double rhomax;	/* Max value for the lookup table */
 	double vmax;	/* Max value for the lookup table */
-	double iExpV;	/* Set to 1 for uniform steps in v */
 	/* Unit convertion factors */
 	double dKpcUnit;
 	double dMsolUnit;
@@ -146,7 +145,7 @@ typedef struct tillMaterial
 /*
  * Tillotson.c
  */
-TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit, int nTableRho, int nTableV, double rhomax, double vmax, int iExpV);
+TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit);
 void tillFinalizeMaterial(TILLMATERIAL *material);
 
 void tilliMatString(TILLMATERIAL *material, char *MatName);
@@ -166,8 +165,6 @@ double eosPhi(TILLMATERIAL *material, double rho, double u);
 double eosGamma(TILLMATERIAL *material, double rho, double u);
 
 double tilldPdrho(TILLMATERIAL *material, double rho, double u);
-double tillSoundSpeed2old(TILLMATERIAL *material, double rho, double u);
-double tillPressureSoundold(TILLMATERIAL *material, double rho, double u, double *pcSound);
 double tillPressureSound(TILLMATERIAL *material, double rho, double u, double *pcSound);
 double tillPressure(TILLMATERIAL *material, double rho, double u);
 double tillPressureNP(TILLMATERIAL *material, double rho, double u);
@@ -191,7 +188,7 @@ int tillSolveBC(TILLMATERIAL *mat1, TILLMATERIAL *mat2, double rho1, double u1, 
  * tillinitlookup.c
  */
 void tillInitColdCurve(TILLMATERIAL *material);
-void tillInitLookup(TILLMATERIAL *material);
+void tillInitLookup(TILLMATERIAL *material, int nTableRho, int nTableV, double rhomin, double rhomax, double vmax);
 TILL_LOOKUP_ENTRY *tillSolveIsentrope(TILLMATERIAL *material, double v);
 TILL_LOOKUP_ENTRY *tillSolveIsentropeLogRho(TILLMATERIAL *material, double v);
 /* Use bsstep.c from the Numerical Recipes */

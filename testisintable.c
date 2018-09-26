@@ -3,7 +3,7 @@
  *
  * Author:   Christian Reinhardt
  * Date:     13.09.2018
- * Modified: 24.09.2018 
+ * Modified: 26.09.2018 
  *
  * Test tillIsInTable() by checking, if a grid of points is in the lookup table. Especially the
  * values close to vmax can be problematic.
@@ -25,6 +25,7 @@ void main(int argc, char **argv) {
 	TILLMATERIAL *tillMat;
 	double dKpcUnit = 2.06701e-13;
 	double dMsolUnit = 4.80438e-08;
+	double rhomin = TILL_RHO_MIN;
 	double rhomax = 100.0;
 	double vmax = 1200.0;
 	int nTableRho = 100;
@@ -36,19 +37,18 @@ void main(int argc, char **argv) {
 	FILE *fp = NULL;
 	int i = 0;
 	int j = 0;
-	int n = 1;
 
 #ifdef TILL_PRESS_NP
 	fprintf(stderr, "TILL_PRESS_NP.\n");
 #endif
 	fprintf(stderr, "Initializing material...\n");
 
-	tillMat = tillInitMaterial(GRANITE, dKpcUnit, dMsolUnit, nTableRho, nTableV, rhomax, vmax, n);
+	tillMat = tillInitMaterial(GRANITE, dKpcUnit, dMsolUnit);
 	
 	fprintf(stderr, "Initializing the look up table...\n");
 
 	/* Solve ODE and splines */
-	tillInitLookup(tillMat);
+	tillInitLookup(tillMat, nTableRho, nTableV, rhomin, rhomax, vmax);
 	fprintf(stderr, "Done.\n");
 
 	fprintf(stderr,"\n");

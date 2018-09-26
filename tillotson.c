@@ -29,16 +29,15 @@
 /* This will cut the pressure in the cold expanded states for rho/rho0 < 0.8 as suggested in Melosh1989. */
 //#define TILL_PRESS_MELOSH
 
-
 /*
- * Initialise a material from the Tillotson library
+ * Initialize a material from the Tillotson library
  *
  * We do:
  * Initialize variables
  * Convert quantities to code units
  * The memory for the look up table is allocated in tillInitLookup()
  */
-TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit, int nTableRho, int nTableV, double rhomax, double vmax, int iExpV)
+TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit)
 {
     const double KBOLTZ = 1.38e-16;      /* bolzman constant in cgs */
     const double MHYDR = 1.67e-24;       /* mass of hydrogen atom in grams */
@@ -54,20 +53,17 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
 
 	material->iMaterial = iMaterial;
 
-/*
-    material->dKpcUnit = 2.06701e-13;
-    material->dMsolUnit = 4.80438e-08;
-*/
 	/* This two parameters define the unit system we use. */
     material->dKpcUnit = dKpcUnit;
     material->dMsolUnit = dMsolUnit;
 
-    /* Min and max values for the lookup table (in code units). */
-	material->rhomax = rhomax;
-	material->vmax = vmax;
+    material->rhomin = 0.0;
+	material->rhomax = 0.0;
+	material->vmax = 0.0;
 
-    assert(material->rhomax > 0.0);
-    assert(material->vmax > 0.0);
+    material->n = 0;
+    material->dlogrho = 0.0;
+    material->dv = 0.0;
 
 	if (dKpcUnit <= 0.0 && dMsolUnit <= 0.0)
 	{
@@ -92,8 +88,8 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
 	}
 
 	/*
-	** Set the Tillotson parameters for the material.
-	*/
+	 * Set the Tillotson parameters for the material.
+	 */
 	switch(iMaterial)
 	{
         case IDEALGAS:
@@ -140,8 +136,8 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
 			break;
 		case GRANITE:
 			/*
-			** Material parameters from Benz et al. (1986).
-			*/
+			 * Material parameters from Benz et al. (1986).
+			 */
 			material->a = 0.5;
 			material->b = 1.3;
 			material->u0 = 1.6e11;		/* in ergs/g */
@@ -156,8 +152,8 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
 			break;
 		case IRON:
 			/*
-			** Material parameters from Benz et al. (1987).
-			*/
+			 * Material parameters from Benz et al. (1987).
+			 */
 			material->a = 0.5;
 			material->b = 1.5;
 			material->u0 = 9.5e10;		/* in ergs/g */
@@ -172,8 +168,8 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
 			break;
 		case BASALT:
 			/*
-			** Material parameters from Benz & Asphaug (1999).
-			*/
+			 ** Material parameters from Benz & Asphaug (1999).
+			 */
 			material->a = 0.5;
 			material->b = 1.5;
 			material->u0 = 4.87e12;		/* in ergs/g */
@@ -188,8 +184,8 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
 			break;
 		case ICE:
 			/*
-			** Material parameters from Benz & Asphaug (1999).
-			*/
+			 * Material parameters from Benz & Asphaug (1999).
+			 */
 			material->a = 0.3;
 			material->b = 0.1;
 			material->u0 = 1.0e11;		/* in ergs/g */
@@ -209,8 +205,8 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
 			break;
 		case WATER:
 			/*
-			** Material parameters from Woolfson (2007).
-			*/
+			 * Material parameters from Woolfson (2007).
+			 */
 			material->a = 0.5;
 			material->b = 0.9;
 			material->u0 = 2.0e10;		/* in ergs/g */
@@ -226,8 +222,8 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
 			break;
 		case DUNITE:
 			/*
-			** Material parameters that imitate dunite in ANEOS (Thompson 1972).
-			*/
+			 * Material parameters that imitate dunite in ANEOS (Thompson 1972).
+			 */
 			material->a = 0.5;
 			material->b = 1.5;
 			material->u0 = 4.87e12;		/* in ergs/g */
@@ -247,8 +243,8 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
 	}
 
     /*
-    ** Convert energies and densities to code units!
-    */
+     * Convert energies and densities to code units!
+     */
     material->u0 /= material->dErgPerGmUnit;
     material->us /= material->dErgPerGmUnit;
     material->us2 /= material->dErgPerGmUnit;
@@ -275,69 +271,15 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
     }
 #endif
 
-	/* Number of grid points for the look up table. */
-	material->nTableRho = nTableRho;
-	material->nTableV = nTableV;
-
-    /* The stuff below does not have to be done for the ideal gas as there is no lookup table. */
-    if (material->iMaterial == IDEALGAS)
-    {
-        material->rhomin = 0.0;
-        material->n = 0;
-        /* rhomax is set already. */
-#if 0
-        material->drho =  material->rhomax/(material->nTableRho-1);
-#endif
-        material->drho =  material->rhomax/(material->nTableRho-1);
-    } else {
-        /* Set rhomin */
-        material->rhomin = TILL_RHO_MIN;
-
-        /* rhomin has to be larger than zero otherwise the logarithmic spacing does not work. */
-        assert(material->rhomin > 0.0 && material->rhomin < material->rhomax);
-#if 0
-        /* Set drho so that rho0 lies on the grid. */
-        material->n = floor((material->rho0-material->rhomin)/(material->rhomax-material->rhomin)*material->nTableRho);
-        material->drho =  (material->rho0-material->rhomin)/material->n;
-
-        /* Set the actual rhomax. */ 
-        material->rhomax = material->drho*(material->nTableRho-1);
-#endif
-        /* Set dlogrho so that log(rho0) lies on the grid. */
-        material->n = floor((log(material->rho0)-log(material->rhomin))/(log(material->rhomax)-log(material->rhomin))*material->nTableRho);
-        material->dlogrho = (log(material->rho0)-log(material->rhomin))/material->n;
-
-        /// CR
-        fprintf(stderr, "Log(rho0)= %g Log(rhomin)= %g Log(rhomax)= %g.\n", log(material->rho0), log(material->rhomin), log(material->rhomax));
-
-        /* Set the actual rhomax (note that rhomax can differ more after the correction when using log(rho) as variable. */ 
-        material->rhomax = tillLookupRho(material, material->nTableRho-1);
-    }
-
-//#ifdef TILL_VERBOSE
-    fprintf(stderr, "tillInitialize: iMat= %i n= %i dlogrho= %g dv= %g.\n", material->iMaterial, material->n, material->dlogrho, material->dv);
-    fprintf(stderr, "tillInitialize: nTableRho= %i nTableV= %i.\n", material->nTableRho, material->nTableV);
-//#endif
-
-
-    /* This is the same for all materials. */
-    material->dv = material->vmax/(material->nTableV-1);
-
-    // (CR) set vmax to rhomax just to check if dv = drho = delta works. */
-    // material->vmax = material->rhomax;
-
-    // (CR) 15.11.15: try non uniform steps in v
-    // But careful: material->n is used to integrate the isentropes
-    //	material->n = 5;
-    material->iExpV = iExpV;
-    // (CR) 15.11.15: Change this back later
-
     return material;
 }
 
+/* 
+ * Free the memory.
+ */
 void tillFinalizeMaterial(TILLMATERIAL *material)
 {
-    /* Free the memory */
+
     if (material->Lookup != NULL) free(material->Lookup);
     //	if (material->cold != NULL) free(material->cold);
 
@@ -443,9 +385,8 @@ void tillPrintMat(TILLMATERIAL *material)
 }
 
 /*
- * These functions provide a more general interface for EOS calls
- * so the user can in principle add different EOS (e.g., an ideal
- * gas).
+ * These functions provide a more general interface for EOS calls so the user can in principle add
+ * different EOS (e.g., an ideal gas).
  */
 double eosPressureSound(TILLMATERIAL *material, double rho, double u, double *pcSound)
 {
@@ -523,15 +464,15 @@ double eosdPdu(TILLMATERIAL *material, double rho, double u)
     }
 }
 
+/*
+ * Calculate T(rho,u) for a material. As an approximation we use
+ *
+ * u(rho,T) = uc(rho) + cv*T
+ *
+ * for condensed materials.
+ */
 double eosTempRhoU(TILLMATERIAL *material, double rho, double u)
 {
-    /*
-     * Calculate T(rho,u) for a material. As an approximation we use
-     *
-     * u(rho,T) = uc(rho) + cv*T
-     *
-     * for condensed materials.
-     */
     assert(material->cv > 0.0);
 
     /*
@@ -667,144 +608,20 @@ double eosGamma(TILLMATERIAL *material, double rho, double u)
     return(1.0/rho*eosdPdu(material, rho, u));
 }
 
+/*
+ * Calculate dP/drho at constant entropy.
+ */
 double tilldPdrho_s(TILLMATERIAL *material, double rho, double u)
 {
-    /*
-     ** Calculate dP/drho at constant entropy.
-     */
-
-    return (1.0/(rho*rho)*(tillSoundSpeed2old(material,rho, u)-2.0*tillPressure(material,rho,u)/rho));
+    return (1.0/(rho*rho)*(tillSoundSpeed(material,rho, u)-2.0*tillPressure(material,rho,u)/rho));
 }
 
-double tillSoundSpeed2old(TILLMATERIAL *material, double rho, double u)
-{
-    /*
-     ** Calculate the sound speed for the Tillotson EOS like we did in
-     ** Gasoline. In the intermediate states its better however to do a
-     ** linear interpolation in the sound speed because we have no
-     ** discontinuity when we change from expanded hot to condensed states.
-     */
-
-    double eta, mu;
-    double Pc, Pe;
-    double c2c, c2e;
-    double Gammac, Gammae, w0, y, z;
-
-    eta = rho/material->rho0;
-    mu = eta - 1.0;
-    z = (1.0 - eta)/eta;
-    w0 = u/(material->u0*eta*eta)+1.0;
-
-    /*
-     **  Here we evaluate, which part of the equation of state we need.
-     */
-    if (rho >= material->rho0) {
-        /*
-         **  condensed states (rho > rho0)
-         */
-        Gammac = material->a + material->b/w0;
-        Pc = Gammac*u*rho + material->A*mu + material->B*mu*mu;
-
-        return ((Gammac+1.0)*Pc/rho + (material->A+material->B*(eta*eta-1.0))/rho + material->b/(w0*w0)*(w0-1.0)*(2*u-Pc/rho));
-    } else if (u < material->us) {
-        /* 
-         ** cold expanded states (rho < rho0 and u < us)
-         ** P is like for the condensed states
-         */
-        Gammac = material->a + material->b/w0;
-        Pc = Gammac*u*rho + material->A*mu + material->B*mu*mu;
-
-        return ((Gammac+1.0)*Pc/rho + (material->A+material->B*(eta*eta-1.0))/rho + material->b/(w0*w0)*(w0-1.0)*(2*u-Pc/rho));
-    } else if (u > material->us2) {
-        /*
-         ** expanded hot states (rho < rho0 and u > us2)
-         */
-        Gammae = material->a + material->b/w0*exp(-material->beta*z*z);
-        Pe = Gammae*u*rho + material->A*mu*exp(-(material->alpha*z+material->beta*z*z));
-
-        return ((Gammae+1.0)*Pe/rho + material->A/material->rho0*exp(-(material->alpha*z+material->beta*z*z))*(1.0+mu/(eta*eta)*(material->alpha+2.0*material->beta*z-eta)) + material->b*rho*u/(w0*w0*eta*eta)*exp(-material->beta*z*z)*(2.0*material->beta*z*w0/material->rho0+1.0/(material->u0*rho)*(2.0*u-Pe/rho)));
-    } else {
-        /*
-         **  intermediate states (rho < rho0 and us < u < us2)
-         */
-        y = (u - material->us)/(material->us2 - material->us);
-
-        Gammac = material->a + material->b/w0;
-        Pc = Gammac*u*rho + material->A*mu + material->B*mu*mu;
-        Gammae = material->a + material->b/w0*exp(-material->beta*z*z);
-        Pe = Gammae*u*rho + material->A*mu*exp(-(material->alpha*z+material->beta*z*z));
-
-        return ((Gammac*(1.0-y)+Gammae*y+1.0)*(Pc*(1.0-y)+Pe*y)/rho+((material->A+material->B*(eta*eta-1.0))/rho + material->b/(w0*w0)*(w0-1.0)*(2*u-Pc/rho))*(1.0-y)+(material->A/material->rho0*exp(-(material->alpha*z+material->beta*z*z))*(1.0+mu/(eta*eta)*(material->alpha+2.0*material->beta*z-eta)) + material->b*rho*u/(w0*w0*eta*eta)*exp(-material->beta*z*z)*(2.0*material->beta*z*w0/material->rho0+1.0/(material->u0*rho)*(2.0*u-Pe/rho)))*y);
-    }
-}
-
-double tillPressureSoundold(TILLMATERIAL *material, double rho, double u, double *pcSound)
-{
-    /*
-     ** Calculate the pressure and sound speed from the Tillotson EOS for a material.
-     ** Set pcSound = NULL to only calculate the pressure forces. Here we used the old
-     ** function that was originally implemented in Gasoline.
-     */
-
-    double eta, mu;
-    double P,c2;
-    double Gamma, epsilon0, y, x;
-
-    eta = rho/material->rho0;
-    mu = eta - 1.0;
-    x  = 1.0 - eta;
-
-    /*
-     **  Here we evaluate, which part of the equation of state we need.
-     */
-    if (rho >= material->rho0) {
-        /*
-         **  condensed states (rho > rho0)
-         */
-        y = 0.0;
-    } else if (u < material->us) {
-        /* 
-         ** cold expanded states (rho < rho0 and u < us)
-         ** P is like for the condensed states
-         */
-        y = 0.0;
-    } else if (u > material->us2) {
-        /*
-         ** expanded hot states (rho < rho0 and u > us2)
-         */
-        y = 1.0;
-    } else {
-        /*
-         **  intermediate states (rho < rho0 and us < u < us2)
-         */
-        y = (u - material->us)/(material->us2 - material->us);
-    }
-
-    Gamma = material->a + material->b/(u/(material->u0*eta*eta)+1.0)*((1.0-y) + y*exp(-material->beta*x*x/eta/eta));
-    epsilon0 = 1.0/(Gamma*rho)*((material->A*mu + material->B*mu*mu)*(1.0-y)+y*material->A*mu*exp(-(material->alpha*x/eta + material->beta*x*x/eta/eta)));
-    P = Gamma*rho*(u + epsilon0);
-
-    if (pcSound != NULL)
-    {
-        /* calculate the sound speed */
-        c2 = (Gamma+1.0)*P/rho + 1.0/rho*((material->A+material->B*(eta*eta-1.0))*(1.0-y)+y*material->A*exp(-(material->alpha*x/eta+material->beta*x*x/eta/eta))*(1+mu/eta*(material->alpha+2*material->beta*x/eta)));
-        /* make sure that c^2 > 0 for rho < rho0 */
-        if (c2 < material->A/material->rho0){
-            c2 = material->A/material->rho0;
-        }
-
-        *pcSound = sqrt(c2);
-    }
-
-    return (P);
-}
-
+/*
+ * Calculate the pressure and sound speed from the Tillotson EOS for a material. Set pcSound = NULL
+ * to only calculate the pressure forces.
+ */
 double tillPressureSound(TILLMATERIAL *material, double rho, double u, double *pcSound)
 {
-    /*
-     ** Calculate the pressure and sound speed from the Tillotson EOS for a material.
-     ** Set pcSound = NULL to only calculate the pressure forces.
-     */
 
     double eta, mu;
     double Pc, Pe;
@@ -817,11 +634,11 @@ double tillPressureSound(TILLMATERIAL *material, double rho, double u, double *p
     w0 = u/(material->u0*eta*eta)+1.0;
 
     /*
-     **  Here we evaluate, which part of the equation of state we need.
+     *  Here we evaluate, which part of the equation of state we need.
      */
     if (rho >= material->rho0 || u < material->us) {
         /*
-         **  Condensed states (rho > rho0) or expanded cold states.
+         *  Condensed states (rho > rho0) or expanded cold states.
          */
         Gammac = material->a + material->b/w0;
         Pc = Gammac*u*rho + material->A*mu + material->B*mu*mu;
@@ -854,7 +671,7 @@ double tillPressureSound(TILLMATERIAL *material, double rho, double u, double *p
         return (Pc);
     } else if (u > material->us2) {
         /*
-         ** Expanded hot states (rho < rho0 and u > us2).
+         * Expanded hot states (rho < rho0 and u > us2).
          */
         Gammae = material->a + material->b/w0*exp(-material->beta*z*z);
         Pe = Gammae*u*rho + material->A*mu*exp(-(material->alpha*z+material->beta*z*z));
@@ -871,7 +688,7 @@ double tillPressureSound(TILLMATERIAL *material, double rho, double u, double *p
         return (Pe);
     } else {
         /*
-         **  intermediate states (rho < rho0 and us < u < us2)
+         *  intermediate states (rho < rho0 and us < u < us2)
          */
         y = (u - material->us)/(material->us2 - material->us);
 
@@ -909,9 +726,11 @@ double tillPressureSound(TILLMATERIAL *material, double rho, double u, double *p
     }
 }
 
+/* 
+ * Calculate the pressure from the Tillotson EOS for a material.
+ */
 double tillPressure(TILLMATERIAL *material, double rho, double u)
 {
-    /* Calculate the pressure from the Tillotson EOS for a material */
     double P = tillPressureSound(material, rho, u, NULL);
 
 #ifdef TILL_PRESS_NP
@@ -919,22 +738,14 @@ double tillPressure(TILLMATERIAL *material, double rho, double u)
     if (P < 0.0 ) P = 0.0;
 #endif
 
-    return (P);
+    return P;
 }
 
-double tillPressureNP(TILLMATERIAL *material, double rho, double u)
-{
-    /* Calculate the pressure from the Tillotson EOS for a material */
-    double P = tillPressureSound(material, rho, u, NULL);
-
-    return (P);
-}
-
+/*
+ * Calculate dP/drho at u=const.
+ */
 double tilldPdrho(TILLMATERIAL *material, double rho, double u)
 {
-    /*
-     ** Calculate dP/drho at u=const.
-     */
     double eta, mu;
     double dPcdrho, dPedrho;
     double w0, y, z;
@@ -945,24 +756,24 @@ double tilldPdrho(TILLMATERIAL *material, double rho, double u)
     w0 = u/(material->u0*eta*eta)+1.0;
 
     /*
-     ** Here we evaluate, which part of the equation of state we need.
+     * Here we evaluate, which part of the equation of state we need.
      */
     if (rho >= material->rho0 || u < material->us) {
         /*
-         ** Condensed (rho > rho0) or cold expanded states (rho < rho0 and u < us).
+         * Condensed (rho > rho0) or cold expanded states (rho < rho0 and u < us).
          */
         dPcdrho = material->a*u + material->b*u/(w0*w0)*(3.0*w0-2.0) + (material->A+2.0*material->B*mu)/material->rho0;
 
         return (dPcdrho);
     } else if (u > material->us2) {
         /*
-         ** Expanded hot states (rho < rho0 and u > us2).
+         * Expanded hot states (rho < rho0 and u > us2).
          */
         dPedrho = (material->a + material->b/w0*exp(-material->beta*z*z)*(2.0*material->beta*z/eta+3.0-2.0/w0))*u+material->A/material->rho0*exp(-(material->alpha*z+material->beta*z*z))*(1.0+mu/(eta*eta)*(material->alpha+2.0*material->beta*z-eta));		
         return (dPedrho);
     } else {
         /*
-         **  Intermediate states (rho < rho0 and us < u < us2).
+         *  Intermediate states (rho < rho0 and us < u < us2).
          */
         y = (u - material->us)/(material->us2 - material->us);
 
@@ -972,11 +783,11 @@ double tilldPdrho(TILLMATERIAL *material, double rho, double u)
     }
 }
 
+/*
+ * Calculate dP/du at rho=const.
+ */
 double tilldPdu(TILLMATERIAL *material, double rho, double u)
 {
-    /*
-     ** Calculate dP/du at rho=const.
-     */
     double eta, mu;
     double dPcdu, dPedu;
     double w0, y, z;
@@ -987,24 +798,24 @@ double tilldPdu(TILLMATERIAL *material, double rho, double u)
     w0 = u/(material->u0*eta*eta)+1.0;
 
     /*
-     **  Here we evaluate, which part of the equation of state we need.
+     *  Here we evaluate, which part of the equation of state we need.
      */
     if (rho >= material->rho0 || u < material->us) {
         /*
-         ** Condensed (rho > rho0) or cold expanded states (rho < rho0 and u < us).
+         * Condensed (rho > rho0) or cold expanded states (rho < rho0 and u < us).
          */
         dPcdu = material->a*rho + material->b*rho/(w0*w0);
 
         return (dPcdu);
     } else if (u > material->us2) {
         /*
-         ** Expanded hot states (rho < rho0 and u > us2).
+         * Expanded hot states (rho < rho0 and u > us2).
          */
         dPedu = (material->a + material->b/(w0*w0)*exp(-material->beta*z*z))*rho;		
         return (dPedu);
     } else {
         /*
-         ** Intermediate states (rho < rho0 and us < u < us2).
+         * Intermediate states (rho < rho0 and us < u < us2).
          */
         y = (u - material->us)/(material->us2 - material->us);
 
@@ -1018,17 +829,17 @@ double tilldPdu(TILLMATERIAL *material, double rho, double u)
 double tilldTdrho(TILLMATERIAL *material, double rho, double u)
 {
     /*
-     ** Calculate dT/drho at u=const.
+     * Calculate dT/drho at u=const.
      */
     assert(material->cv > 0.0);
     return (-1.0/material->cv*tillPressure(material,rho,tillColdULookup(material,rho))*(rho*rho));
 }
 
+/*
+ * Calculate dT/du at rho=const.
+ */
 double tilldTdu(TILLMATERIAL *material, double rho, double u)
 {
-    /*
-     ** Calculate dT/du at rho=const.
-     */
 
     assert(material->cv > 0.0);
     return (-1.0/material->cv);
@@ -1040,34 +851,39 @@ double tillPressureRhoU(TILLMATERIAL material, double rho, double u)
     assert(0);
 }
 
+/*
+ * Calculate T(rho,u) for a material. As an approximation
+ * we use u(rho,T) = uc(rho) + cv*T.
+ */
 double tillTempRhoU(TILLMATERIAL *material, double rho, double u)
 {
-    /*
-     ** Calculate T(rho,u) for a material. As an approximation
-     ** we use u(rho,T) = uc(rho) + cv*T.
-     */
+
     assert(material->cv > 0.0);
     return ((u-tillColdULookup(material,rho))/material->cv);
 }
 
+/*
+ * Calculate T(rho,P) for a material.
+ */
 double tillTempRhoP(TILLMATERIAL *material, double rho, double P)
 {
-    /* Calculate T(rho,P) for a material */
     assert(0);
 }
 
+/*
+ * Calculate u(rho,T) for a material.
+ */
 double tillURhoTemp(TILLMATERIAL *material, double rho, double T)
 {
-    /* Calculate u(rho,T) for a material */
     return(tillColdULookup(material, rho) + material->cv*T);
 }
 
+/* 
+ * Calculate rho(P,T) for a material. Because thermodynamical consistency requires
+ * (dP/drho)_T > 0 this should always work except where we do the pressure cutoff.
+ */
 double tillRhoPTemp(TILLMATERIAL *material, double P, double T)
 {
-    /* 
-     * Calculate rho(P,T) for a material. Because thermodynamical consistency requires
-     * (dP/drho)_T > 0 this should always work except where we do the pressure cutoff.
-     */
     double a, ua, Pa, b, ub, Pb, c, uc, Pc;
 
     Pc = 0.0;
@@ -1111,15 +927,9 @@ double tillRhoPTemp(TILLMATERIAL *material, double P, double T)
          * related values in tillInitLookup().
          */
         material->rhomax *= 2.0;
-        
-        /* Set drho so that rho0 lies on the grid. */
-        material->n = floor((material->rho0-material->rhomin)/(material->rhomax-material->rhomin)*material->nTableRho);
-        material->drho =  (material->rho0-material->rhomin)/material->n;
-
-        /* Set the actual rhomax. */ 
-        material->rhomax = material->drho*(material->nTableRho-1);
-        
-        tillInitLookup(material);
+         
+        /// CR: This code is still not wporking properly. Currently rhomax and vmax have to be set properly.
+        tillInitLookup(material, material->nTableRho, material->nTableV, material->rhomin, material->rhomax, material->vmax);
 
 #ifdef TILL_VERBOSE
         fprintf(stderr, "tillRhoPTemp: P > Pb, expanding lookup table (P= %g, Pb= %g, b= %g).\n", P, Pb, b);
@@ -1168,19 +978,15 @@ double tillRhoPTemp(TILLMATERIAL *material, double P, double T)
     return c;
 }
 
+/*
+ * Calculate sound speed for a material.
+ */
 double tillSoundSpeed(TILLMATERIAL *material, double rho, double u)
 {
-    /* Calculate sound speed for a material */
     double c;
 
     tillPressureSound(material, rho, u, &c);
     return (c);
-}
-
-double tillDensRatio(TILLMATERIAL material1, TILLMATERIAL material2, double P, double T)
-{
-    /* From Woolfson 2007 */
-    assert(0);
 }
 
 /* 
@@ -1236,6 +1042,12 @@ double tillRhoPU(TILLMATERIAL *material, double P, double u)
     return (c);
 }
 
+/*
+ * Calculate the derivative of u with respect to rho.
+ *
+ * du/drho = P/rho^2
+ *
+ */
 double tilldudrho(TILLMATERIAL *material, double rho, double u)
 {
     return (tillPressure(material,rho,u)/(rho*rho));
@@ -1253,19 +1065,19 @@ double tilldudlogrho(TILLMATERIAL *material, double logrho, double u)
     return (tillPressure(material,rho,u)/(rho));
 }
 
+/*
+ * Given rho1, u1 (material 1) solve for rho2, u2 (material 2) at the interface between two material.
+ *
+ * The b.c. are:
+ *
+ * P1(rho1,u1)=P2(rho2,u2) and T1(rho1,u1)=T2(rho2,u2)
+ *
+ * Since P = P(rho, T) and T1=T2 we solve for P2(rho2)-P1=0.
+ *
+ * Returns 0 if successful or -1 if not.
+ */
 int tillSolveBC(TILLMATERIAL *mat1, TILLMATERIAL *mat2, double rho1, double u1, double *prho2, double *pu2)
 {
-    /*
-     * Given rho1, u1 (material 1) solve for rho2, u2 (material 2) at the interface between two material.
-     *
-     * The b.c. are:
-     *
-     * P1(rho1,u1)=P2(rho2,u2) and T1(rho1,u1)=T2(rho2,u2)
-     *
-     * Since P = P(rho, T) and T1=T2 we solve for P2(rho2)-P1=0.
-     *
-     * Returns 0 if successful or -1 if not.
-     */
     double P, T;
     double a, ua, Pa, b, ub, Pb, c, uc, Pc;
     int iRet;
