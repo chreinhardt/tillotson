@@ -67,8 +67,6 @@ void tillInitLookup(TILLMATERIAL *material)
     assert(material->Lookup != NULL);
 
 	v = 0.0;
-	// (CR) There was a bug before. We need dv=vmax/(nTableMax-1).
-	//dv = material->vmax/(material->nTableMax-1);
 	dv = material->dv;
 
 	fprintf(stderr,"tillInitLookup: Solving ODEs.\n");
@@ -78,12 +76,8 @@ void tillInitLookup(TILLMATERIAL *material)
      */
 	for (j=0; j<material->nTableV; j++)
 	{
-//        fprintf(stderr,"tillInitLookup: v= %g.\n", v);
-
 		isentrope = tillSolveIsentropeLogRho(material,v);
 		
-//        fprintf(stderr,"tillInitLookup: Copy data (v= %g).\n", v);
-
 		/* Copy one row to the look up table. This is of course not efficient at all. */
 		for (i=0; i<material->nTableRho; i++)
 		{
