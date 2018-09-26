@@ -927,15 +927,9 @@ double tillRhoPTemp(TILLMATERIAL *material, double P, double T)
          * related values in tillInitLookup().
          */
         material->rhomax *= 2.0;
-        
-        /* Set drho so that rho0 lies on the grid. */
-        material->n = floor((material->rho0-material->rhomin)/(material->rhomax-material->rhomin)*material->nTableRho);
-        material->drho =  (material->rho0-material->rhomin)/material->n;
-
-        /* Set the actual rhomax. */ 
-        material->rhomax = material->drho*(material->nTableRho-1);
-        
-        tillInitLookup(material);
+         
+        /// CR: This code is still not wporking properly. Currently rhomax and vmax have to be set properly.
+        tillInitLookup(material, material->nTableRho, material->nTableV, material->rhomin, material->rhomax, material->vmax);
 
 #ifdef TILL_VERBOSE
         fprintf(stderr, "tillRhoPTemp: P > Pb, expanding lookup table (P= %g, Pb= %g, b= %g).\n", P, Pb, b);
