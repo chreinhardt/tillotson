@@ -755,53 +755,6 @@ double tillSplineIntrho(TILLMATERIAL *material, double rho, int iv)
 }
 #endif
 
-#if 0
-/// CR: Joachims bicubic interpolator using rho as a variable.
-/*
- * Do a bicubic spline interpolation in logrho and v.
- *
- * u[0] = u(v,0)
- * u[1] = u(v,1)
- * dudrho[0] = dudrho(v,0)
- * dudrho[1] = dudrho(v,1)
- * dudv[0] = dudv(v,0)
- * dudv[1] = dudv(v,1)
- * dudvdrho[0] = dudvdrho(v,0)
- * dudvdrho[1] = dudvdrho(v,1)
- *
- * Where v is interpolated between vj and vj+1 using a cubic spline.
- */
-void cubicint(double u[2],double dudrho[2], double dudv[2], double dudvdrho[2], double rho[2], double rhoint, double *intvalues) {
-	double dx, e, e1;
-	double *ce;
-	
-	assert(intvalues != NULL);
-
-	/* Allocate memory */
-	ce = malloc(4*sizeof(double));
-	assert(ce != NULL);
-
-	dx = rho[1] - rho[0];
-	e = (rhoint - rho[0])/dx;
-	e1 = e - 1;
-
-	// these are the 4 Hermite functions
-	ce[0] = (2*e + 1)*e1*e1;
-	ce[1] = e*e1*e1;
-	ce[2] = e*e*(3 - 2*e);
-	ce[3] = e*e*e1;
-
-	/*
-	**    = ce[0]*u(v,0) + ce[1]*dudrho(v,0)*dx + ce[2]*u(v,1) + ce[3]*dudrho(v,1);
-	** the above is written as 4 independent spline lookups in the table v lies between some j and j+1
-	*/
-	intvalues[0] = (ce[0]*u[0] + ce[1]*dudrho[0]*dx + ce[2]*u[1] + ce[3]*dudrho[1]*dx);
-	intvalues[1] = (ce[0]*dudv[0] + ce[1]*dudvdrho[0]*dx + ce[2]*dudv[1] + ce[3]*dudvdrho[1]*dx);
-	
-	// free memory
-	free(ce);
-}
-#endif
 /*
  * Do a bicubic spline interpolation in logrho and v.
  *
@@ -956,9 +909,8 @@ double tillFindEntropyCurve(TILLMATERIAL *material,double rho,double u,int iOrde
 	double tol=1e-6;
     double v_eps = V_EPS;
     
-    /// CR: Why 0 < v <= vmax-dv????? We want v < vmax
+    /* Note that using vmax rather than vmax-eps can cause an error in the brent root finder. */
 	return brent(denergy,material,0.0,material->vmax-v_eps,rho,u,tol,iOrder);
-//	return brent(denergy,material,0.0,material->vmax-material->dv,rho,u,tol,iOrder);
 }
 
 double tillLookupU(TILLMATERIAL *material, double rho1, double u1, double rho2, int iOrder)
@@ -1023,12 +975,7 @@ double tillColdULookup(TILLMATERIAL *material, double rho)
         assert(0);
     }
 
-	// iv = 0 corresponds to the cold curve
-
-    //// CR: Needs to be changed for logrho.
-//	return(tillCubicIntRho(material, rho, 0));
     return tillCubicInt(material, rho, 0.0);
-//    assert(0);
 }
 
 /*
@@ -1054,7 +1001,7 @@ int tillLookupIndexRho(TILLMATERIAL *material, double rho)
 /*
  * Return the index i, so that log(rho_i) and log(rho_i+1) bracket log(rho) in the lookup table.
  *
- * Note: The index of rho(i) is i-1. Since the value of rho is still bracketed by i and i+1 this
+ * Note: The index of rho(i) is i-1. Since the value of rho is still bracketed by i-1 and i this
  *       should be fine.
  */
 int tillLookupIndexLogRho(TILLMATERIAL *material, double logrho)
