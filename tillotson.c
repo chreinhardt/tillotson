@@ -280,10 +280,7 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
         material->rhomin = 0.0;
         material->n = 0;
         /* rhomax is set already. */
-#if 0
-        material->drho =  material->rhomax/(material->nTableRho-1);
-#endif
-        material->drho =  material->rhomax/(material->nTableRho-1);
+        material->dlogrho = 0.0;
     } else {
         /* Set rhomin */
         material->rhomin = TILL_RHO_MIN;
