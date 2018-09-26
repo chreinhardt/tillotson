@@ -38,7 +38,7 @@
  * Convert quantities to code units
  * The memory for the look up table is allocated in tillInitLookup()
  */
-TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit, int nTableRho, int nTableV, double rhomax, double vmax, int iExpV)
+TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit, int nTableRho, int nTableV, double rhomax, double vmax)
 {
     const double KBOLTZ = 1.38e-16;      /* bolzman constant in cgs */
     const double MHYDR = 1.67e-24;       /* mass of hydrogen atom in grams */
@@ -322,15 +322,6 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit,
 
     /* This is the same for all materials. */
     material->dv = material->vmax/(material->nTableV-1);
-
-    // (CR) set vmax to rhomax just to check if dv = drho = delta works. */
-    // material->vmax = material->rhomax;
-
-    // (CR) 15.11.15: try non uniform steps in v
-    // But careful: material->n is used to integrate the isentropes
-    //	material->n = 5;
-    material->iExpV = iExpV;
-    // (CR) 15.11.15: Change this back later
 
     return material;
 }
