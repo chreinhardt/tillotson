@@ -426,6 +426,8 @@ int tillIsInTable(TILLMATERIAL *material, double rho, double u)
 {
     double logrho;
     double v_eps = V_EPS;
+    double u1, u2;
+    double A;
     int i;
 
 	/* Check if rho <= rhomin or rho >= rhomax */
@@ -450,9 +452,18 @@ int tillIsInTable(TILLMATERIAL *material, double rho, double u)
 	i = tillLookupIndexLogRho(material, log(rho));
 	assert(i >= 0 && i < material->nTableRho-1);
 
-    /* Check if v(rho, u) < v_max. This requires interpolation. */
-    if ((u < tillSplineIntU(material, material->vmax-v_eps, i)) &&
-        (u < tillSplineIntU(material, material->vmax-v_eps, i+1)))
+    /* 
+     * Check if v(rho, u) < v_max. This requires interpolation. Currently we do a linear
+     * interpolation between u(i,N-1) and u(i+1,N-1) to obtain umax(rho). There are certainly more
+     * sophisticated methods but this one should be quick and realiable.
+     */
+    u1 = tillSplineIntU(material, material->vmax-v_eps, i);
+    u2 = tillSplineIntU(material, material->vmax-v_eps, i+1);
+
+    A = (tillLookupRho(i+1)-rho)/(tillLookupRho(i+1)-tillLookupRho(i));
+    assert(A >= 0.0);
+
+    if (u < (A*u1 + (1.0-A)*u2))
     {
         /* Check if v(rho, u) > v_0 (so if u > u(rho, 0)). */
         if ((u > material->Lookup[TILL_INDEX(i,0)].u) && (u > material->Lookup[TILL_INDEX(i+1,0)].u))
