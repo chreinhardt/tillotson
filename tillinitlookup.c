@@ -460,7 +460,7 @@ int tillIsInTable(TILLMATERIAL *material, double rho, double u)
     u1 = tillSplineIntU(material, material->vmax-v_eps, i);
     u2 = tillSplineIntU(material, material->vmax-v_eps, i+1);
 
-    A = (tillLookupRho(i+1)-rho)/(tillLookupRho(i+1)-tillLookupRho(i));
+    A = (tillLookupRho(material, i+1)-rho)/(tillLookupRho(material, i+1)-tillLookupRho(material, i));
     assert(A >= 0.0);
 
     if (u < (A*u1 + (1.0-A)*u2))
