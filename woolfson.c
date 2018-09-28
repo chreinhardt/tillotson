@@ -120,12 +120,10 @@ WOOLFSON_COEFF_TABLE* InitWoolfsonCoeffTable(TILLMATERIAL *Mat1, TILLMATERIAL *M
 
     // Make sure the EOS is initialized.
     assert(Mat1 != NULL);
-    if (Mat1->Lookup == NULL)
-        tillInitLookup(Mat1);
-
+    assert(Mat1->Lookup != NULL);
+    
     assert(Mat2 != NULL);
-    if (Mat2->Lookup == NULL)
-        tillInitLookup(Mat2);
+    assert(Mat2->Lookup != NULL);
 
     // Allocate nP x nT table
     table->Lookup = CoeffMatrixAlloc(nP, nT);
