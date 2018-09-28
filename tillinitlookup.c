@@ -447,7 +447,7 @@ int tillIsInTable(TILLMATERIAL *material, double rho, double u)
      * CR: Note that if rho lies on a grid point this can be problematic as, e.g., rho_i can either
      *     be in the interval [i-1, i] or [i, i+1] which is rare cases affects wether or not a
      *     a point close to vmax is in the table. Tests however show, that even if it fails (is in
-     *     the table when it should not be) the brent rootfinder still works
+     *     the table when it should not be) the brent rootfinder still works.
      */
 	i = tillLookupIndexLogRho(material, log(rho));
 	assert(i >= 0 && i < material->nTableRho-1);
@@ -466,7 +466,7 @@ int tillIsInTable(TILLMATERIAL *material, double rho, double u)
     if (u < (A*u1 + (1.0-A)*u2))
     {
         /* Check if v(rho, u) > v_0 (so if u > u(rho, 0)). */
-        if ((u > material->Lookup[TILL_INDEX(i,0)].u) && (u > material->Lookup[TILL_INDEX(i+1,0)].u))
+        if ((u > tillCubicInt(material, rho, 0.0)))
         {
             /* u(rho, v) is definitely inside of the lookup table. */
             return TILL_LOOKUP_SUCCESS;
