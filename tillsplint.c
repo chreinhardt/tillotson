@@ -457,7 +457,7 @@ double tillLookupU(TILLMATERIAL *material, double rho1, double u1, double rho2, 
 	} else {
         /* Do direct integration unless the value is below the cold curve. */
 #ifdef TILL_VERBOSE
-		fprintf(stderr,"tillLookupU: values outside of look up table, doing direct integration (Error: %i).\n", iRet);
+		fprintf(stderr,"tillLookupU: value (%g, %g) outside of look up table, doing direct integration (Error: %i).\n", rho, u, iRet);
 #endif
         assert(iRet != TILL_LOOKUP_OUTSIDE_VMIN);
 		u = tillCalcU(material, rho1, u1, rho2);
