@@ -46,6 +46,7 @@ data = loadtxt('lookup.txt')
 
 # Load data points
 data2 = loadtxt('testisintable.txt')
+data3 = loadtxt('testisintable2.txt')
 
 rho = data2[:,0]
 u = data2[:,1]
@@ -54,7 +55,7 @@ u = data2[:,1]
 for i in range(1,size(data[:,0]),1):
 		plot(data[:,0],data[:,i],'-',color='red',markersize=1,label='Table')
 
-scatter(rho, u, s=16,color='blue')
+scatter(rho, u, s=16, color='blue')
 
 
 xmax = 25
@@ -67,5 +68,33 @@ xlabel('Density')
 ylabel('Internal energy')
 
 savefig('testisintable.png', dpi=300, bbox_inches='tight')
+
+figg = gcf()
+
+fig.clear()
+
+rho = data3[:,0]
+u = data3[:,1]
+error = data3[:,2]
+
+# Plot the lookup table
+for i in range(1,size(data[:,0]),1):
+		plot(data[:,0],data[:,i],'-',color='red',markersize=1,label='Table')
+
+scatter(rho, u, s=16, c=error, linewidth=0)
+
+colorbar()
+
+xmax = 25
+ymax = 25
+#xlim(0,xmax)
+#ylim(0,ymax)
+
+#title('The Tillotson equation of state')
+xlabel('Density')
+ylabel('Internal energy')
+
+savefig('testisintable2.png', dpi=300, bbox_inches='tight')
+
 show()
 
