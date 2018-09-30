@@ -32,6 +32,7 @@ void main(int argc, char **argv) {
     int nTableV = 100;
     double rho, v, u;
     double umax;
+    double rho2, u2;
     char ErrorString[256]; 
     int iRet;
     FILE *fp = NULL;
@@ -89,7 +90,7 @@ void main(int argc, char **argv) {
      */
     fp = fopen("testisintable2.txt", "w");
     assert(fp != NULL);
-
+#if 0
     /* First do the cold curve. */
     v = 0.0;
 
@@ -108,32 +109,90 @@ void main(int argc, char **argv) {
 */
                 iRet = tillIsInTable(tillMat, rho, u);
 
-#if 0
                 if (iRet != TILL_LOOKUP_SUCCESS)
                 {
                     tillErrorString(iRet, ErrorString);
-                    fprintf(stderr,"i= %i j= %i: rho=%15.7E, u=%15.7E (v= %15.7E) not in table (Error %s)!\n", i, j, rho, u, v, ErrorString);
-
+                    fprintf(stderr,"i= %i: rho=%15.7E, u=%15.7E (v= %15.7E) not in table (Error %s)!\n", i, rho, u, v, ErrorString);
+#if 0
                     fprintf(stderr, "Calling tillLookupU.\n");
                     fprintf(stderr, "rho1= %g u1= %g rho2= %g ", rho, u, tillMat->rhomin*exp((i + 0.5)*tillMat->dlogrho));
                     u = tillLookupU(tillMat, rho, u, tillMat->rhomin*exp((i + 0.5)*tillMat->dlogrho), 0);
                     fprintf(stderr, "u2= %g\n", u);
-
+#endif
                     //			fprintf(fp, "%15.7E %15.7E\n", rho, u);
                 } else {
-                    fprintf(stderr, "i= %i j= %i: rho=%15.7E, u=%15.7E (v= %15.7E) is in table.\n", i, j, rho, u, v);
+                    /* Test if tillLookupU() really works. */
+                    rho2 = tillMat->rhomin*exp((i + 0.02*j)*tillMat->dlogrho);
+                    fprintf(stderr, "i= %i: rho=%15.7E, u=%15.7E (v= %15.7E) is in table.\n", i, rho, u, v);
                     fprintf(stderr, "Calling tillLookupU.\n");
-                    fprintf(stderr, "rho1= %g u1= %g rho2= %g ", rho, u, tillMat->rhomin*exp((i + 0.5)*tillMat->dlogrho));
-                    u = tillLookupU(tillMat, rho, u, tillMat->rhomin*exp((i + 0.5)*tillMat->dlogrho), 0);
+                    fprintf(stderr, "rho1= %g u1= %g rho2= %g ", rho, u, rho2);
+                    u = tillLookupU(tillMat, rho, u, rho2, 0);
                     fprintf(stderr, "u2= %g\n", u);
-                    assert(0);
+//                    assert(0);
                 }
-#endif
+                
                 fprintf(fp, "%15.7E%15.7E%2i\n", rho, u, iRet);
             }
         }
         v += 1e-2/(100-1);
     }
+#endif
+    /* Now vmax (note that tillCubicInt fails if v==vmax). */
+    v = tillMat->vmax-1e-9;
+    //v = tillMat->vmax-0.99999*tillMat->dv;
+
+#if 0
+    fprintf(stderr, "Checking v==vmax (v= %15.7E, vmax= %15.7E, dv= %15.7E).\n", v, tillMat->vmax,
+            tillMat->dv);
+    fprintf(stderr, "v_N-1= %15.7E v_N-2 %15.7E dv= %g\n", tillLookupV(tillMat, tillMat->nTableV-1), 
+            tillLookupV(tillMat, tillMat->nTableV-2), tillLookupV(tillMat, tillMat->nTableV-1)-tillLookupV(tillMat, tillMat->nTableV-2));
+    fprintf(stderr, "delta_v = %15.7E (dv= %g)\n", tillMat->vmax-v, 0.99999*tillMat->dv);
+#endif
+    while (v > tillMat->vmax-tillMat->dv)
+    {
+        fprintf(stderr, "v= %15.7E\n", v);
+        for (i=0; i<tillMat->nTableRho-1; i+=1)
+        {
+            for (j=0; j<100; j++)
+            {
+                rho = tillMat->rhomin*exp((i+0.01*j)*tillMat->dlogrho);
+                u = tillCubicInt(tillMat, rho, v);
+/*
+                fprintf(stderr, "\n");
+                fprintf(stderr,"i= %i: Testing rho=%g, u=%g (v= %g)! Rho: index= %g = %i\n", i, rho, u, v, (log(rho)-log(tillMat->rhomin))/tillMat->dlogrho, (int) floor((log(rho)-log(tillMat->rhomin))/tillMat->dlogrho));
+*/
+                iRet = tillIsInTable(tillMat, rho, u);
+
+                if (iRet != TILL_LOOKUP_SUCCESS)
+                {
+                    tillErrorString(iRet, ErrorString);
+                    fprintf(stderr,"i= %i: rho=%15.7E, u=%15.7E (v= %15.7E) not in table (Error %s)!\n", i, rho, u, v, ErrorString);
+#if 0
+                    fprintf(stderr, "Calling tillLookupU.\n");
+                    fprintf(stderr, "rho1= %g u1= %g rho2= %g ", rho, u, tillMat->rhomin*exp((i + 0.5)*tillMat->dlogrho));
+                    u = tillLookupU(tillMat, rho, u, tillMat->rhomin*exp((i + 0.5)*tillMat->dlogrho), 0);
+                    fprintf(stderr, "u2= %g\n", u);
+#endif
+                    //			fprintf(fp, "%15.7E %15.7E\n", rho, u);
+                } else {
+                    /* Test if tillLookupU() really works. */
+//#if 0
+                    rho2 = tillMat->rhomin*exp((i + 0.02*j)*tillMat->dlogrho);
+                    fprintf(stderr, "i= %i: rho=%15.7E, u=%15.7E (v= %15.7E) is in table.\n", i, rho, u, v);
+                    fprintf(stderr, "Calling tillLookupU.\n");
+                    fprintf(stderr, "rho1= %g u1= %g rho2= %g ", rho, u, rho2);
+                    u2 = tillLookupU(tillMat, rho, u, rho2, 0);
+                    fprintf(stderr, "u2= %g\n", u2);
+//#endif
+                }
+                
+                fprintf(fp, "%15.7E%15.7E%2i\n", rho, u, iRet);
+            }
+        }
+        v  -= tillMat->dv/(100-1);
+    }
+
+
     fclose(fp);
 
 #if 0
