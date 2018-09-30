@@ -425,13 +425,13 @@ double tillCalcU(TILLMATERIAL *material, double rho1, double u1, double rho2)
 int tillIsInTable(TILLMATERIAL *material, double rho, double u)
 {
     double logrho;
-    double v_eps = V_EPS;
+    double v_eps = 0.001*material->dv;
     double u1, u2;
     double A;
     int i;
 
-	/* Check if rho <= rhomin or rho >= rhomax */
-	if (rho <= material->rhomin)
+	/* Check if rho < rhomin or rho >= rhomax */
+	if (rho < material->rhomin)
 	{
 		return TILL_LOOKUP_OUTSIDE_RHOMIN;
 	}
@@ -446,7 +446,7 @@ int tillIsInTable(TILLMATERIAL *material, double rho, double u)
      * 
      * CR: Note that if rho lies on a grid point this can be problematic as, e.g., rho_i can either
      *     be in the interval [i-1, i] or [i, i+1] which is rare cases affects wether or not a
-     *     a point close to vmax is in the table. Tests however show, that even if it fails (is in
+     *     point close to vmax is in the table. Tests however show, that even if it fails (is in
      *     the table when it should not be) the brent rootfinder still works.
      */
 	i = tillLookupIndexLogRho(material, log(rho));
@@ -455,7 +455,9 @@ int tillIsInTable(TILLMATERIAL *material, double rho, double u)
     /* 
      * Check if v(rho, u) < v_max. This requires interpolation. Currently we do a linear
      * interpolation between u(i,N-1) and u(i+1,N-1) to obtain umax(rho). There are certainly more
-     * sophisticated methods but this one should be quick and realiable.
+     * sophisticated methods but this one should be quick and realiable. Note that eps=0.001*dv as
+     * for v close to vmax rounding errors can be problematic and cause problems with the brent
+     * root finder.
      */
     u1 = tillSplineIntU(material, material->vmax-v_eps, i);
     u2 = tillSplineIntU(material, material->vmax-v_eps, i+1);
@@ -469,6 +471,16 @@ int tillIsInTable(TILLMATERIAL *material, double rho, double u)
         if ((u > tillCubicInt(material, rho, 0.0)))
         {
             /* u(rho, v) is definitely inside of the lookup table. */
+            /// CR: debug
+#if 0
+            fprintf(stderr, "\n");
+            fprintf(stderr, "rho= %15.7E u=%15.7E  A= %15.7E umax= %15.7E (i= %i rho(i)= %15.7E\n",
+                    rho, u, A, A*u1+(1.0-A)*u2, i, tillLookupRho(material, i));
+            fprintf(stderr, "rho-rho_i= %15.7E u-umax=%15.7E  u1= %15.7E u2= %15.7E\n", rho-
+                    tillLookupRho(material, i), u-(A*u1+(1.0-A)*u2), u1, u2);
+            fprintf(stderr, "u-u1= %15.7E u-u2=%15.7E\n", u-u1, u-u2);
+            fprintf(stderr, "\n");
+#endif
             return TILL_LOOKUP_SUCCESS;
         } else {
             /* u(rho, v) is below the cold curve. */
