@@ -425,7 +425,7 @@ double tillCalcU(TILLMATERIAL *material, double rho1, double u1, double rho2)
 int tillIsInTable(TILLMATERIAL *material, double rho, double u)
 {
     double logrho;
-    double v_eps = 0.001*material->dv;
+    double v_eps = 0.1*material->dv;
     double u1, u2;
     double A;
     int i;
@@ -455,7 +455,7 @@ int tillIsInTable(TILLMATERIAL *material, double rho, double u)
     /* 
      * Check if v(rho, u) < v_max. This requires interpolation. Currently we do a linear
      * interpolation between u(i,N-1) and u(i+1,N-1) to obtain umax(rho). There are certainly more
-     * sophisticated methods but this one should be quick and realiable. Note that eps=0.001*dv as
+     * sophisticated methods but this one should be quick and realiable. Note that eps=0.1*dv as
      * for v close to vmax rounding errors can be problematic and cause problems with the brent
      * root finder.
      */
