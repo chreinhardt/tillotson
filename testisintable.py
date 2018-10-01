@@ -51,9 +51,12 @@ data3 = loadtxt('testisintable2.txt')
 rho = data2[:,0]
 u = data2[:,1]
 
+# Number of isentropes
+v_n = size(data[0, :])
+
 # Plot the lookup table
-for i in range(1,size(data[:,0]),1):
-		plot(data[:,0],data[:,i],'-',color='red',markersize=1,label='Table')
+for i in range(1, v_n, 1):
+		plot(data[:,0], data[:,i], '-', color='red', markersize=1, label='Table')
 
 scatter(rho, u, s=16, color='blue')
 
@@ -78,8 +81,8 @@ u = data3[:,1]
 error = data3[:,2]
 
 # Plot the lookup table
-for i in range(1,size(data[:,0]),1):
-		plot(data[:,0],data[:,i],'-',color='red',markersize=1,label='Table')
+for i in range(1, v_n, 1):
+		plot(data[:,0], data[:,i], '-', color='red', markersize=1, label='Table')
 
 scatter(rho, u, s=16, c=error, linewidth=0)
 

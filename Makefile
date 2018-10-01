@@ -1,6 +1,6 @@
 objects = tillotson.o tillinitlookup.o tillsplint.o interpol/brent.o nr/nrcubicspline.o nr/nrutil.o
 
-exe = table pressureoldnew lookup lookup_cold testu1 testspline testsplint testnewsplint testsplint2 testsplinerho testsplintrho testsplinev testsplintv testcubicintrho testlookupucold testudrho testudv testgrid testpolyv printderiv printpress pressneg testisintable testisbelowcoldcurve testrhomin testoutofbounds testsolvebc calcisentrope testrhoptemp calcpressure testdirectintegration testpoverrho2 testeospressure testtillpressure testtillrhopu tillpressrhotemp
+exe = table pressureoldnew lookup lookup_cold testu1 testspline testsplint testnewsplint testsplint2 testsplinerho testsplintrho testsplinev testsplintv testcubicintrho testlookupucold testudrho testudv testgrid testpolyv printderiv printpress pressneg testisintable testisbelowcoldcurve testrhomin testoutofbounds testsolvebc calcisentrope testrhoptemp tillcalcpressure testdirectintegration testpoverrho2 testeospressure testtillpressure testtillrhopu tillpressrhotemp
 
 #defs = -DTILL_PRESS_NP -DTILL_OUTPUT_ALL_WARNINGS -DTILL_PRESS_MELOSH
 defs = -DTILL_PRESS_NP -DTILL_OUTPUT_ALL_WARNINGS
@@ -135,8 +135,8 @@ calcisentrope: calcisentrope.o $(objects)
 testrhoptemp: testrhoptemp.o $(objects)
 	cc -o testrhoptemp testrhoptemp.o $(objects) -lm
 
-calcpressure: calcpressure.o $(objects)
-	cc -o calcpressure calcpressure.o $(objects) -lm
+tillcalcpressure: tillcalcpressure.o $(objects)
+	cc -o tillcalcpressure tillcalcpressure.o $(objects) -lm
 
 # Code to test the direct integration tillCalcU().
 testdirectintegration: testdirectintegration.o $(objects)
