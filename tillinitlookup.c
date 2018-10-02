@@ -468,7 +468,7 @@ int tillIsInTable(TILLMATERIAL *material, double rho, double u)
     if (u < (A*u1 + (1.0-A)*u2))
     {
         /* Check if v(rho, u) > v_0 (so if u > u(rho, 0)). */
-        if ((u > tillCubicInt(material, rho, 0.0)))
+        if ((u >= tillCubicInt(material, rho, 0.0)))
         {
             /* u(rho, v) is definitely inside of the lookup table. */
             /// CR: debug
@@ -510,7 +510,7 @@ int tillIsBelowColdCurve(TILLMATERIAL *material,double rho,double u)
         assert(0);
     }
 
-	if (u > tillCubicInt(material, rho, 0.0))
+	if (u >= tillCubicInt(material, rho, 0.0))
 	{
 //		printf("tillIsBelowColdCurve: value (%g,%g) below the cold curve (iMat=%i)!\n",rho,u,material->iMaterial);
 		iRet = 0;
