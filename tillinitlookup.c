@@ -502,16 +502,19 @@ int tillIsBelowColdCurve(TILLMATERIAL *material,double rho,double u)
      *
      * Returns 1 (true) if (rho,u) is below the cold curve and 0 (false) if not.
 	 */
-	int iRet = 0;
+	int iRet = 1;
 
-    /// CR: This needs work!
-    fprintf(stderr, "tillIsBelowColdCurve is currently not working!\n");
-    exit(1);
+    if ((rho < material->rhomin) || (rho >= material->rhomax))
+    {
+        fprintf(stderr, "tillIsBelowColdCurve: rho= %g outside of the lookup table.\n", rho);
+        assert(0);
+    }
 
-	if (u < tillColdULookup(material, rho))
+	if (u > tillCubicInt(material, rho, 0.0))
 	{
 //		printf("tillIsBelowColdCurve: value (%g,%g) below the cold curve (iMat=%i)!\n",rho,u,material->iMaterial);
-		iRet = 1;
+		iRet = 0;
 	}
-	return(iRet);
+
+	return iRet;
 }
