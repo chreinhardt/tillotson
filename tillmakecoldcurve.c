@@ -1,5 +1,9 @@
 /*
  * Generate the cold curve u_cold(rho) for a given material.
+ *
+ * Author:   Christian Reinhardt
+ * Date:     02.12.2017
+ * Modified: 04.10.2018
  */
 #include <math.h>
 #include <stdio.h>
@@ -19,8 +23,6 @@ void main(int argc, char **argv)
 	double dMsolUnit = 4.80438e-08;
 	double rhomax = 100.0;
 	double vmax = 1200.0;
-
-//	double vmax = 28.0;
 	double rho, u;
 	int nTableRho = 1000;
 	int nTableV = 1000;
@@ -46,7 +48,7 @@ void main(int argc, char **argv)
     assert(iMat > 0);
 
 	fprintf(stderr, "Initializing material: ");
-	tillMat = tillInitMaterial(iMat, dKpcUnit, dMsolUnit, nTableRho, nTableV, rhomax, vmax, 1);
+	tillMat = tillInitMaterial(iMat, dKpcUnit, dMsolUnit);
     tilliMatString(tillMat, &MatName);
 	fprintf(stderr, "%s\n", MatName);
 #ifdef TILL_PRESS_NP
@@ -55,13 +57,14 @@ void main(int argc, char **argv)
 	fprintf(stderr,"\n");
 
 	fprintf(stderr, "Initializing the look up table...\n");
-	tillInitLookup(tillMat);
+	tillInitLookup(tillMat, nTableRho, nTableV, 1e-4, rhomax, vmax);
 	fprintf(stderr, "Done.\n");
 
 	fprintf(stderr,"\n");
-	fprintf(stderr,"rhomax: %g, vmax: %g \n", tillMat->rhomax, tillMat->vmax);
+	fprintf(stderr,"rhomin: %g rhomax: %g, vmax: %g \n", tillMat->rhomin, tillMat->rhomax,
+            tillMat->vmax);
 	fprintf(stderr,"nTableRho: %i, nTableV: %i \n", tillMat->nTableRho, tillMat->nTableV);
-	fprintf(stderr,"drho: %g, dv: %g \n", tillMat->drho, tillMat->dv);
+	fprintf(stderr,"dlogrho: %g, dv: %g \n", tillMat->dlogrho, tillMat->dv);
 	fprintf(stderr,"\n");
 
 #if 0
