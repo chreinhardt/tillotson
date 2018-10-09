@@ -3,15 +3,7 @@
  *
  * This file provides all the functions to do the density correction at the material interface
  * proposed in Woolfson (2007).
- */
-#include <stdlib.h>
-#include <math.h>
-#include <assert.h>
-#include <stdio.h>
-#include "tillotson.h"
-#include "woolfson.h"
-
-/*
+ *
  * Functions:
  *
  * Initialize/Finalize:
@@ -22,15 +14,22 @@
  *
  * CalcWoolfsonCoeff: Calculate the correction coefficients f_ij as in Woolfson (2007).
  */
+#include <stdlib.h>
+#include <math.h>
+#include <assert.h>
+#include <stdio.h>
+#include "tillotson.h"
+#include "woolfson.h"
+
+/*
+ * Calculate the coefficient
+ *
+ * f_ij := rho_mat1(P, T)/rho_mat2(P, T)
+ *
+ * needed to correct the density at a material interface.
+ */
 double CalcWoolfsonCoeff(TILLMATERIAL *mat1, TILLMATERIAL *mat2, double P, double T)
 {
-    /*
-     * Calculate the coefficient
-     *
-     * f_ij := rho_mat1(P, T)/rho_mat2(P, T)
-     *
-     * needed to correct the density at a material interface.
-     */
     double rho1;
     double rho2;
 
@@ -56,16 +55,17 @@ double CalcWoolfsonCoeff(TILLMATERIAL *mat1, TILLMATERIAL *mat2, double P, doubl
         fprintf(stderr, "Warning: Pressure is close to zero so no density correction is done.\n");
         return 1.0;
     }
+
     rho1 = eosRhoPTemp(mat1, P, T);
     rho2 = eosRhoPTemp(mat2, P, T);
 
-//    fprintf(stderr, "rho1= %g rho2= %g\n", rho1, rho2);
+    //    fprintf(stderr, "rho1= %g rho2= %g\n", rho1, rho2);
 
     // If the density is unphysical return 1 so the density is not corrected.
     if ((rho1 <= 0.0) || (rho2 <= 0.0))
     {
         fprintf(stderr, "CalcWoolfsonCoeff: unphysical density (rho1= %g, rho2= %g).\n");
-//        return 1.0;
+        //        return 1.0;
         return -1.0;
     }
 
@@ -81,16 +81,16 @@ WOOLFSON_COEFF_TABLE_ENTRY **CoeffMatrixAlloc(int nRow, int nCol)
     int i;
 
 
-	Lookup = (WOOLFSON_COEFF_TABLE_ENTRY **) calloc(nRow, sizeof(WOOLFSON_COEFF_TABLE_ENTRY*));
-	Lookup[0] = (WOOLFSON_COEFF_TABLE_ENTRY *) calloc(nRow*nCol, sizeof(WOOLFSON_COEFF_TABLE_ENTRY));
+    Lookup = (WOOLFSON_COEFF_TABLE_ENTRY **) calloc(nRow, sizeof(WOOLFSON_COEFF_TABLE_ENTRY*));
+    Lookup[0] = (WOOLFSON_COEFF_TABLE_ENTRY *) calloc(nRow*nCol, sizeof(WOOLFSON_COEFF_TABLE_ENTRY));
 
-	assert(Lookup != NULL);
+    assert(Lookup != NULL);
 
-	/* Set a pointer to each row. */
-	for (i=1; i<nRow; i++)
-	{
-		Lookup[i] = Lookup[i-1]+nCol;
-	}
+    /* Set a pointer to each row. */
+    for (i=1; i<nRow; i++)
+    {
+        Lookup[i] = Lookup[i-1]+nCol;
+    }
 
     return Lookup;
 }
@@ -99,8 +99,8 @@ WOOLFSON_COEFF_TABLE_ENTRY **CoeffMatrixAlloc(int nRow, int nCol)
  * This function does allocate memory and generate the lookup table for the coefficients.
  */
 WOOLFSON_COEFF_TABLE* InitWoolfsonCoeffTable(TILLMATERIAL *Mat1, TILLMATERIAL *Mat2, int nP,
-                                             int nT, double Pmin, double Pmax, double Tmin,
-                                             double Tmax)
+        int nT, double Pmin, double Pmax, double Tmin,
+        double Tmax)
 {
     WOOLFSON_COEFF_TABLE *table;
     double P, dP;
@@ -112,7 +112,7 @@ WOOLFSON_COEFF_TABLE* InitWoolfsonCoeffTable(TILLMATERIAL *Mat1, TILLMATERIAL *M
 
     table->nTableP = nP;
     table->nTableT = nT;
-    
+
     table->Pmin = Pmin;
     table->Pmax = Pmax;
     table->Tmin = Tmin;
@@ -121,7 +121,7 @@ WOOLFSON_COEFF_TABLE* InitWoolfsonCoeffTable(TILLMATERIAL *Mat1, TILLMATERIAL *M
     // Make sure the EOS is initialized.
     assert(Mat1 != NULL);
     assert(Mat1->Lookup != NULL);
-    
+
     assert(Mat2 != NULL);
     assert(Mat2->Lookup != NULL);
 
@@ -145,7 +145,7 @@ WOOLFSON_COEFF_TABLE* InitWoolfsonCoeffTable(TILLMATERIAL *Mat1, TILLMATERIAL *M
             table->Lookup[i][j].f = CalcWoolfsonCoeff(Mat1, Mat2, P, T);
         }
     }
-    
+
     return table;
 }
 
@@ -153,10 +153,10 @@ WOOLFSON_COEFF_TABLE* InitWoolfsonCoeffTable(TILLMATERIAL *Mat1, TILLMATERIAL *M
  * This function frees all allocated memory.
  */
 WOOLFSON_COEFF_TABLE* FinalizeWoolfsonCoeffTable(TILLMATERIAL *Mat1, TILLMATERIAL *Mat2, int nP,
-                                                 int nT, double Pmin, double Pmax, double Tmin,
-                                                 double Tmax)
+        int nT, double Pmin, double Pmax, double Tmin,
+        double Tmax)
 {
-    
+
 }
 
 /*
@@ -165,49 +165,49 @@ WOOLFSON_COEFF_TABLE* FinalizeWoolfsonCoeffTable(TILLMATERIAL *Mat1, TILLMATERIA
  */
 int WoolfsonLookupPIndex(WOOLFSON_COEFF_TABLE_ENTRY **Lookup, double P, unsigned int nRow, unsigned int iCol)
 {
-	unsigned int iLower, iUpper, i;
-	
-	iLower = 0;
-	iUpper = nRow-1;
+    unsigned int iLower, iUpper, i;
 
-	/*
-	 * Make sure that P is in the lookup table. If this is not the case return -1 or nRow.
+    iLower = 0;
+    iUpper = nRow-1;
+
+    /*
+     * Make sure that P is in the lookup table. If this is not the case return -1 or nRow.
      */
-	if (P < Lookup[iLower][iCol].P)
-	{
-		return -1;
-	} else if (P > Lookup[iUpper][iCol].P)
-	{
-		return nRow;
-	}
+    if (P < Lookup[iLower][iCol].P)
+    {
+        return -1;
+    } else if (P > Lookup[iUpper][iCol].P)
+    {
+        return nRow;
+    }
 
-	assert(Lookup[iLower][iCol].P < Lookup[iUpper][iCol].P);
-	
-	/* Do bisection. */
-	while (iUpper-iLower > 1)
-	{
-		/* Compute the midpoint. */
-		i = (iUpper + iLower) >> 1;
+    assert(Lookup[iLower][iCol].P < Lookup[iUpper][iCol].P);
 
-		if (P >= Lookup[i][iCol].P)
-		{
-			iLower = i;
-		} else {
-			iUpper = i;
-		}
-	}
-	
-	if (P == Lookup[0][iCol].P) return 0;
+    /* Do bisection. */
+    while (iUpper-iLower > 1)
+    {
+        /* Compute the midpoint. */
+        i = (iUpper + iLower) >> 1;
 
-	/* 
-	 * Return Pmax-1 as the lower index, so the desired value is always bracketed by (i,i+1).
-	 */
-	if (P == Lookup[nRow-1][iCol].P)
-	{
-			return (nRow-2);
-	}
+        if (P >= Lookup[i][iCol].P)
+        {
+            iLower = i;
+        } else {
+            iUpper = i;
+        }
+    }
 
-	return iLower;
+    if (P == Lookup[0][iCol].P) return 0;
+
+    /* 
+     * Return Pmax-1 as the lower index, so the desired value is always bracketed by (i,i+1).
+     */
+    if (P == Lookup[nRow-1][iCol].P)
+    {
+        return (nRow-2);
+    }
+
+    return iLower;
 }
 
 /*
@@ -216,49 +216,49 @@ int WoolfsonLookupPIndex(WOOLFSON_COEFF_TABLE_ENTRY **Lookup, double P, unsigned
  */
 int WoolfsonLookupTIndex(WOOLFSON_COEFF_TABLE_ENTRY **Lookup, double T, unsigned int iRow, unsigned int nCol)
 {
-	unsigned int iLower,iUpper,i;
-	
-	iLower = 0;
-	iUpper = nCol-1;
+    unsigned int iLower,iUpper,i;
 
-	/*
-	 * Make sure that T is in the lookup table. If this is not the case return -1 or nCol.
+    iLower = 0;
+    iUpper = nCol-1;
+
+    /*
+     * Make sure that T is in the lookup table. If this is not the case return -1 or nCol.
      */
-	if (T < Lookup[iRow][iLower].T)
-	{
-		return -1;
-	} else if (T > Lookup[iRow][iUpper].T)
+    if (T < Lookup[iRow][iLower].T)
     {
-		return nCol;
-	}
+        return -1;
+    } else if (T > Lookup[iRow][iUpper].T)
+    {
+        return nCol;
+    }
 
-	assert(Lookup[iRow][iLower].T < Lookup[iRow][iUpper].T);
-	
-	/* Do bisection. */
-	while (iUpper-iLower > 1)
-	{
-		/* Compute the midpoint. */
-		i = (iUpper + iLower) >> 1;
+    assert(Lookup[iRow][iLower].T < Lookup[iRow][iUpper].T);
 
-		if (T >= Lookup[iRow][i].T)
-		{
-			iLower = i;
-		} else {
-			iUpper = i;
-		}
-	}
-	
-	if (T == Lookup[iRow][0].T) return 0;
-	/* 
-	 * Return umax-1 as the lower index, so the desired value is always bracketed by (i,i+1).
-	 */
-	if (T == Lookup[iRow][nCol-1].T)
-	{
-			return (nCol-2);
-	}
+    /* Do bisection. */
+    while (iUpper-iLower > 1)
+    {
+        /* Compute the midpoint. */
+        i = (iUpper + iLower) >> 1;
 
-	printf("T= %g T(i,jmax)= %g iLower= %i T(%i, %i)= %g\n", T, Lookup[iRow][nCol-1].T, iLower, iLower, nCol-1, Lookup[iLower][nCol-1].T);
-	return iLower;
+        if (T >= Lookup[iRow][i].T)
+        {
+            iLower = i;
+        } else {
+            iUpper = i;
+        }
+    }
+
+    if (T == Lookup[iRow][0].T) return 0;
+    /* 
+     * Return umax-1 as the lower index, so the desired value is always bracketed by (i,i+1).
+     */
+    if (T == Lookup[iRow][nCol-1].T)
+    {
+        return (nCol-2);
+    }
+
+    printf("T= %g T(i,jmax)= %g iLower= %i T(%i, %i)= %g\n", T, Lookup[iRow][nCol-1].T, iLower, iLower, nCol-1, Lookup[iLower][nCol-1].T);
+    return iLower;
 }
 
 /*
@@ -274,7 +274,7 @@ double WoolfsonCoeffInterpol(WOOLFSON_COEFF_TABLE *table, double P, double T)
      */
     i = WoolfsonLookupPIndex(table->Lookup, P, table->nTableP, 0);
     printf("i=%i ",i);
-    
+
     j = WoolfsonLookupTIndex(table->Lookup, T, 0, table->nTableT);
     printf("j=%i ",j);
 
@@ -300,7 +300,7 @@ double WoolfsonCoeffInterpol(WOOLFSON_COEFF_TABLE *table, double P, double T)
     y = (table->Lookup[i][j+1].T - T)/(table->Lookup[i][j+1].T - table->Lookup[i][j].T);
 
     return (x*y*table->Lookup[i][j].f + x*(1.0-y)*table->Lookup[i][j+1].f +
-        (1.0-x)*y*table->Lookup[i+1][j].f + (1.0-x)*(1.0-y)*table->Lookup[i+1][j+1].f);
+            (1.0-x)*y*table->Lookup[i+1][j].f + (1.0-x)*(1.0-y)*table->Lookup[i+1][j+1].f);
 }
 
 int PrintWoolfsonCoeffTable(WOOLFSON_COEFF_TABLE *table)
@@ -314,7 +314,7 @@ int PrintWoolfsonCoeffTable(WOOLFSON_COEFF_TABLE *table)
     {
         for (j=0; j<table->nTableT; j++)
         {
-//            printf(" %15.7E", table->Lookup[i][j].f);
+            //            printf(" %15.7E", table->Lookup[i][j].f);
             printf(" %15.7E", table->Lookup[i][j].T);
         }
         printf("\n");
