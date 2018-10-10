@@ -48,7 +48,7 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit)
     TILLMATERIAL *material;
 	int i;
 	 
-    material = calloc(1, sizeof(TILLMATERIAL));
+    material = (TILLMATERIAL *) calloc(1, sizeof(TILLMATERIAL));
     assert(material != NULL);
 
 	material->iMaterial = iMaterial;
@@ -101,7 +101,7 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit)
             material->dConstGamma = 5.0/3.0;
             material->dMeanMolMass = 1.0;
 
-//            material->dMeanMolMass = 23.0; // 10x solar value (mu=2.3)
+            material->dMeanMolMass = 23.0; // 10x solar value (mu=2.3)
 //          material->dMeanMolMass = 11.5; // 5x solar value (mu=2.3)
 //          material->dMeanMolMass = 17.25; // 7.5x solar value (mu=2.3)
 #if 0
@@ -128,8 +128,8 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit)
              * NOTE:    Introducing the parameter b defines a maximum density
              *          and the code must assert that rho < rho_max.
              */
-//            material->b = 26.6/(material->dMeanMolMass*MHYDR*NA);
-            material->b = 0.0; 
+            material->b = 26.6/(material->dMeanMolMass*MHYDR*NA);
+//            material->b = 0.0; 
             material->a = 0.0;
             fprintf(stderr, "Modified ideal gas: b=  %g [cm^3/g]\n", material->b);
             fprintf(stderr, "Modified ideal gas: mu= %g [1/m_H]\n", material->dMeanMolMass);
@@ -586,7 +586,7 @@ double eosRhoPTemp(TILLMATERIAL *material, double P, double T)
     if (material->iMaterial == IDEALGAS)
     {
         // For the ideal gas there is an analytic expression.
-        rho = P/((material->dConstGamma-1.0)*material->cv*T);
+        rho = P/((material->dConstGamma-1.0)*material->cv*T+P*material->b);
     } else {
         // If it is a Tillotson material call tillRhoPTemp().
         rho = tillRhoPTemp(material, P, T);
