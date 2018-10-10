@@ -131,8 +131,10 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit)
             material->b = 26.6/(material->dMeanMolMass*MHYDR*NA);
 //            material->b = 0.0; 
             material->a = 0.0;
-            fprintf(stderr, "Modified ideal gas: b=  %g [cm^3/g]\n", material->b);
-            fprintf(stderr, "Modified ideal gas: mu= %g [1/m_H]\n", material->dMeanMolMass);
+#ifdef TILL_VERBOSE
+            fprintf(stderr, "tillInitMaterial: Modified ideal gas: b=  %g [cm^3/g]\n", material->b);
+            fprintf(stderr, "tillInitMaterial: Modified ideal gas: mu= %g [1/m_H]\n", material->dMeanMolMass);
+#endif
 			break;
 		case GRANITE:
 			/*
@@ -587,6 +589,10 @@ double eosRhoPTemp(TILLMATERIAL *material, double P, double T)
     {
         // For the ideal gas there is an analytic expression.
         rho = P/((material->dConstGamma-1.0)*material->cv*T+P*material->b);
+        
+        // Limit rho to 0.99*rho_min because for larger values the EOS becomes very stiff.
+        if ((material->b > 0.0) && (rho >= (1.0/material->b)*0.99))
+            rho = (1.0/material->b)*0.99;
     } else {
         // If it is a Tillotson material call tillRhoPTemp().
         rho = tillRhoPTemp(material, P, T);
