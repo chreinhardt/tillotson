@@ -13,9 +13,6 @@
 #include "tillotson.h"
 //#include "tillsplint.h"
 
-/* Header file for the Numerical Recipes routines */
-#include "nr/nrcubicspline.h"
-
 /*
  * Basic functions:
  *
