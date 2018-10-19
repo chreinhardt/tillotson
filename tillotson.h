@@ -6,10 +6,6 @@
 
 //#include "tillwoolfson.h"
 
-#include "interpol/coeff.h"
-#include "interpol/interpol.h"
-#include "nr/nrcubicspline.h"
-
 /*
  * Version.
  */
