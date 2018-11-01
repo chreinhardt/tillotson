@@ -71,6 +71,9 @@ void tillInitLookup(TILLMATERIAL *material, int nTableRho, int nTableV, double r
     /* rhomin has to be larger than zero otherwise the logarithmic spacing does not work. */
     assert(material->rhomin > 0.0 && material->rhomin < material->rhomax);
         
+    /* rhomin has to be smaller than rho0. */
+    assert(material->rhomin < material->rho0);
+
     assert(material->rhomax > 0.0);
     assert(material->vmax > 0.0);
 
