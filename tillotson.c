@@ -1097,7 +1097,9 @@ int tillSolveBC(TILLMATERIAL *mat1, TILLMATERIAL *mat2, double rho1, double u1, 
     P = tillPressure(mat1, rho1, u1);
     T = tillTempRhoU(mat1, rho1, u1);
 
-    fprintf(stderr,"modelSolveBC: P= %g, T= %g\n", P, T);
+#ifdef TILL_VERBOSE
+    fprintf(stderr, "tillSolveBC: P= %g, T= %g\n", P, T);
+#endif
 
     /*
      * We use rho1 as an upper limit for rho2 assuming that the denser component is in the inner shell.
@@ -1110,7 +1112,9 @@ int tillSolveBC(TILLMATERIAL *mat1, TILLMATERIAL *mat2, double rho1, double u1, 
     ub = tillURhoTemp(mat2, b, T);
     Pb = tillPressure(mat2, b, ub);
 
-    fprintf(stderr,"modelSolveBC: starting with a=%g ua=%g Pa=%g b=%g ub=%g Pb=%g\n",a ,ua, Pa, b, ub, Pb);
+#ifdef TILL_VERBOSE
+    fprintf(stderr,"tillSolveBC: starting with a=%g ua=%g Pa=%g b=%g ub=%g Pb=%g\n",a ,ua, Pa, b, ub, Pb);
+#endif
 
     /*
      * Assert that the root is bracketed by (a, b).
