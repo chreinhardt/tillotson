@@ -40,6 +40,9 @@ void main(int argc, char **argv)
     assert(iMat >= 0);
 
 	tillMat = tillInitMaterial(iMat, dKpcUnit, dMsolUnit);
+    
+    printf("Units:\n");
+    printf("dKpcUnit= %g dMsolUnit= %g\n", dKpcUnit, dMsolUnit);
 
     printf("\n");
     tillPrintMat(tillMat);
