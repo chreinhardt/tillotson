@@ -128,8 +128,8 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit)
              * NOTE:    Introducing the parameter b defines a maximum density
              *          and the code must assert that rho < rho_max.
              */
-            material->b = 26.6/(material->dMeanMolMass*MHYDR*NA);
-//            material->b = 0.0; 
+//            material->b = 26.6/(material->dMeanMolMass*MHYDR*NA);
+            material->b = 0.0; 
             material->a = 0.0;
 #ifdef TILL_VERBOSE
             fprintf(stderr, "tillInitMaterial: Modified ideal gas: b=  %g [cm^3/g]\n", material->b);
@@ -263,7 +263,7 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit)
     if (iMaterial == IDEALGAS)
     {
         material->b *=material->dGmPerCcUnit;
-//        fprintf(stderr, "b= %g [RE^3/Munit]\n", material->b);
+        fprintf(stderr, "b= %g [RE^3/Munit]\n", material->b);
     }
 
 #if 0
@@ -371,6 +371,8 @@ void tillPrintMat(TILLMATERIAL *material)
         fprintf(stderr,"dMeanMolMass: %g\n", material->dMeanMolMass);    
         fprintf(stderr,"rho0: %g\n", material->rho0);
         fprintf(stderr,"cv: %g\n", material->cv);
+        fprintf(stderr,"a: %g\n", material->a);
+        fprintf(stderr,"b: %g\n", material->b);
     } else {
         fprintf(stderr,"a: %g\n", material->a);
         fprintf(stderr,"b: %g\n", material->b);
