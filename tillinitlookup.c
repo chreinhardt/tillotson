@@ -506,7 +506,8 @@ int tillIsBelowColdCurve(TILLMATERIAL *material,double rho,double u)
 
     if ((rho < material->rhomin) || (rho >= material->rhomax))
     {
-        fprintf(stderr, "tillIsBelowColdCurve: rho= %g outside of the lookup table.\n", rho);
+        fprintf(stderr, "tillIsBelowColdCurve: rho= %g outside of the lookup table (iMat= %i, rhomin= %g, rhomax= %g).\n",
+                rho, material->iMat, material->rhomin, material->rhomax);
         assert(0);
     }
 
