@@ -411,7 +411,12 @@ double eosPressureSound(TILLMATERIAL *material, double rho, double u, double *pc
          *       must be treated properly or the code will crash.
          */
         if ((material->b > 0.0) && (rho >= (1.0/material->b)*0.99))
+        {
+            printf("eosPressureSound: rho= %g", rho);
             rho = (1.0/material->b)*0.99;
+            printf(" rho= %g", rho);
+            assert(0);
+        }
 
         if (pcSound != NULL)
             *pcSound = material->dConstGamma*(material->dConstGamma-1.0)*u/pow(1.0-material->b*rho, 2.0);
