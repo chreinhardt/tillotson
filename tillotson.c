@@ -410,12 +410,9 @@ double eosPressureSound(TILLMATERIAL *material, double rho, double u, double *pc
          * NOTE: For densities larger than 1/b the pressure is negative. This
          *       must be treated properly or the code will crash.
          */
-        if ((material->b > 0.0) && (rho >= (1.0/material->b)*0.99))
+        if (rho >= (1.0/material->b)*0.99)
         {
-            printf("eosPressureSound: rho= %g", rho);
             rho = (1.0/material->b)*0.99;
-            printf(" rho= %g", rho);
-            assert(0);
         }
 
         if (pcSound != NULL)
