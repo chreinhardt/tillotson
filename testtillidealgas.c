@@ -23,19 +23,16 @@
 
 void main(int argc, char **argv)
 {
-	/*
-     * Calculate P(rho, u), cs(rho,u), dPdrho(rho, u) and dPdu(rho, u) for an
-     * ideal gas from the Tillotson EOS library and compare the results to the
-     * analytic expression.
-     */
 	double dKpcUnit = 2.06701e-13;
 	double dMsolUnit = 4.80438e-08;
+    double rhomin = 1e-4;
 	double rhomax = 100.0;
     double vmax = 100.0;
 	double umax = 100.0;
+    double drho, dv;
 	double rho, rho_int, u, P, cs2, dPdrho, dPdu;
-	int nTableRho = 100;
-	int nTableV = 100;
+	int nRho = 100;
+	int nV = 100;
 
 	TILLMATERIAL *tillmat;
 	FILE *fp1 = NULL;
@@ -44,26 +41,34 @@ void main(int argc, char **argv)
 	int i = 0;
 	int j = 0;
 
+    drho = (rhomax-rhomin)/(nRho-1);
+    dv = vmax/(nV-1);
+
+    // Print version information
+    fprintf(stderr,"Tillotson EOS library version: %s\n", TILL_VERSION_TEXT);
+
 	fprintf(stderr, "Initializing material...\n");
-	tillmat = tillInitMaterial(IDEALGAS, dKpcUnit, dMsolUnit, nTableRho, nTableV, rhomax, vmax, 1);
+	tillmat = tillInitMaterial(IDEALGAS, dKpcUnit, dMsolUnit);
 	fprintf(stderr, "Done.\n");
 
 	/*
 	 * Determine P(rho, u) on a rho x u grid.
 	 */	
-	fp1 = fopen("testtillidealgas.pressure1.txt","w");
+	fp1 = fopen("testtillidealgas.pressure1.txt", "w");
 	assert(fp1 != NULL);
 
-	fp2 = fopen("testtillidealgas.pressure2.txt","w");
+	fp2 = fopen("testtillidealgas.pressure2.txt", "w");
 	assert(fp2 != NULL);
 	
 	/* Print a rho x u grid. */
-	for (i=0; i<tillmat->nTableRho; i++)
+	for (i=0; i<nRho; i++)
 	{
-		rho = i*tillmat->drho;
-		for (j=0; j<tillmat->nTableV; j++)
+		rho = rhomin + i*drho;
+
+        fprintf(stderr, "rho= %g\n", rho);
+		for (j=0; j<nV; j++)
 		{
-			u = j*tillmat->dv;
+			u = j*dv;
 
 			fprintf(fp1, " %15.7E", eosPressure(tillmat, rho, u));
 			fprintf(fp2, " %15.7E", (5.0/3.0-1.0)*rho*u);
@@ -85,12 +90,13 @@ void main(int argc, char **argv)
 	assert(fp2 != NULL);
 	
 	/* Print a rho x u grid. */
-	for (i=0; i<tillmat->nTableRho; i++)
+	for (i=0; i<nRho; i++)
 	{
-		rho = i*tillmat->drho;
-		for (j=0; j<tillmat->nTableV; j++)
+		rho = rhomin + i*drho;
+
+		for (j=0; j<nV; j++)
 		{
-			u = j*tillmat->dv;
+			u = j*dv;
             P = eosPressureSound(tillmat, rho, u, &cs2);
 			fprintf(fp1, " %15.7E", cs2);
 			fprintf(fp2, " %15.7E", (5.0/3.0)*(5.0/3.0-1.0)*u);
@@ -112,12 +118,13 @@ void main(int argc, char **argv)
 	assert(fp2 != NULL);
 	
 	/* Print a rho x u grid. */
-	for (i=0; i<tillmat->nTableRho; i++)
+	for (i=0; i<nRho; i++)
 	{
-		rho = i*tillmat->drho;
-		for (j=0; j<tillmat->nTableV; j++)
+		rho = rhomin + i*drho;
+
+		for (j=0; j<nV; j++)
 		{
-			u = j*tillmat->dv;
+			u = j*dv;
 
 			fprintf(fp1, " %15.7E", eosdPdrho(tillmat, rho, u));
 			fprintf(fp2, " %15.7E", (5.0/3.0-1.0)*u);
@@ -139,12 +146,13 @@ void main(int argc, char **argv)
 	assert(fp2 != NULL);
 	
 	/* Print a rho x u grid. */
-	for (i=0; i<tillmat->nTableRho; i++)
+	for (i=0; i<nRho; i++)
 	{
-		rho = i*tillmat->drho;
-		for (j=0; j<tillmat->nTableV; j++)
+		rho = rhomin + i*drho;
+
+		for (j=0; j<nV; j++)
 		{
-			u = j*tillmat->dv;
+			u = j*dv;
 
 			fprintf(fp1, " %15.7E", eosdPdu(tillmat, rho, u));
 			fprintf(fp2, " %15.7E", (5.0/3.0-1.0)*rho);
