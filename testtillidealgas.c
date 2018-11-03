@@ -65,7 +65,6 @@ void main(int argc, char **argv)
 	{
 		rho = rhomin + i*drho;
 
-        fprintf(stderr, "rho= %g\n", rho);
 		for (j=0; j<nV; j++)
 		{
 			u = j*dv;
