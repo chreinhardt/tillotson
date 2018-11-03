@@ -1,4 +1,4 @@
-objects = tillotson.o tillinitlookup.o tillsplint.o interpol/brent.o nr/nrcubicspline.o nr/nrutil.o
+objects = tillotson.o tillinitlookup.o tillsplint.o interpol/brent.o 
 
 exe = table pressureoldnew lookup lookup_cold testu1 testspline testsplint testnewsplint testsplint2 testsplinerho testsplintrho testsplinev testsplintv testcubicintrho testlookupucold testudrho testudv testgrid testpolyv printderiv printpress pressneg testisintable testisbelowcoldcurve testrhomin testoutofbounds testsolvebc calcisentrope testrhoptemp tillcalcpressure testdirectintegration testpoverrho2 testeospressure testtillpressure testtillrhopu tillpressrhotemp
 
