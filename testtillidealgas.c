@@ -1,5 +1,11 @@
 /*
  * This is a simple program to test the Tillotson EOS library.
+ *
+ * Author:   Christian Reinhardt
+ * Date:     05.06.2018
+ * Modified: 03.11.2018
+ *
+ * Calculate the pressure of an ideal gas using eosPressure() and compare to the analytic solution.
  */
 #include <math.h>
 #include <stdio.h>
