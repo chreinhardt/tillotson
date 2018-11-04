@@ -3,7 +3,7 @@ objects = tillotson.o tillinitlookup.o tillsplint.o interpol/brent.o
 exe = table pressureoldnew lookup lookup_cold testu1 testspline testsplint testnewsplint testsplint2 testsplinerho testsplintrho testsplinev testsplintv testcubicintrho testlookupucold testudrho testudv testgrid testpolyv printderiv printpress pressneg testisintable testisbelowcoldcurve testrhomin testoutofbounds testsolvebc calcisentrope testrhoptemp tillcalcpressure testdirectintegration testpoverrho2 testeospressure testtillpressure testtillrhopu tillpressrhotemp
 
 #defs = -DTILL_PRESS_NP -DTILL_OUTPUT_ALL_WARNINGS -DTILL_PRESS_MELOSH
-defs = -DTILL_PRESS_NP -DTILL_OUTPUT_ALL_WARNINGS
+defs = -DTILL_PRESS_NP -DTILL_OUTPUT_ALL_WARNINGS -DTILL_VERBOSE
 
 CFLAGS ?= -O3 $(defs)
 
