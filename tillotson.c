@@ -101,7 +101,7 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit)
             material->dConstGamma = 5.0/3.0;
             material->dMeanMolMass = 1.0;
 
-            material->dMeanMolMass = 23.0; // 10x solar value (mu=2.3)
+//          material->dMeanMolMass = 23.0; // 10x solar value (mu=2.3)
 //          material->dMeanMolMass = 11.5; // 5x solar value (mu=2.3)
 //          material->dMeanMolMass = 17.25; // 7.5x solar value (mu=2.3)
 #if 0
