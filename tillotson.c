@@ -128,8 +128,8 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit)
              * NOTE:    Introducing the parameter b defines a maximum density
              *          and the code must assert that rho < rho_max.
              */
-            material->b = 26.6/(material->dMeanMolMass*MHYDR*NA);
-//            material->b = 0.0; 
+//            material->b = 26.6/(material->dMeanMolMass*MHYDR*NA);
+            material->b = 0.0; 
             material->a = 0.0;
 #ifdef TILL_VERBOSE
             fprintf(stderr, "tillInitMaterial: Modified ideal gas: b=  %g [cm^3/g]\n", material->b);
