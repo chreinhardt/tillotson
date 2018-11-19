@@ -196,12 +196,15 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit)
 			material->B = 9.47e10;		/* ergs/cc */
 			material->us = 7.73e9;		/* ergs/g */
 			material->us2 = 3.04e10;	/* ergs/g */
+			material->alpha = 10.0;
+			material->beta = 5.0;
 			/*
 			 * Note that the expression for Pe provided in Benz et al. (1986) does not agree
 			 * in alpha and beta with the one provided in Melosh (1989) or Benz & Asphaug (1999).
+             * It seems that alpha and beta were switched so we use alpha=5 and beta=10.
 			 */
-			material->alpha = 10.0;
-			material->beta = 5.0;
+			material->alpha = 5.0;
+			material->beta = 10.0;
 			// Have to look up in more details?
 			material->cv = 1.0e7;		/* ergs/g K */ 
 			break;
