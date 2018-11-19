@@ -51,10 +51,9 @@ enum till_error
 #define MIN(A,B) ((A) > (B) ? (B) : (A))
 
 /* Define a minimum density for the look up table */
-#define TILL_RHO_MIN 1e-2
+#ifndef TILL_RHO_MIN
 #define TILL_RHO_MIN 1e-4
-//#define TILL_RHO_MIN 5e-1
-//#define TILL_RHO_MIN 0.0
+#endif
 
 /* Define eps so that v <= v_max-eps. */
 #define V_EPS 1e-8
