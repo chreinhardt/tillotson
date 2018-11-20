@@ -101,7 +101,7 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit)
             material->dConstGamma = 5.0/3.0;
             material->dMeanMolMass = 1.0;
 
-            material->dMeanMolMass = 23.0; // 10x solar value (mu=2.3)
+//            material->dMeanMolMass = 23.0; // 10x solar value (mu=2.3)
 //          material->dMeanMolMass = 11.5; // 5x solar value (mu=2.3)
 //          material->dMeanMolMass = 17.25; // 7.5x solar value (mu=2.3)
 #if 0
@@ -115,18 +115,18 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit)
             material->rho0 = 0.001;
 
             /*
-             * Add a finite volume to each gas particle to avoid crazy
-             * densities at large pressure but neglect self-interaction.
+             * Add a finite volume to each gas particle to avoid crazy densities at large pressure
+             * but neglect self-interaction.
              *
              * Hydrogen: b = 26.6 cm^3/mol (Wikipedia)
              *
-             * The code uses b'=b/dMeanMolarMass instead, so be careful when
-             * converting the parameter ([b] = cm^3/(g*mol)).
+             * The code uses b'=b/dMeanMolarMass instead, so be careful when converting the
+             * parameter ([b] = cm^3/(g*mol)).
              *
              * For b=0 the ideal gas EOS is obtained.
              *
-             * NOTE:    Introducing the parameter b defines a maximum density
-             *          and the code must assert that rho < rho_max.
+             * NOTE:    Introducing the parameter b defines a maximum density and the code must
+             *          assert that rho < rho_max.
              */
 //            material->b = 26.6/(material->dMeanMolMass*MHYDR*NA);
             material->b = 0.0; 
