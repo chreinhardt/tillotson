@@ -94,16 +94,17 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit)
 	{
         case IDEALGAS:
             /*
-             * Ideal gas EOS. Currently we are limited to monoatomic gases.
-             * Keep in mind that dGasConstant is not R but seems to be kb/mp
-             * (where mp is the mean particle mass) in Gasoline.
+             * Ideal gas EOS. Currently we are limited to monoatomic gases. Keep in mind that
+             * dGasConstant is not R but seems to be kb/mp (where mp is the mean particle mass) in
+             * Gasoline.
              */
             material->dConstGamma = 5.0/3.0;
             material->dMeanMolMass = 1.0;
 
-//            material->dMeanMolMass = 23.0; // 10x solar value (mu=2.3)
-//          material->dMeanMolMass = 11.5; // 5x solar value (mu=2.3)
+//          material->dMeanMolMass = 23.0;  // 10x solar value (mu=2.3)
+//          material->dMeanMolMass = 11.5;  // 5x solar value (mu=2.3)
 //          material->dMeanMolMass = 17.25; // 7.5x solar value (mu=2.3)
+//            material->dMeanMolMass = 2.3;   // solar value (mu=2.3)
 #if 0
             /*
              * This doesnt work as cv is converted to code units below.
@@ -547,11 +548,17 @@ double eosURhoP(TILLMATERIAL *material, double rho, double P)
 {
     double a, b, c, Pa, Pb, Pc;
 
+    // Use the analytic solution for the ideal gas
+    if (material->iMaterial == IDEALGAS)
+    {
+
+    }
+
     // umin = 0.0
     a = 0.0;
     Pa = eosPressure(material, rho, a);
 
-    b = material->vmax;
+    b = 100.0;
     Pb = eosPressure(material, rho, b);
 
     /*
@@ -561,6 +568,7 @@ double eosURhoP(TILLMATERIAL *material, double rho, double P)
     {
         b = 2.0*b;
         Pb = eosPressure(material, rho, b);
+        fprintf(stderr, "rho= %g P= %g: a= %g, Pa= %g, b= %g, Pb= %g\n", rho, P, a, Pa, b, Pb);
     }
 
     fprintf(stderr, "rho= %g P= %g: a= %g, Pa= %g, b= %g, Pb= %g\n", rho, P, a, Pa, b, Pb);
