@@ -46,7 +46,6 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit)
     const double KPCCM = 3.085678e21;    /* kiloparsec in centimeters */
     const double NA = 6.022e23;          /* Avogadro's number */
     TILLMATERIAL *material;
-	int i;
 	 
     material = (TILLMATERIAL *) calloc(1, sizeof(TILLMATERIAL));
     assert(material != NULL);
