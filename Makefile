@@ -138,6 +138,12 @@ testrhoptemp: testrhoptemp.o $(objects)
 tillcalcpressure: tillcalcpressure.o $(objects)
 	cc -o tillcalcpressure tillcalcpressure.o $(objects) -lm
 
+#
+# Calculate the bulk modulus for different isentropes.
+#
+tillcalcbulkmodulus: tillcalcbulkmodulus.o $(objects)
+	cc -o tillcalcbulkmodulus tillcalcbulkmodulus.o $(objects) -lm
+
 # Code to test the direct integration tillCalcU().
 testdirectintegration: testdirectintegration.o $(objects)
 	cc -o testdirectintegration testdirectintegration.o $(objects) -lm
@@ -255,6 +261,7 @@ tillpressrhotemp: tillpressrhotemp.o $(objects)
 #
 tillpressrhotemp_monotonic: tillpressrhotemp_monotonic.o $(objects)
 	cc -o tillpressrhotemp_monotonic tillpressrhotemp_monotonic.o $(objects) -lm
+
 clean:
 	rm $(objects)
 
