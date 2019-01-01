@@ -102,8 +102,10 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit)
 
 //          material->dMeanMolMass = 23.0;  // 10x solar value (mu=2.3)
 //          material->dMeanMolMass = 11.5;  // 5x solar value (mu=2.3)
+//          material->dMeanMolMass = 23.0;  // 10x solar value (mu=2.3)
+//          material->dMeanMolMass = 11.5;  // 5x solar value (mu=2.3)
 //          material->dMeanMolMass = 17.25; // 7.5x solar value (mu=2.3)
-//            material->dMeanMolMass = 2.3;   // solar value (mu=2.3)
+//          material->dMeanMolMass = 2.3;   // solar value (mu=2.3)
 #if 0
             /*
              * This doesnt work as cv is converted to code units below.
