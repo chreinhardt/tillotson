@@ -227,6 +227,12 @@ testtillcoldu: testtillcoldu.o $(objects)
 	cc -o testtillcoldu testtillcoldu.o $(objects)  -lm
 
 #
+# Calculate the cold energy for a given density.
+#
+till_calc_u_cold: till_calc_u_cold.o $(objects)
+	cc -o till_calc_u_cold till_calc_u_cold.o $(objects)  -lm
+
+#
 # Print the Tillotson EOS parameters for a material.
 #
 tillprintmat: tillprintmat.o $(objects)
