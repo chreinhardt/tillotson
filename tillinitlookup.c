@@ -488,7 +488,7 @@ int tillIsInTable(TILLMATERIAL *material, double rho, double u)
         } else {
             /* u(rho, v) is below the cold curve. */
 #ifdef TILL_VERBOSE
-            fprintf(stderr, "tillIsInTable: Value (rho=%g, u=%g) below the cold curve!\n", rho, u);
+            fprintf(stderr, "tillIsInTable: Value (rho=%15.7E, u=%15.7E, iMat= %i) below the cold curve!\n", rho, u, iMat);
 #endif
             return TILL_LOOKUP_OUTSIDE_VMIN;
         }
