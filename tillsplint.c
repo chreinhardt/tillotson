@@ -453,6 +453,16 @@ double tillLookupU(TILLMATERIAL *material, double rho1, double u1, double rho2, 
 		u = tillFindUonIsentrope(material, v, rho2);
 	} else {
         /* Do direct integration unless the value is below the cold curve. */
+        if (iRet == TILL_LOOKUP_OUTSIDE_VMIN)
+        {
+#ifdef TILL_VERBOSE
+            /// CR: We should remove any particle information here and return an error to gasoline.
+		    fprintf(stderr,"tillLookupU: Particle %i (rho=%g, u=%g, iMat=%i) is below the cold curve.\n",
+                    iOrder, rho1, u1, material->iMaterial);
+#endif
+            assert(iRet != TILL_LOOKUP_OUTSIDE_VMIN);
+        }
+
 #ifdef TILL_VERBOSE
 		fprintf(stderr,"tillLookupU: value (%g, %g, %g) outside of look up table, doing direct integration (Error: %i).\n",
                 rho1, u1, rho2, iRet);

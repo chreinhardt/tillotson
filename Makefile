@@ -3,7 +3,7 @@ objects = tillotson.o tillinitlookup.o tillsplint.o interpol/brent.o
 exe = table pressureoldnew lookup lookup_cold testu1 testspline testsplint testnewsplint testsplint2 testsplinerho testsplintrho testsplinev testsplintv testcubicintrho testlookupucold testudrho testudv testgrid testpolyv printderiv printpress pressneg testisintable testisbelowcoldcurve testrhomin testoutofbounds testsolvebc calcisentrope testrhoptemp tillcalcpressure testdirectintegration testpoverrho2 testeospressure testtillpressure testtillrhopu tillpressrhotemp
 
 #defs = -DTILL_PRESS_NP -DTILL_OUTPUT_ALL_WARNINGS -DTILL_PRESS_MELOSH
-defs = -DTILL_PRESS_NP -DTILL_OUTPUT_ALL_WARNINGS
+defs = -DTILL_PRESS_NP -DTILL_OUTPUT_ALL_WARNINGS -DTILL_VERBOSE
 
 CFLAGS ?= -O3 $(defs)
 
@@ -138,6 +138,12 @@ testrhoptemp: testrhoptemp.o $(objects)
 tillcalcpressure: tillcalcpressure.o $(objects)
 	cc -o tillcalcpressure tillcalcpressure.o $(objects) -lm
 
+#
+# Calculate the bulk modulus for different isentropes.
+#
+tillcalcbulkmodulus: tillcalcbulkmodulus.o $(objects)
+	cc -o tillcalcbulkmodulus tillcalcbulkmodulus.o $(objects) -lm
+
 # Code to test the direct integration tillCalcU().
 testdirectintegration: testdirectintegration.o $(objects)
 	cc -o testdirectintegration testdirectintegration.o $(objects) -lm
@@ -221,6 +227,12 @@ testtillcoldu: testtillcoldu.o $(objects)
 	cc -o testtillcoldu testtillcoldu.o $(objects)  -lm
 
 #
+# Calculate the cold energy for a given density.
+#
+till_calc_u_cold: till_calc_u_cold.o $(objects)
+	cc -o till_calc_u_cold till_calc_u_cold.o $(objects)  -lm
+
+#
 # Print the Tillotson EOS parameters for a material.
 #
 tillprintmat: tillprintmat.o $(objects)
@@ -255,6 +267,7 @@ tillpressrhotemp: tillpressrhotemp.o $(objects)
 #
 tillpressrhotemp_monotonic: tillpressrhotemp_monotonic.o $(objects)
 	cc -o tillpressrhotemp_monotonic tillpressrhotemp_monotonic.o $(objects) -lm
+
 clean:
 	rm $(objects)
 

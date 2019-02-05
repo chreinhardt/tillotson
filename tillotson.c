@@ -46,7 +46,6 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit)
     const double KPCCM = 3.085678e21;    /* kiloparsec in centimeters */
     const double NA = 6.022e23;          /* Avogadro's number */
     TILLMATERIAL *material;
-	int i;
 	 
     material = (TILLMATERIAL *) calloc(1, sizeof(TILLMATERIAL));
     assert(material != NULL);
@@ -94,16 +93,18 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit)
 	{
         case IDEALGAS:
             /*
-             * Ideal gas EOS. Currently we are limited to monoatomic gases.
-             * Keep in mind that dGasConstant is not R but seems to be kb/mp
-             * (where mp is the mean particle mass) in Gasoline.
+             * Ideal gas EOS. Currently we are limited to monoatomic gases. Keep in mind that
+             * dGasConstant is not R but seems to be kb/mp (where mp is the mean particle mass) in
+             * Gasoline.
              */
             material->dConstGamma = 5.0/3.0;
             material->dMeanMolMass = 1.0;
 
 //          material->dMeanMolMass = 23.0; // 10x solar value (mu=2.3)
 //          material->dMeanMolMass = 11.5; // 5x solar value (mu=2.3)
+//          material->dMeanMolMass = 11.5;  // 5x solar value (mu=2.3)
 //          material->dMeanMolMass = 17.25; // 7.5x solar value (mu=2.3)
+//          material->dMeanMolMass = 2.3;   // solar value (mu=2.3)
 #if 0
             /*
              * This doesnt work as cv is converted to code units below.
@@ -115,18 +116,18 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit)
             material->rho0 = 0.001;
 
             /*
-             * Add a finite volume to each gas particle to avoid crazy
-             * densities at large pressure but neglect self-interaction.
+             * Add a finite volume to each gas particle to avoid crazy densities at large pressure
+             * but neglect self-interaction.
              *
              * Hydrogen: b = 26.6 cm^3/mol (Wikipedia)
              *
-             * The code uses b'=b/dMeanMolarMass instead, so be careful when
-             * converting the parameter ([b] = cm^3/(g*mol)).
+             * The code uses b'=b/dMeanMolarMass instead, so be careful when converting the
+             * parameter ([b] = cm^3/(g*mol)).
              *
              * For b=0 the ideal gas EOS is obtained.
              *
-             * NOTE:    Introducing the parameter b defines a maximum density
-             *          and the code must assert that rho < rho_max.
+             * NOTE:    Introducing the parameter b defines a maximum density and the code must
+             *          assert that rho < rho_max.
              */
             material->b = 26.6/(material->dMeanMolMass*MHYDR*NA);
             material->b = 0.0; 
@@ -196,12 +197,15 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit)
 			material->B = 9.47e10;		/* ergs/cc */
 			material->us = 7.73e9;		/* ergs/g */
 			material->us2 = 3.04e10;	/* ergs/g */
+			material->alpha = 10.0;
+			material->beta = 5.0;
 			/*
 			 * Note that the expression for Pe provided in Benz et al. (1986) does not agree
 			 * in alpha and beta with the one provided in Melosh (1989) or Benz & Asphaug (1999).
+             * It seems that alpha and beta were switched so we use alpha=5 and beta=10.
 			 */
-			material->alpha = 10.0;
-			material->beta = 5.0;
+			material->alpha = 5.0;
+			material->beta = 10.0;
 			// Have to look up in more details?
 			material->cv = 1.0e7;		/* ergs/g K */ 
 			break;
@@ -544,11 +548,17 @@ double eosURhoP(TILLMATERIAL *material, double rho, double P)
 {
     double a, b, c, Pa, Pb, Pc;
 
+    // Use the analytic solution for the ideal gas
+    if (material->iMaterial == IDEALGAS)
+    {
+
+    }
+
     // umin = 0.0
     a = 0.0;
     Pa = eosPressure(material, rho, a);
 
-    b = material->vmax;
+    b = 100.0;
     Pb = eosPressure(material, rho, b);
 
     /*
@@ -558,6 +568,7 @@ double eosURhoP(TILLMATERIAL *material, double rho, double P)
     {
         b = 2.0*b;
         Pb = eosPressure(material, rho, b);
+        fprintf(stderr, "rho= %g P= %g: a= %g, Pa= %g, b= %g, Pb= %g\n", rho, P, a, Pa, b, Pb);
     }
 
     fprintf(stderr, "rho= %g P= %g: a= %g, Pa= %g, b= %g, Pb= %g\n", rho, P, a, Pa, b, Pb);
