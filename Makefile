@@ -5,7 +5,7 @@ exe = table pressureoldnew lookup lookup_cold testu1 testspline testsplint testn
 #defs = -DTILL_PRESS_NP -DTILL_OUTPUT_ALL_WARNINGS -DTILL_PRESS_MELOSH
 defs = -DTILL_PRESS_NP -DTILL_OUTPUT_ALL_WARNINGS -DTILL_VERBOSE
 
-CFLAGS ?= -O3 $(defs)
+CFLAGS ?= -O3 $(defs) -Wall
 
 default:
 	@echo "Please specify which tool you want to make."
