@@ -1,8 +1,9 @@
 /*
  * Calculate the isentrope from (rho1, u1) to (rho2, u2) doing direct integration.
  *
- * Author: Christian Reinhardt
- * Date:   07.02.2019
+ * Author:   Christian Reinhardt
+ * Date:     07.02.2019
+ * Modified: 08.02.2019
  */
 #include <math.h>
 #include <stdio.h>
