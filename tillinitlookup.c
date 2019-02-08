@@ -373,10 +373,14 @@ double tillCalcU(TILLMATERIAL *material, double rho1, double u1, double rho2)
     logrho2 = log(rho2);
 
     /* Make sure that dlogrho is set. */
-    assert(material->Lookup != NULL);
-
-	/* Make smaller steps than we used for look up table. */
-	h = material->dlogrho/100.0;
+    if (material->dlogrho > 0.0)
+    {
+        /* Make smaller steps than we used for look up table. */
+        h = material->dlogrho/100.0;
+    } else {
+        h = fabs(logrho2-logrho)/100.0;
+        assert(h > 0.0);
+    }
 #ifdef TILL_VERBOSE
     fprintf(stderr, "tillCalcU: Solving ODE (rho1= %g u1= %g rho2= %g).\n", rho1, u1, rho2);
 #endif
@@ -417,8 +421,6 @@ double tillCalcU(TILLMATERIAL *material, double rho1, double u1, double rho2)
             if (fabs(logrho-logrho2) < h) {
                 h = logrho-logrho2;
             }
-            
-            fprintf(stderr, "rho= %g u=%g\n", exp(logrho), u);
 		}
 	}
 	return u;
