@@ -375,7 +375,7 @@ double tillCalcU(TILLMATERIAL *material, double rho1, double u1, double rho2)
 	/* Make smaller steps than we used for look up table. */
 	h = material->dlogrho/100.0;
 #ifdef TILL_VERBOSE
-    fprintf(stderr, "tillCalcU: Solving ODE (rho1= %g u1= %g rho= %g).\n", rho1, u1, rho2);
+    fprintf(stderr, "tillCalcU: Solving ODE (rho1= %g u1= %g rho2= %g).\n", rho1, u1, rho2);
 #endif
 	
     if (rho1 < rho2)
