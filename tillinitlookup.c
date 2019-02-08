@@ -372,6 +372,9 @@ double tillCalcU(TILLMATERIAL *material, double rho1, double u1, double rho2)
 	u = u1;
     logrho2 = log(rho2);
 
+    /* Make sure that dlogrho is set. */
+    assert(material->Lookup != NULL);
+
 	/* Make smaller steps than we used for look up table. */
 	h = material->dlogrho/100.0;
 #ifdef TILL_VERBOSE
@@ -414,7 +417,8 @@ double tillCalcU(TILLMATERIAL *material, double rho1, double u1, double rho2)
             if (fabs(logrho-logrho2) < h) {
                 h = logrho-logrho2;
             }
-
+            
+            fprintf(stderr, "rho= %g u=%g\n", exp(logrho), u);
 		}
 	}
 	return u;
