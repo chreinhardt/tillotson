@@ -625,25 +625,25 @@ double eosRhoPTemp(TILLMATERIAL *material, double P, double T)
  *
  * Since P = P(rho, T) and T1=T2 we solve for P2(rho2)-P1=0.
  *
- * Returns 0 if successful or -1 if not.
+ * Returns TILL_SUCCESS if successful or TILL_FAIL if not.
  */
 int eosSolveBC(TILLMATERIAL *mat1, TILLMATERIAL *mat2, double rho1, double u1, double *prho2, double *pu2)
 {
     /* Check if there is indeed a material interface. */
-    if (mat1.iMaterial == mat2.iMaterial)
+    if (mat1->iMaterial == mat2->iMaterial)
     {
 #ifdef TILL_VERBOSE
         fprintf(stderr, "eosSolveBC: No material interface (mat1= %i, mat2= %i).\n",
                 mat1->iMaterial, mat2->iMaterial);
 #endif
-        return -1;
+        return TILL_FAIL;
     }
         
-    if (mat1.iMaterial != IDEALGAS && mat2.iMaterial != IDEALGAS)
+    if (mat1->iMaterial != IDEALGAS && mat2->iMaterial != IDEALGAS)
     {
         /* Both materials are not an ideal gas. */
         return tillSolveBC(mat1, mat2, rho1, u1, prho2, pu2);
-    } else if (mat1.iMaterial != IDEALGAS && mat2.iMaterial == IDEALGAS) {
+    } else if (mat1->iMaterial != IDEALGAS && mat2->iMaterial == IDEALGAS) {
         /* Condensed material and ideal gas. */
         P = eosPressure(mat1, rho1, u1);
         T = eosTempRhoU(mat1, rho1, u1);
@@ -652,12 +652,12 @@ int eosSolveBC(TILLMATERIAL *mat1, TILLMATERIAL *mat2, double rho1, double u1, d
         *pu2 = mat2->cv*T;
         *prho2 = P/((mat2->dConstGamma-1.0)*mat2->cv*T);
 
-        return 0;
+        return TILL_SUCCESS;
     } else {
         assert(0);
     }
 
-    return -1;
+    return TILL_FAIL;
 }
 
 /*
