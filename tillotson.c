@@ -629,6 +629,7 @@ double eosRhoPTemp(TILLMATERIAL *material, double P, double T)
  */
 int eosSolveBC(TILLMATERIAL *mat1, TILLMATERIAL *mat2, double rho1, double u1, double *prho2, double *pu2)
 {
+    double P, T;
     /* Check if there is indeed a material interface. */
     if (mat1->iMaterial == mat2->iMaterial)
     {
