@@ -617,6 +617,50 @@ double eosRhoPTemp(TILLMATERIAL *material, double P, double T)
 }
 
 /*
+ * Given rho1, u1 (material 1) solve for rho2, u2 (material 2) at the interface between two material.
+ *
+ * The b.c. are:
+ *
+ * P1(rho1, u1)=P2(rho2, u2) and T1(rho1, u1)=T2(rho2, u2)
+ *
+ * Since P = P(rho, T) and T1=T2 we solve for P2(rho2)-P1=0.
+ *
+ * Returns 0 if successful or -1 if not.
+ */
+int eosSolveBC(TILLMATERIAL *mat1, TILLMATERIAL *mat2, double rho1, double u1, double *prho2, double *pu2)
+{
+    /* Check if there is indeed a material interface. */
+    if (mat1.iMaterial == mat2.iMaterial)
+    {
+#ifdef TILL_VERBOSE
+        fprintf(stderr, "eosSolveBC: No material interface (mat1= %i, mat2= %i).\n",
+                mat1->iMaterial, mat2->iMaterial);
+#endif
+        return -1;
+    }
+        
+    if (mat1.iMaterial != IDEALGAS && mat2.iMaterial != IDEALGAS)
+    {
+        /* Both materials are not an ideal gas. */
+        return tillSolveBC(mat1, mat2, rho1, u1, prho2, pu2);
+    } else if (mat1.iMaterial != IDEALGAS && mat2.iMaterial == IDEALGAS) {
+        /* Condensed material and ideal gas. */
+        P = eosPressure(mat1, rho1, u1);
+        T = eosTempRhoU(mat1, rho1, u1);
+
+        /* For an ideal gas there is an analytic solution. */
+        *pu2 = mat2->cv*T;
+        *prho2 = P/((mat2->dConstGamma-1.0)*mat2->cv*T);
+
+        return 0;
+    } else {
+        assert(0);
+    }
+
+    return -1;
+}
+
+/*
  * Calculate phi and gamma as given in Hu et al. (2009).
  */
 double eosPhi(TILLMATERIAL *material, double rho, double u)
@@ -935,7 +979,8 @@ double tillRhoPTemp(TILLMATERIAL *material, double P, double T)
     ua = tillURhoTemp(material, a, T);
     Pa = tillPressure(material, a, ua);
 
-    b = material->rhomax*0.99;
+//    b = material->rhomax*0.99;
+    b = 2*a;
     ub = tillURhoTemp(material, b, T);
     Pb = tillPressure(material, b, ub);
 
@@ -1134,9 +1179,7 @@ int tillSolveBC(TILLMATERIAL *mat1, TILLMATERIAL *mat2, double rho1, double u1, 
      */
     if (Pa < P || Pb > P)
     {
-
-        return(iRet);
-
+        return iRet;
     }
 
     //	assert (Pa > P && Pb < P);	
@@ -1168,6 +1211,6 @@ int tillSolveBC(TILLMATERIAL *mat1, TILLMATERIAL *mat2, double rho1, double u1, 
 
     iRet = 0;
 
-    return(iRet);
+    return iRet;
 }
 

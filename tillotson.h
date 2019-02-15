@@ -17,7 +17,10 @@
 /*
  * Error codes.
  */
-enum till_error
+#define TILL_SUCCESS 0
+#define TILL_FAIL   -1
+
+enum till_error_lookup
 {
     TILL_LOOKUP_SUCCESS = 0,
     TILL_LOOKUP_OUTSIDE_RHOMIN,
