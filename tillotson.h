@@ -162,6 +162,7 @@ double eosRhoPU(TILLMATERIAL *material, double P, double u);
 double eosURhoP(TILLMATERIAL *material, double rho, double P);
 double eosURhoTemp(TILLMATERIAL *material, double rho, double T);
 double eosRhoPTemp(TILLMATERIAL *material, double P, double T);
+int eosSolveBC(TILLMATERIAL *mat1, TILLMATERIAL *mat2, double rho1, double u1, double *prho2, double *pu2);
 double eosPhi(TILLMATERIAL *material, double rho, double u);
 double eosGamma(TILLMATERIAL *material, double rho, double u);
 
