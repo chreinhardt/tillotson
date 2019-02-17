@@ -152,12 +152,15 @@ void tillPrintMat(TILLMATERIAL *material);
 
 // Some functions that provide a general interface for EOS calls where other EOS, e.g., an ideal gas EOS can be implemented
 double eosPressureSound(TILLMATERIAL *material, double rho, double u, double *pcSound);
+double eosPressureSoundRhoT(TILLMATERIAL *material, double rho, double T, double *pcSound);
 double eosPressure(TILLMATERIAL *material, double rho, double u);
+double eosPressureRhoT(TILLMATERIAL *material, double rho, double T);
 double eosdPdrho(TILLMATERIAL *material, double rho, double u);
 double eosdPdu(TILLMATERIAL *material, double rho, double u);
 double eosTempRhoU(TILLMATERIAL *material, double rho, double u);
 double eosRhoPU(TILLMATERIAL *material, double P, double u);
 double eosURhoP(TILLMATERIAL *material, double rho, double P);
+double eosURhoTemp(TILLMATERIAL *material, double rho, double T);
 double eosRhoPTemp(TILLMATERIAL *material, double P, double T);
 double eosPhi(TILLMATERIAL *material, double rho, double u);
 double eosGamma(TILLMATERIAL *material, double rho, double u);

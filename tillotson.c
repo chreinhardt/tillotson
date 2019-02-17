@@ -433,6 +433,20 @@ double eosPressure(TILLMATERIAL *material, double rho, double u)
     return (eosPressureSound(material, rho, u, NULL));
 }
 
+double eosPressureSoundRhoT(TILLMATERIAL *material, double rho, double T, double *pcSound)
+{
+    double u;
+
+    u = eosURhoTemp(material, rho, T);
+
+    return eosPressureSound(material, rho, u, pcSound);
+}
+
+double eosPressureRhoT(TILLMATERIAL *material, double rho, double T)
+{
+    return (eosPressureSoundRhoT(material, rho, T, NULL));
+}
+
 double eosdPdrho(TILLMATERIAL *material, double rho, double u)
 {
     if (material->iMaterial == IDEALGAS)
@@ -591,6 +605,20 @@ double eosURhoP(TILLMATERIAL *material, double rho, double P)
     }
 
     return(c);
+}
+
+/*
+ * Calculate u(rho,T) for a material.
+ */
+double eosURhoTemp(TILLMATERIAL *material, double rho, double T)
+{
+    if (material->iMaterial == IDEALGAS)
+    {
+        // For the ideal gas there is no cold term.
+        return(material->cv*T);
+    } else {
+        return tillURhoTemp(material, rho, T);
+    }
 }
 
 /*
