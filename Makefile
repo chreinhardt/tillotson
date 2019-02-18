@@ -161,6 +161,12 @@ testeospressure: testeospressure.o $(objects)
 	cc -o testeospressure testeospressure.o $(objects) -lm
 
 #
+# Test the function eosPressureSoundRhoT.
+#
+testeospressurerhot: testeospressurerhot.o $(objects)
+	cc -o testeospressurerhot testeospressurerhot.o $(objects) -lm
+
+#
 # Test the function eosdPdrho.
 #
 testeosdpdrho: testeosdpdrho.o $(objects)
