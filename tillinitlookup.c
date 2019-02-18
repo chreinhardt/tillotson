@@ -514,7 +514,7 @@ int eosIsBelowColdCurve(TILLMATERIAL *material, double rho, double u)
     if (material->iMaterial == IDEALGAS) {
         return 0;
     } else {
-        return tillIsBelowColdCurve(tillmat, rho, u);
+        return tillIsBelowColdCurve(material, rho, u);
     }
 }
 
