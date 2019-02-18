@@ -197,6 +197,7 @@ TILL_LOOKUP_ENTRY *tillSolveIsentropeLogRho(TILLMATERIAL *material, double v);
 TILL_LOOKUP_ENTRY *tillSolveIsentropeBS(TILLMATERIAL *material, double v);
 double tillCalcU(TILLMATERIAL *material,double rho1,double u1,double rho2);
 int tillIsInTable(TILLMATERIAL *material,double rho,double u);
+int eosIsBelowColdCurve(TILLMATERIAL *material,double rho,double u);
 int tillIsBelowColdCurve(TILLMATERIAL *material,double rho,double u);
 
 /*

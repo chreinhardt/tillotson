@@ -505,6 +505,20 @@ int tillIsInTable(TILLMATERIAL *material, double rho, double u)
 }
 
 /*
+ * Check if a given (rho,u) is in an unphysical state below the cold curve.
+ *
+ * Returns 1 (true) if (rho,u) is below the cold curve and 0 (false) if not.
+ */
+int eosIsBelowColdCurve(TILLMATERIAL *material, double rho, double u)
+{
+    if (material->iMaterial == IDEALGAS) {
+        return 0;
+    } else {
+        return tillIsBelowColdCurve(tillmat, rho, u);
+    }
+}
+
+/*
  * This function checks if a given (rho,u) is in an unphysical state below the cold curve.
  *
  * Returns 1 (true) if (rho,u) is below the cold curve and 0 (false) if not.
