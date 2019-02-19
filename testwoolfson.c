@@ -18,8 +18,6 @@
 
 #define INDEX(i, j) ((i*tillmat->nTableV) + (j))
 
-#define TILL_PRESS_NP
-
 int main(int argc, char **argv)
 {
     // Tillotson library
