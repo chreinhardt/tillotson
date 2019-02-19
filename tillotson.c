@@ -1008,8 +1008,8 @@ double tillRhoPTemp(TILLMATERIAL *material, double P, double T)
     ua = tillURhoTemp(material, a, T);
     Pa = tillPressure(material, a, ua);
 
-//    b = material->rhomax*0.99;
-    b = 2*a;
+    b = material->rhomax*0.99;
+//    b = 2*a;
     ub = tillURhoTemp(material, b, T);
     Pb = tillPressure(material, b, ub);
 
