@@ -3,7 +3,7 @@
  *
  * Author:   Christian Reinhardt
  * Date:     21.08.2018
- * Modified: 12.02.2019
+ * Modified: 13.02.2019
  */
 #include <math.h>
 #include <stdio.h>
@@ -20,7 +20,7 @@
 
 #define TILL_PRESS_NP
 
-void main(int argc, char **argv)
+int main(int argc, char **argv)
 {
     // Tillotson library
 	TILLMATERIAL **tillmat;
@@ -29,10 +29,8 @@ void main(int argc, char **argv)
 	int nTableRho = 100;
 	int nTableV = 100;
     double vmax = 100.0;
-	double P, T;
     double f_ij;
     double rhomin, rhomax, umin, umax;
-    int nRho, nU;
     int i;
 
     if (TILL_VERSION_MAJOR < 3)
@@ -40,10 +38,6 @@ void main(int argc, char **argv)
         fprintf(stderr, "Wrong version of the Tillotson library (%s).\n", TILL_VERSION_TEXT);
         exit(1);
     }
-
-    // Make a 100 x 100 grid.
-    nRho = 100;
-    nU = 100;
 
     rhomin = 1e-4;
     rhomax = 10000.0;
@@ -87,19 +81,8 @@ void main(int argc, char **argv)
     fprintf(stderr, "Direct calculation: f_ij=rho1/rho2= %g (rho1/rho2= %g) f_ji=1/f_ij=rho2/rho1= %g (rho2/rho1= %g)\n", f_ij, rho1/rho2, 1.0/f_ij, rho2/rho1);
     fprintf(stderr, "\n");
 
-#if 0
-    /*
-     * Now generate the lookup table and do a lookup.
-     */
-    fprintf(stderr, "Initializing lookup table.\n");
-    table = InitWoolfsonCoeffTable(tillmat[0], tillmat[1], nP, nT, Pmin, Pmax, Tmin, Tmax);
-    fprintf(stderr, "Done.\n");
-
-    f_ij = WoolfsonCoeffInterpol(table, P1, T1);
-    fprintf(stderr, "Lookup: f_ij= %g rho1/rho2= %g rho2/rho1= %g\n", f_ij, rho1/rho2, rho2/rho1);
-
-//    PrintWoolfsonCoeffTable(table);
-#endif
 	tillFinalizeMaterial(tillmat[0]);
 	tillFinalizeMaterial(tillmat[1]);
+
+    return 0;
 }
