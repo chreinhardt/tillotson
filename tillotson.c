@@ -24,6 +24,8 @@
 #include <math.h>
 #include <assert.h>
 #include <stdio.h>
+#include <gsl/gsl_errno.h>
+#include <gsl/gsl_roots.h>
 #include "tillotson.h"
 
 /* This will cut the pressure in the cold expanded states for rho/rho0 < 0.8 as suggested in Melosh1989. */
@@ -972,6 +974,7 @@ double tillURhoTemp(TILLMATERIAL *material, double rho, double T)
     return(tillColdULookup(material, rho) + material->cv*T);
 }
 
+#if 0
 /* 
  * Calculate rho(P,T) for a material. Because thermodynamical consistency requires
  * (dP/drho)_T > 0 this should always work except where we do the pressure cutoff.
@@ -1072,6 +1075,164 @@ double tillRhoPTemp(TILLMATERIAL *material, double P, double T)
      */
     return c;
 }
+#endif
+
+double PressureRhoT_GSL(double rho, void *params)
+{
+    TILLMATERIAL *material;
+    double P;
+    double T;
+
+    struct PressureRhoT_GSL_Params *p;
+
+    p = (struct PressureRhoT_GSL_Params *) params;
+
+    material = p->material;
+    P = p->P;
+    T = p->T;
+
+    return(eosPressureRhoT(material, rho, T)-P);
+}
+
+/* 
+ * Calculate rho(P,T) for a material using the GSL root finder.
+ *
+ * Because thermodynamical consistency requires (dP/drho)_T > 0 this should always work except 
+ * where we do the pressure cutoff.
+ */
+double tillRhoPTemp(TILLMATERIAL *material, double P, double T)
+{
+    // GSL root finder
+    gsl_root_fsolver *Solver;
+    const gsl_root_fsolver_type *SolverType;
+    gsl_function F;
+    struct PressureRhoT_GSL_Params Params;
+    const double err_abs = 0.0;
+    const double err_rel = 1e-10;
+    int status;
+    int max_iter = 1000;
+    double rho;
+    double rho_min;
+    double rho_max;
+
+    int i;
+
+    /*
+     * Check, if P <= 0.0. In this case the algorithm will not work and the
+     * function returns a negative value for the density to indicate that it
+     * failed.
+     */
+    if (P <= 0.0)
+    {
+#if TILL_VERBOSE
+        fprintf(stderr, "tillRhoPTemp: Called for negative pressure (P= %g). No correction is done.\n", P);
+#endif
+        return -1.0;
+    }
+
+    // Initialize the parameters
+    Params.material = material;
+    Params.P = P;
+    Params.T = T;
+
+    // Initialize the function
+    F.function = &PressureRhoT_GSL;
+    F.params = &Params;
+
+    rho_min = material->rhomin;
+    rho_max = 0.999*material->rhomax;
+
+    // For rho=0.0 the pressure diverges so set a minimum density.
+    if (rho_min < 1e-5)
+        rho_min = 1e-5;
+
+    // Initialize the root finder
+    SolverType = gsl_root_fsolver_brent;
+    Solver = gsl_root_fsolver_alloc(SolverType);
+    assert(Solver != NULL);
+
+    /// CR: Some debug code
+//    fprintf(stderr, "rho_min= %g P_min= %g rho_max= %g P_max= %g\n", rho_min, eosPressureRhoT(material, rho_min, T),
+//            rho_max, eosPressureRhoT(material, rho_max, T));
+
+    gsl_root_fsolver_set(Solver, &F, rho_min, rho_max);
+
+#if TILL_VERBOSE
+    fprintf(stderr, "tillRhoPTemp: Using solver %s.\n", gsl_root_fsolver_name(Solver));
+#endif
+
+#if 0
+    // Make sure that Pb > P. If nescessary the lookup table has to be expanded.
+    while (Pmax < P)
+    {
+        /*
+         * Careful, here a new lookup table has to be generated. Currently the new parameters are
+         * set by hand but it would make more sense to move the initialization of all lookup table
+         * related values in tillInitLookup().
+         */
+        material->rhomax *= 2.0;
+         
+        /// CR: This code is still not wporking properly. Currently rhomax and vmax have to be set properly.
+        tillInitLookup(material, material->nTableRho, material->nTableV, material->rhomin, material->rhomax, material->vmax);
+
+#ifdef TILL_VERBOSE
+        fprintf(stderr, "tillRhoPTemp: P > Pb, expanding lookup table (P= %g, Pb= %g, b= %g).\n", P, Pb, b);
+#endif
+        b = material->rhomax*0.99;
+
+        ub = tillURhoTemp(material, b, T);
+        Pb = tillPressure(material, b, ub);
+    }
+
+
+    /* What do we do for P=0 in the expanded cold states?*/
+    //	fprintf(stderr,"tillRhoPTemp: starting with a= %g ua= %g Pa= %g b=%g ub= %g Pb= %g\n", a, ua, Pa, b, ub, Pb);
+    /* Check if the root is bracketed. */
+    if ((P_min >= P) || (P_max <=P))
+    {
+#ifdef TILL_VERBOSE
+        fprintf(stderr, "tillRhoPTemp: Root can not be bracketed (P= %g, Pa= %g, Pb= %g).\n", P, Pa, Pb);
+#endif
+        return -1.0;
+    }
+
+    assert (Pa < P && P < Pb);	
+#endif
+
+    for (i=0; i<max_iter; i++)
+    {
+        // Do one iteration of the root solver
+        status = gsl_root_fsolver_iterate(Solver);
+
+        // Estimate of the root
+        rho = gsl_root_fsolver_root(Solver);
+
+        // Current interval that brackets the root
+        rho_min = gsl_root_fsolver_x_lower(Solver);
+        rho_max = gsl_root_fsolver_x_upper(Solver);
+
+        // Test for convergence
+        status = gsl_root_test_interval(rho_min, rho_max, err_abs, err_rel);
+
+#if 0
+        if (status == GSL_SUCCESS)
+            fprintf(stderr, "Converged: x= %g\n", x);
+#endif
+        if (status != GSL_CONTINUE)
+            break;
+    }
+
+    if (status != GSL_SUCCESS)
+        rho = -1.0;
+
+    gsl_root_fsolver_free(Solver);
+    
+    /*
+     * Return values.
+     */
+    return rho;
+}
+
 
 /*
  * Calculate sound speed for a material.

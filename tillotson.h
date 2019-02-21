@@ -140,6 +140,13 @@ typedef struct tillMaterial
 	TILL_LOOKUP_ENTRY *Lookup;	// this is an array of pointers
 } TILLMATERIAL;
 
+/* Data structure needed for the GSL root finder. */
+struct PressureRhoT_GSL_Params {
+    TILLMATERIAL *material;
+    double P;
+    double T;
+};
+
 /*
  * Tillotson.c
  */
@@ -179,6 +186,7 @@ double tillTempRhoU(TILLMATERIAL *material, double rho, double u);
 // Not implemented yet
 double tillTempRhoP(TILLMATERIAL *material, double rho, double P);
 double tillURhoTemp(TILLMATERIAL *material, double rho, double T);
+double PressureRhoT_GSL(double rho, void *params);
 double tillRhoPTemp(TILLMATERIAL *material, double P, double T);
 double tillSoundSpeed(TILLMATERIAL *material, double rho, double u);
 double tillRhoPU(TILLMATERIAL *material, double P, double u);
