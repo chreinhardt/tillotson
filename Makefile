@@ -279,6 +279,12 @@ tillpressrhotemp: tillpressrhotemp.o $(objects)
 tillpressrhotemp_monotonic: tillpressrhotemp_monotonic.o $(objects)
 	cc -o tillpressrhotemp_monotonic tillpressrhotemp_monotonic.o $(objects) $(LIBS)
 
+#
+# Plot the pressure on a rho x u grid.
+#
+plottillpressure: plottillpressure.o $(objects)
+	cc -o plottillpressure plottillpressure.o $(objects) $(LIBS)
+
 clean:
 	rm $(objects)
 
