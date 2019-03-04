@@ -1125,7 +1125,7 @@ double tillRhoPTemp(TILLMATERIAL *material, double P, double T)
     if (P <= 0.0)
     {
 #if TILL_VERBOSE
-        fprintf(stderr, "tillRhoPTemp: Called for negative pressure (P= %g). No correction is done.\n", P);
+        fprintf(stderr, "tillRhoPTemp: Called for negative pressure (P= %g)\n", P);
 #endif
         return -1.0;
     }
