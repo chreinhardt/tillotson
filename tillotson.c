@@ -1146,6 +1146,14 @@ double tillRhoPTemp(TILLMATERIAL *material, double P, double T)
     if (rho_min < 1e-5)
         rho_min = 1e-5;
 
+    // Check if P(rho_min, T) < P otherwise the root can not be bracketed.
+    if (eosPressureRhoT(material, rho_min, T) > P) {
+#if TILL_VERBOSE
+        fprintf(stderr, "tillRhoPTemp: P= %g smaller than minimum pressure.\n", P);
+#endif
+        return -1.0;
+    }
+
     // Initialize the root finder
     SolverType = gsl_root_fsolver_brent;
     Solver = gsl_root_fsolver_alloc(SolverType);
