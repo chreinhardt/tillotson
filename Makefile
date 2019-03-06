@@ -140,8 +140,8 @@ calcisentrope: calcisentrope.o $(objects)
 testrhoptemp: testrhoptemp.o $(objects)
 	cc -o testrhoptemp testrhoptemp.o $(objects) $(LIBS)
 
-tillcalcpressure: tillcalcpressure.o $(objects)
-	cc -o tillcalcpressure tillcalcpressure.o $(objects) $(LIBS)
+eoscalcpressure: eoscalcpressure.o $(objects)
+	cc -o eoscalcpressure eoscalcpressure.o $(objects) $(LIBS)
 
 #
 # Calculate the bulk modulus for different isentropes.

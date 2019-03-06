@@ -3,7 +3,7 @@
  *
  * Author:   Christian Reinhardt
  * Date:     01.10.2018
- * Modified: 04.03.2019
+ * Modified: 06.03.2019
  */
 #include <math.h>
 #include <stdio.h>
@@ -23,7 +23,7 @@ int main(int argc, char **argv) {
 
 	if (argc != 4)
 	{
-			fprintf(stderr, "calcpressure <iMat> <rho> <u>\n");
+			fprintf(stderr, "eoscalcpressure <iMat> <rho> <u>\n");
 			exit(1);
 	}
 
@@ -38,7 +38,7 @@ int main(int argc, char **argv) {
 
 	tillmat = tillInitMaterial(iMat, dKpcUnit, dMsolUnit);
 	
-	P = tillPressure(tillmat, rho, u);
+	P = eosPressure(tillmat, rho, u);
 	printf("%i %.8g %.8g %.8g\n", iMat, rho, u, P);
 
 	tillFinalizeMaterial(tillmat);
