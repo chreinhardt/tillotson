@@ -143,6 +143,9 @@ testrhoptemp: testrhoptemp.o $(objects)
 eoscalcpressure: eoscalcpressure.o $(objects)
 	cc -o eoscalcpressure eoscalcpressure.o $(objects) $(LIBS)
 
+eoscalcpressure_rhot: eoscalcpressure_rhot.o $(objects)
+	cc -o eoscalcpressure_rhot eoscalcpressure_rhot.o $(objects) $(LIBS)
+
 #
 # Calculate the bulk modulus for different isentropes.
 #
