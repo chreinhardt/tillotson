@@ -1149,7 +1149,8 @@ double tillRhoPTemp(TILLMATERIAL *material, double P, double T)
     // Check if P(rho_min, T) < P otherwise the root can not be bracketed.
     if (eosPressureRhoT(material, rho_min, T) > P) {
 #if TILL_VERBOSE
-        fprintf(stderr, "tillRhoPTemp: P= %g smaller than minimum pressure.\n", P);
+        fprintf(stderr, "tillRhoPTemp: P= %g smaller than P_min (rho_min= %g P_min= %g T=%g).\n",
+                P, rho_min, eosPressureRhoT(material, rho_min, T), T);
 #endif
         return -1.0;
     }
