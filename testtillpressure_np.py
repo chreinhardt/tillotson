@@ -1,6 +1,6 @@
 #!/usr/bin/env python2
 """
-This script compares pressure calculated in tillPressureSoundNP with the results from tillPressure.
+This script plots the results of plottillpressure.c.
 """
 from matplotlib import *
 rcParams['font.family'] = 'serif'
@@ -31,9 +31,9 @@ rcParams['ytick.major.size'] = 4
 rcParams['ytick.minor.size'] = 2
 
 # Adjust Font Size
-rcParams['xtick.labelsize']  = 'x-small'
-rcParams['ytick.labelsize']  = 'x-small'
-rcParams['axes.labelsize']   = 'small'
+rcParams['xtick.labelsize']  = 'xx-small'
+rcParams['ytick.labelsize']  = 'xx-small'
+rcParams['axes.labelsize']   = 'x-small'
 
 # Set Up Figure, Single Column MNRAS
 fig = gcf()
@@ -41,31 +41,97 @@ ax = gca()
 fig, ax = subplots(1,1)
 fig.set_size_inches(8.27*0.39,8.27*(6./8.)*0.39)
 
+# Physical constants used for unit convertion (cgs)
+KBOLTZ = 1.38e-16		# bolzman constant in cgs
+MHYDR  = 1.67e-24		# mass of hydrogen atom in grams
+MSOLG  = 1.99e33		# solar mass in grams
+GCGS   = 6.67e-8		# G in cgs
+KPCCM  = 3.085678e21		# kiloparsec in centimeters
+
+# These two values define the unit system we use
+dKpcUnit  = 2.06701e-13	        # kiloparsec in code units
+dMsolUnit = 4.80438e-08	        # solar mass in code units
+
+# Mass of Earth
+MEarth = 5.98e27		# g
+MSun   = 1.989e33	        # g
+
+"""
+Convert kboltz/mhydrogen to system units, assuming that
+G == 1.
+"""
+# code energy per unit mass --> erg per g
+dErgPerGmUnit = GCGS*dMsolUnit*MSOLG/(dKpcUnit*KPCCM)
+# code density --> g per cc
+dGmPerCcUnit = (dMsolUnit*MSOLG)/pow(dKpcUnit*KPCCM,3.0)
+# code time --> seconds
+dSecUnit = sqrt(1/(dGmPerCcUnit*GCGS))
+
+# The units are not nescessary but can be derived from the quanities above
+Lunit = dKpcUnit*KPCCM
+Munit = dMsolUnit*MSOLG
+
 """
 data1 = loadtxt('out.old.dat',skiprows=3)
 data2 = loadtxt('out.dat',skiprows=3)
 """
 
-# Tillotson material
-data1 = loadtxt('testtillpressure_np.txt')
-data2 = loadtxt('testtillpressure.txt')
-data3 = loadtxt('testtillpressure_np_diff.txt')
+"""
+# Load values for rho and u
+data = loadtxt('testtillpressure_np_diff.txt')
 
-print where(fabs(data1-data2) > 1e-30)
-print
-print where(fabs(data3) > 1e-30);
+rho = data[:, 0]
+u   = data[:, 1]
+T   = data[:, 2]
 
-figure(1)
-imshow(data1-data2)
+print "rho_min=", min(rho), "rho_max=", max(rho)
+print "u_min  =", min(u), "u_max  =", max(u)
 
-figure(2)
-imshow(data1)
+# Convert to cgs
+rho /= dGmPerCcUnit
+u   /= dErgPerGmUnit
 
-figure(3)
-imshow(data2)
+#data /= (dErgPerGmUnit*dGmPerCcUnit)
+#data /= (dGmPerCcUnit*dErgPerGmUnit)
 
-figure(4)
-imshow(data3)
+rho_min = min(rho)
+rho_max = max(rho)
+
+u_min   = min(u)
+u_max   = max(u)
+
+T_min   = min(T)
+T_max   = max(T)
+
+print "rho_min=", min(rho), "rho_max=", max(rho)
+print "u_min  =", min(u), "u_max  =", max(u)
+"""
+# Reference density (material dependent)
+rho0 = 2.7
+us   = 3.5e10
+us2  = 1.8e11
+
+# Plot the difference between tillPressureSoundNP and tillPressure
+data = loadtxt('testtillpressure_np_diff.txt')
+
+print where(fabs(data) < 1e-10)
+
+#figure(1)
+imshow(data, origin='lower', extent=(rho_min, rho_max, u_min, u_max), aspect='auto')
+
+plot([rho0, rho0], [u_min, u_max], '--', color='red')
+plot([rho_min, rho_max], [us, us], '--', color='red')
+plot([rho_min, rho_max], [us2, us2], '--', color='red')
+
+xlabel("Density [code units]")
+ylabel("Int. energy [code units]")
+
+colorbar()
+
+savefig('testtillpressure_np.png', dpi=300, bbox_inches='tight')
+
+
 
 show()
+
 

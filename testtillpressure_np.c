@@ -20,12 +20,12 @@ void main(int argc, char **argv) {
 	double dMsolUnit = 4.80438e-08;
     // Define the size of the grid
     double rhomin = 1e-4;
-	double rhomax = 100.0;
+	double rhomax = 10.0;
     double vmax = 100.0;
-	double umax = 100.0;
+	double umax = 25.0;
 	double umin = 0.0;
-	int nRho = 1000;
-	int nU = 1000;
+	int nRho = 100;
+	int nU = 100;
     double drho, dU;
 
 	double rho;
@@ -84,24 +84,47 @@ void main(int argc, char **argv) {
 	fclose(fp);
 
 	fp = fopen("testtillpressure_np_diff.txt", "w");
-	assert(fp != NULL);
+	assert(fp != null);
 
-	fprintf(stderr, "Printing grid for the ideal gas EOS...\n");
+	fprintf(stderr, "printing grid for the ideal gas eos...\n");
 
-	/* Print a rho x u grid. */
-	for (i=0; i<nRho; i+=1)
+	/* print a rho x u grid. */
+	for (i=0; i<nrho; i+=1)
 	{
 		rho = rhomin + i*drho;
 
-		for (j=0; j<nU; j+=1)
+		for (j=0; j<nu; j+=1)
 		{
-			u = umin + j*dU;
-			fprintf(fp," %15.7E", tillPressureSoundNP(tillmat, rho, u, NULL)-
-                    tillPressure(tillmat, rho, u));
+			u = umin + j*du;
+			fprintf(fp," %15.7e", tillpressuresoundnp(tillmat, rho, u, null)-
+                    tillpressure(tillmat, rho, u));
 		}
 		fprintf(fp,"\n");
 	}
+	fclose(fp);
 
+    /* Plot where P is negative. */
+	fp = fopen("testtillpressure_np_region.txt", "w");
+	assert(fp != null);
+
+	/* print a rho x u grid. */
+	for (i=0; i<nrho; i+=1)
+	{
+		rho = rhomin + i*drho;
+
+		for (j=0; j<nu; j+=1)
+		{
+			u = umin + j*du;
+            
+            if (tillpressuresoundnp(tillmat, rho, u, null) < 0.0)
+            {
+                fprintf(fp," %3i", -1);
+            } else {
+                fprintf(fp," %3i", 0);
+            }
+		}
+		fprintf(fp,"\n");
+	}
 	fclose(fp);
 	tillFinalizeMaterial(tillmat);
 }
