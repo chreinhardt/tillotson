@@ -174,6 +174,7 @@ double eosPhi(TILLMATERIAL *material, double rho, double u);
 double eosGamma(TILLMATERIAL *material, double rho, double u);
 
 double tilldPdrho(TILLMATERIAL *material, double rho, double u);
+double tillPressureSoundNP(TILLMATERIAL *material, double rho, double u, double *pcSound);
 double tillPressureSound(TILLMATERIAL *material, double rho, double u, double *pcSound);
 double tillPressure(TILLMATERIAL *material, double rho, double u);
 double tillPressureNP(TILLMATERIAL *material, double rho, double u);

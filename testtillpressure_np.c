@@ -24,8 +24,8 @@ void main(int argc, char **argv) {
     double vmax = 100.0;
 	double umax = 25.0;
 	double umin = 0.0;
-	int nRho = 500;
-	int nU = 500;
+	int nRho = 1000;
+	int nU = 1000;
     double drho, dU;
 
 	double rho;
@@ -37,12 +37,20 @@ void main(int argc, char **argv) {
 	int i = 0;
 	int j = 0;
 
-    drho = (rhomax-rhomin)/(nRho-1);
-    dU = (umax-umin)/(nU-1);
-
 	fprintf(stderr, "Initializing material...\n");
 	tillmat = tillInitMaterial(GRANITE, dKpcUnit, dMsolUnit);
 	fprintf(stderr, "Done.\n");
+
+    /*
+     * Zoom in to the expanded states.
+     */
+    rhomax = 1.1*tillmat->rho0;
+    umax = 1.1*tillmat->us2;
+
+    fprintf(stderr, "rhomin= %g rhomax= %g umin= %g umax= %g\n", rhomin, rhomax, umin, umax);
+
+    drho = (rhomax-rhomin)/(nRho-1);
+    dU = (umax-umin)/(nU-1);
 
 	/*
 	 * Print P on a rho x u grid.
@@ -53,12 +61,12 @@ void main(int argc, char **argv) {
 	fprintf(stderr, "Printing grid using tillPressureSoundNP()...\n");
 
 	/* Print a rho x u grid. */
-	for (i=0; i<nRho; i+=1)
+	for (i=0; i<nU; i+=1)
 	{
-		rho = rhomin + i*drho;
-		for (j=0; j<nU; j+=1)
+		u = umin + i*dU;
+		for (j=0; j<nRho; j+=1)
 		{
-			u = umin + j*dU;
+		    rho = rhomin + j*drho;
 			fprintf(fp," %15.7E", tillPressureSoundNP(tillmat, rho, u, NULL));
 		}
 		fprintf(fp,"\n");
@@ -71,12 +79,14 @@ void main(int argc, char **argv) {
 	fprintf(stderr, "Printing grid using tillPressure()...\n");
 
 	/* Print a rho x u grid. */
-	for (i=0; i<nRho; i+=1)
+	for (i=0; i<nU; i+=1)
 	{
-		rho = rhomin + i*drho;
-		for (j=0; j<nU; j+=1)
+        u = umin + i*dU;
+
+		for (j=0; j<nRho; j+=1)
 		{
-			u = umin + j*dU;
+            rho = rhomin + j*drho;
+
 			fprintf(fp," %15.7E", tillPressure(tillmat, rho, u));
 		}
 		fprintf(fp,"\n");
@@ -87,13 +97,14 @@ void main(int argc, char **argv) {
 	assert(fp != NULL);
 
 	/* print a rho x u grid. */
-	for (i=0; i<nRho; i+=1)
+	for (i=0; i<nU; i+=1)
 	{
-		rho = rhomin + i*drho;
+        u = umin + i*dU;
 
-		for (j=0; j<nU; j+=1)
+		for (j=0; j<nRho; j+=1)
 		{
-			u = umin + j*dU;
+            rho = rhomin + j*drho;
+
 			fprintf(fp," %15.7E", tillPressureSoundNP(tillmat, rho, u, NULL)-
                     tillPressure(tillmat, rho, u));
 		}
@@ -106,19 +117,19 @@ void main(int argc, char **argv) {
 	assert(fp != NULL);
 
 	/* print a rho x u grid. */
-	for (i=0; i<nRho; i+=1)
+	for (i=0; i<nU; i+=1)
 	{
-		rho = rhomin + i*drho;
+        u = umin + i*dU;
 
-		for (j=0; j<nU; j+=1)
+		for (j=0; j<nRho; j+=1)
 		{
-			u = umin + j*dU;
-            
-            if (tillPressureSoundNP(tillmat, rho, u, NULL) < 0.0)
+            rho = rhomin + j*drho;
+//            if (tillPressureSoundNP(tillmat, rho, u, NULL) <= 0.0)
+            if (tillPressureSound(tillmat, rho, u, NULL) <= 0.0)
             {
-                fprintf(fp," %3i", -1);
+                fprintf(fp," %2i", 0);
             } else {
-                fprintf(fp," %3i", 0);
+                fprintf(fp," %2i", 1);
             }
 		}
 		fprintf(fp,"\n");

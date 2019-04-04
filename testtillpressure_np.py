@@ -111,12 +111,36 @@ rho0 = 2.7
 us   = 3.5e10
 us2  = 1.8e11
 
-# Plot the difference between tillPressureSoundNP and tillPressure
+rho_min = 1e-4
+rho_max = 10.0
+u_min   = 0.0
+u_max   = 25.0
+
+rho_min = 1e-4
+rho_max = 8.0602
+u_min   = 0.0
+u_max   = 19.8035
+
+# Convert to cgs
+rho_min *= dGmPerCcUnit
+rho_max *= dGmPerCcUnit
+
+u_min   *= dErgPerGmUnit
+u_max   *= dErgPerGmUnit
+
+print dGmPerCcUnit
+print dErgPerGmUnit
+
+print "rho_min=", rho_min, "rho_max=", rho_max
+print "u_min  =", u_min, "u_max  =", u_max
+
+"""
+Plot the difference between tillPressureSoundNP and tillPressure.
+"""
 data = loadtxt('testtillpressure_np_diff.txt')
 
 print where(fabs(data) < 1e-10)
 
-#figure(1)
 imshow(data, origin='lower', extent=(rho_min, rho_max, u_min, u_max), aspect='auto')
 
 plot([rho0, rho0], [u_min, u_max], '--', color='red')
@@ -128,8 +152,27 @@ ylabel("Int. energy [code units]")
 
 colorbar()
 
-savefig('testtillpressure_np.png', dpi=300, bbox_inches='tight')
+savefig('testtillpressure_np_diff.png', dpi=300, bbox_inches='tight')
 
+fig.clear()
+
+"""
+Plot where the pressure is negative.
+"""
+data = loadtxt('testtillpressure_np_region.txt')
+
+imshow(data, origin='lower', extent=(rho_min, rho_max, u_min, u_max), aspect='auto')
+
+plot([rho0, rho0], [u_min, u_max], '--', color='red')
+plot([rho_min, rho_max], [us, us], '--', color='red')
+plot([rho_min, rho_max], [us2, us2], '--', color='red')
+
+xlabel("Density [code units]")
+ylabel("Int. energy [code units]")
+
+colorbar()
+
+savefig('testtillpressure_np_region.png', dpi=300, bbox_inches='tight')
 
 
 show()
