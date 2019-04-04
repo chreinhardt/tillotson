@@ -24,8 +24,8 @@ void main(int argc, char **argv) {
     double vmax = 100.0;
 	double umax = 25.0;
 	double umin = 0.0;
-	int nRho = 100;
-	int nU = 100;
+	int nRho = 500;
+	int nU = 500;
     double drho, dU;
 
 	double rho;
@@ -84,20 +84,18 @@ void main(int argc, char **argv) {
 	fclose(fp);
 
 	fp = fopen("testtillpressure_np_diff.txt", "w");
-	assert(fp != null);
-
-	fprintf(stderr, "printing grid for the ideal gas eos...\n");
+	assert(fp != NULL);
 
 	/* print a rho x u grid. */
-	for (i=0; i<nrho; i+=1)
+	for (i=0; i<nRho; i+=1)
 	{
 		rho = rhomin + i*drho;
 
-		for (j=0; j<nu; j+=1)
+		for (j=0; j<nU; j+=1)
 		{
-			u = umin + j*du;
-			fprintf(fp," %15.7e", tillpressuresoundnp(tillmat, rho, u, null)-
-                    tillpressure(tillmat, rho, u));
+			u = umin + j*dU;
+			fprintf(fp," %15.7E", tillPressureSoundNP(tillmat, rho, u, NULL)-
+                    tillPressure(tillmat, rho, u));
 		}
 		fprintf(fp,"\n");
 	}
@@ -105,18 +103,18 @@ void main(int argc, char **argv) {
 
     /* Plot where P is negative. */
 	fp = fopen("testtillpressure_np_region.txt", "w");
-	assert(fp != null);
+	assert(fp != NULL);
 
 	/* print a rho x u grid. */
-	for (i=0; i<nrho; i+=1)
+	for (i=0; i<nRho; i+=1)
 	{
 		rho = rhomin + i*drho;
 
-		for (j=0; j<nu; j+=1)
+		for (j=0; j<nU; j+=1)
 		{
-			u = umin + j*du;
+			u = umin + j*dU;
             
-            if (tillpressuresoundnp(tillmat, rho, u, null) < 0.0)
+            if (tillPressureSoundNP(tillmat, rho, u, NULL) < 0.0)
             {
                 fprintf(fp," %3i", -1);
             } else {
