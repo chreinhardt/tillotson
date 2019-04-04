@@ -211,6 +211,12 @@ testtillpressure: testtillpressure.o $(objects)
 	cc -o testtillpressure testtillpressure.o $(objects) $(LIBS)
 
 #
+# Test the function tillPressureNP.
+#
+testtillpressure_np: testtillpressure_np.o $(objects)
+	cc -o testtillpressure_np testtillpressure_np.o $(objects) $(LIBS)
+
+#
 # Test the function tillPressureSound.
 #
 testtillsound: testtillsound.o $(objects)
