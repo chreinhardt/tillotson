@@ -269,7 +269,7 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit)
     if (iMaterial == IDEALGAS)
     {
         material->b *=material->dGmPerCcUnit;
-        fprintf(stderr, "b= %g [RE^3/Munit]\n", material->b);
+//        fprintf(stderr, "b= %g [RE^3/Munit]\n", material->b);
     }
 
 #if 0
@@ -710,6 +710,83 @@ double eosGamma(TILLMATERIAL *material, double rho, double u)
 double tilldPdrho_s(TILLMATERIAL *material, double rho, double u)
 {
     return (1.0/(rho*rho)*(tillSoundSpeed(material,rho, u)-2.0*tillPressure(material,rho,u)/rho));
+}
+
+/*
+ * Calculate the pressure and sound speed from the Tillotson EOS for a material. Set pcSound = NULL
+ * to only calculate the pressure forces.
+ *
+ * Note: tillPressureSoundNP does not pressure or sound speed correction. In most cases we suggest
+ *       using tillPressureSound (e.g., in a hydro code).
+ */
+double tillPressureSoundNP(TILLMATERIAL *material, double rho, double u, double *pcSound)
+{
+
+    double eta, mu;
+    double Pc, Pe;
+    double c2c, c2e;
+    double Gammac, Gammae, w0, y, z;
+
+    eta = rho/material->rho0;
+    mu = eta - 1.0;
+    z = (1.0 - eta)/eta;
+    w0 = u/(material->u0*eta*eta)+1.0;
+
+    /*
+     *  Here we evaluate, which part of the equation of state we need.
+     */
+    if (rho >= material->rho0 || u < material->us) {
+        /*
+         *  Condensed states (rho > rho0) or expanded cold states.
+         */
+        Gammac = material->a + material->b/w0;
+        Pc = Gammac*u*rho + material->A*mu + material->B*mu*mu;
+
+        if (pcSound != NULL)
+        {
+            /* Calculate the sound speed. */
+            c2c =material->a*u+material->b*u/(w0*w0)*(3.0*w0-2.0)+(material->A+2.0*material->B*mu)/material->rho0 + Pc/(rho*rho)*(material->a*rho+material->b*rho/(w0*w0));
+            *pcSound = c2c;
+        }
+        return (Pc);
+    } else if (u > material->us2) {
+        /*
+         * Expanded hot states (rho < rho0 and u > us2).
+         */
+        Gammae = material->a + material->b/w0*exp(-material->beta*z*z);
+        Pe = Gammae*u*rho + material->A*mu*exp(-(material->alpha*z+material->beta*z*z));
+
+        if (pcSound != NULL)
+        {
+            /* calculate the sound speed */
+            c2e = (Gammae+1.0)*Pe/rho + material->A/material->rho0*exp(-(material->alpha*z+material->beta*z*z))*(1.0+mu/(eta*eta)*(material->alpha+2.0*material->beta*z-eta)) + material->b*rho*u/(w0*w0*eta*eta)*exp(-material->beta*z*z)*(2.0*material->beta*z*w0/material->rho0+1.0/(material->u0*rho)*(2.0*u-Pe/rho));
+
+            *pcSound = c2e;
+        }
+
+        return (Pe);
+    } else {
+        /*
+         *  intermediate states (rho < rho0 and us < u < us2)
+         */
+        y = (u - material->us)/(material->us2 - material->us);
+
+        Gammac = material->a + material->b/w0;
+        Pc = Gammac*u*rho + material->A*mu + material->B*mu*mu;
+        Gammae = material->a + material->b/w0*exp(-material->beta*z*z);
+        Pe = Gammae*u*rho + material->A*mu*exp(-(material->alpha*z+material->beta*z*z));
+
+        if (pcSound != NULL)
+        {
+            /* calculate the sound speed */
+            c2c =material->a*u+material->b*u/(w0*w0)*(3.0*w0-2.0)+(material->A+2.0*material->B*mu)/material->rho0 + Pc/(rho*rho)*(material->a*rho+material->b*rho/(w0*w0));
+            c2e = (Gammae+1.0)*Pe/rho + material->A/material->rho0*exp(-(material->alpha*z+material->beta*z*z))*(1.0+mu/(eta*eta)*(material->alpha+2.0*material->beta*z-eta)) + material->b*rho*u/(w0*w0*eta*eta)*exp(-material->beta*z*z)*(2.0*material->beta*z*w0/material->rho0+1.0/(material->u0*rho)*(2.0*u-Pe/rho));
+
+            *pcSound = c2c*(1.0-y)+c2e*y;
+        }
+
+        return (Pc*(1.0-y)+Pe*y);
+    }
 }
 
 /*
