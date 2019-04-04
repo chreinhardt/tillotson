@@ -87,8 +87,8 @@ print "rho_min=", min(rho), "rho_max=", max(rho)
 print "u_min  =", min(u), "u_max  =", max(u)
 
 # Convert to cgs
-rho /= dGmPerCcUnit
-u   /= dErgPerGmUnit
+rho *= dGmPerCcUnit
+u   *= dErgPerGmUnit
 
 #data /= (dErgPerGmUnit*dGmPerCcUnit)
 #data /= (dGmPerCcUnit*dErgPerGmUnit)
