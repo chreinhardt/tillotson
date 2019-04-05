@@ -105,8 +105,18 @@ void main(int argc, char **argv) {
 		{
             rho = rhomin + j*drho;
 
-			fprintf(fp," %15.7E", tillPressureSoundNP(tillmat, rho, u, NULL)-
+            double P;
+            P = fabs(tillPressureSoundNP(tillmat, rho, u, NULL)-tillPressure(tillmat, rho, u));
+
+            if (P > 0.0) {
+                fprintf(fp," %2i", 0);
+            } else {
+                fprintf(fp," %2i", 1);
+            }
+#if 0
+            fprintf(fp," %15.7E", tillPressureSoundNP(tillmat, rho, u, NULL)-
                     tillPressure(tillmat, rho, u));
+#endif
 		}
 		fprintf(fp,"\n");
 	}
@@ -124,8 +134,8 @@ void main(int argc, char **argv) {
 		for (j=0; j<nRho; j+=1)
 		{
             rho = rhomin + j*drho;
-//            if (tillPressureSoundNP(tillmat, rho, u, NULL) <= 0.0)
-            if (tillPressureSound(tillmat, rho, u, NULL) <= 0.0)
+            if (tillPressureSoundNP(tillmat, rho, u, NULL) <= 0.0)
+//            if (tillPressureSound(tillmat, rho, u, NULL) <= 0.0)
             {
                 fprintf(fp," %2i", 0);
             } else {
