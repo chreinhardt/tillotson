@@ -45,7 +45,7 @@ int main(int argc, char **argv) {
 	tillInitLookup(tillmat, nRho, nV, rhomin, rhomax, vmax);
 	fprintf(stderr, "Done.\n");
 	
-    dP = (P_max-P_nin)/(nP-1);
+    dP = (P_max-P_min)/(nP-1);
     dT = (T_max-T_min)/(nT-1);
 
 	/*
@@ -70,5 +70,7 @@ int main(int argc, char **argv) {
 	fclose(fp);
 
 	fprintf(stderr,"Done.\n");
-	tillFinalizeMaterial(granite);
+	tillFinalizeMaterial(tillmat);
+
+    return 0;
 }
