@@ -1159,6 +1159,7 @@ double PressureRhoT_GSL(double rho, void *params)
     TILLMATERIAL *material;
     double P;
     double T;
+    double u;
 
     struct PressureRhoT_GSL_Params *p;
 
