@@ -1168,7 +1168,15 @@ double PressureRhoT_GSL(double rho, void *params)
     P = p->P;
     T = p->T;
 
-    return(eosPressureRhoT(material, rho, T)-P);
+    u = eosURhoTemp(material, rho, T);
+
+    if (material->iMaterial == IDEALGAS) {
+        // Ideal gas has no negative pressure region
+        return (eosPressureSound(material, rho, u, NULL));
+    } else {
+        // Note that this only works for the Tillotson EOS so far!!!
+        return (tillPressureSoundNP(material, rho, u, NULL));
+    }
 }
 
 /* 
@@ -1216,13 +1224,11 @@ double tillRhoPTemp(TILLMATERIAL *material, double P, double T)
     F.function = &PressureRhoT_GSL;
     F.params = &Params;
 
-    rho_min = material->rhomin;
+    // Set minimum density because the pressure diverges if rho=0 and u=0.
+    rho_min = 1e-10;
     rho_max = 0.999*material->rhomax;
 
-    // For rho=0.0 the pressure diverges so set a minimum density.
-    if (rho_min < 1e-5)
-        rho_min = 1e-5;
-
+#if 0
     // Check if P(rho_min, T) < P otherwise the root can not be bracketed.
     if (eosPressureRhoT(material, rho_min, T) > P) {
 #if TILL_VERBOSE
@@ -1231,6 +1237,7 @@ double tillRhoPTemp(TILLMATERIAL *material, double P, double T)
 #endif
         return -1.0;
     }
+#endif
 
     // Initialize the root finder
     SolverType = gsl_root_fsolver_brent;
