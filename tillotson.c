@@ -1173,10 +1173,10 @@ double PressureRhoT_GSL(double rho, void *params)
 
     if (material->iMaterial == IDEALGAS) {
         // Ideal gas has no negative pressure region
-        return (eosPressureSound(material, rho, u, NULL));
+        return (eosPressureSound(material, rho, u, NULL)-P);
     } else {
         // Note that this only works for the Tillotson EOS so far!!!
-        return (tillPressureSoundNP(material, rho, u, NULL));
+        return (tillPressureSoundNP(material, rho, u, NULL)-P);
     }
 }
 
@@ -1229,6 +1229,22 @@ double tillRhoPTemp(TILLMATERIAL *material, double P, double T)
     rho_min = 1e-10;
     rho_max = 0.999*material->rhomax;
 
+    // Check if the root can be bracketed
+    double u;
+    double P_min, P_max;
+
+    fprintf(stderr, "P= %g T= %g rho_min= %g rho_max= %g\n", P, T, rho_min, rho_max);
+
+    u = eosURhoTemp(material, rho_min, T);
+    P_min = tillPressureSoundNP(material, rho_min, u, NULL);
+    fprintf(stderr, "u_min= %g P_min= %g dP_min= %g\n", u, P_min, P_min-P);
+
+    u = eosURhoTemp(material, rho_max, T);
+    P_max = tillPressureSoundNP(material, rho_max, u, NULL);
+
+    fprintf(stderr, "u_max= %g P_max= %g dP_max= %g\n", u, P_max, P_max-P);
+
+    assert (P_min < P && P < P_max);	
 #if 0
     // Check if P(rho_min, T) < P otherwise the root can not be bracketed.
     if (eosPressureRhoT(material, rho_min, T) > P) {
@@ -1248,7 +1264,7 @@ double tillRhoPTemp(TILLMATERIAL *material, double P, double T)
     /// CR: Some debug code
 //    fprintf(stderr, "rho_min= %g P_min= %g rho_max= %g P_max= %g\n", rho_min, eosPressureRhoT(material, rho_min, T),
 //            rho_max, eosPressureRhoT(material, rho_max, T));
-
+    fprintf(stderr, "Setting root finder...\n");
     gsl_root_fsolver_set(Solver, &F, rho_min, rho_max);
 
 #if TILL_VERBOSE
@@ -1293,6 +1309,17 @@ double tillRhoPTemp(TILLMATERIAL *material, double P, double T)
     assert (Pa < P && P < Pb);	
 #endif
 
+    // CR: More debug
+
+    fprintf(stderr, "PressureRhoT_GSL: P_min= %g ", PressureRhoT_GSL(rho_min, (void *) &Params));
+    fprintf(stderr, "P_max= %g\n", PressureRhoT_GSL(rho_max, (void *) &Params));
+    fprintf(stderr, "PressureRhoT_GSL: dP_min= %g ", PressureRhoT_GSL(rho_min, (void *) &Params)-P);
+    fprintf(stderr, "dP_max= %g\n", PressureRhoT_GSL(rho_max, (void *) &Params)-P);
+
+    fprintf(stderr, "GSL_FN_EVAL: P_min= %g ", GSL_FN_EVAL(&F, rho_min));
+    fprintf(stderr, "P_max= %g\n", GSL_FN_EVAL(&F, rho_max));
+    fprintf(stderr, "\n");
+
     for (i=0; i<max_iter; i++)
     {
         // Do one iteration of the root solver
@@ -1314,6 +1341,12 @@ double tillRhoPTemp(TILLMATERIAL *material, double P, double T)
 #endif
         if (status != GSL_CONTINUE)
             break;
+
+#if 0
+        ///CR: Debug
+        fprintf(stderr, "iteration %i: rho= %g rho_min= %g rho_max= %g err_abs= %g err_rel= %g\n",
+                i, rho, rho_min, rho_max, err_abs, err_rel);
+#endif
     }
 
     if (status != GSL_SUCCESS)
