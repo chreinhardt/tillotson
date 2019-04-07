@@ -49,7 +49,7 @@ int main(int argc, char **argv) {
     dT = (T_max-T_min)/(nT-1);
     
     // Zoom in
-	rho_max = 25.0;
+	rho_max = 10.0;
     rho_min = 1e-4;
     drho = (rho_max-rho_min)/(nRho-1);
 
@@ -115,9 +115,19 @@ int main(int argc, char **argv) {
 		    rho = rho_min + j*drho;
             P = eosPressureRhoT(tillmat, rho, T);
 
-            printf("rho = %g T= %g P= %g\n", rho, T, P);
+            // Avoid weird densities if the root finding fails.
+            if (P <= 0.0) {
+                printf("rho = %g T= %g P= %g\n", rho, T, P);
+                fprintf(fp," %3i", -1);
+            } else {
+                if (fabs(tillRhoPTemp(tillmat, P, T)-rho) < 1e-3) {
+                    fprintf(fp," %3i", 0);
+                } else {
+                    fprintf(fp," %3i", 1);
+                }
 
-			fprintf(fp," %15.7E", tillRhoPTemp(tillmat, P, T)-rho);
+//                fprintf(fp," %15.7E", tillRhoPTemp(tillmat, P, T)-rho);
+            }
 		}
 		fprintf(fp,"\n");
 	}
