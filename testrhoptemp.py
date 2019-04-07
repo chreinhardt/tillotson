@@ -111,11 +111,11 @@ print "u_min  =", u_min, "u_max  =", u_max
 """
 Plot rho(P, T).
 """
-data = loadtxt('testtillpressure_np_diff.txt')
+data = loadtxt('testrhoptemp.txt')
 
 print where(fabs(data) < 1e-10)
 
-imshow(data, origin='lower', extent=(rho_min, rho_max, u_min, u_max), aspect='auto')
+imshow(data, origin='lower', extent=(P_min, P_max, T_min, T_max), aspect='auto')
 
 xlabel("Pressure [code units]")
 ylabel("Temperature [K]")
@@ -126,5 +126,37 @@ savefig('testrhoptemp.png', dpi=300, bbox_inches='tight')
 
 fig.clear()
 
+"""
+Plot P(rho, T)-P.
+"""
+data = loadtxt('testrhoptemp_diff.txt')
 
+print where(fabs(data) < 1e-10)
+
+imshow(data, origin='lower', extent=(P_min, P_max, T_min, T_max), aspect='auto')
+
+xlabel("Pressure [code units]")
+ylabel("Temperature [K]")
+
+colorbar()
+
+savefig('testrhoptemp_diff.png', dpi=300, bbox_inches='tight')
+
+fig.clear()
+
+"""
+Plot rho(P, T)-rho.
+"""
+data = loadtxt('testrhoptemp_rhot.txt')
+
+print where(fabs(data) < 1e-10)
+
+imshow(data, origin='lower', extent=(P_min, P_max, T_min, T_max), aspect='auto')
+
+xlabel("Density [code units]")
+ylabel("Temperature [K]")
+
+colorbar()
+
+savefig('testrhoptemp_rhot.png', dpi=300, bbox_inches='tight')
 
