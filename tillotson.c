@@ -776,6 +776,19 @@ double tillPressureSoundNP(TILLMATERIAL *material, double rho, double u, double 
         Gammae = material->a + material->b/w0*exp(-material->beta*z*z);
         Pe = Gammae*u*rho + material->A*mu*exp(-(material->alpha*z+material->beta*z*z));
 
+        /*
+         * Set Pc to zero if it is negative so it does not contribute to the pressure in the
+         * expanded, intermediate states.
+         */
+#ifdef TILL_PRESS_MELOSH
+        if (eta < 0.8)
+        {
+            Pc = 0.0;
+        }
+#endif
+#ifdef TILL_PRESS_NP
+        if (Pc < 0.0) Pc = 0.0;
+#endif
         if (pcSound != NULL)
         {
             /* calculate the sound speed */
