@@ -26,10 +26,10 @@ int main(int argc, char **argv) {
 	int nV = 1000;
     int iMat = GRANITE;
     // Grid
-    double P_min = 0.0;
-    double P_max = 1e3;
+    double P_min = 1e-8;
+    double P_max = 1e2;
     double T_min = 0.0;
-    double T_max = 1e3;
+    double T_max = 1e5;
     int nP = 1000;
     int nT = 1000;
 	double rho, u;
@@ -51,7 +51,7 @@ int main(int argc, char **argv) {
 	/*
 	 * Print rho on a P x T grid.
 	 */	
-	fp = fopen("testtillrhoptemp.txt", "w");
+	fp = fopen("testrhoptemp.txt", "w");
 	assert(fp != NULL);
 
 	fprintf(stderr, "Printing grid...\n");
@@ -64,6 +64,30 @@ int main(int argc, char **argv) {
 		{
 		    P = P_min + j*dP;
 			fprintf(fp," %15.7E", tillRhoPTemp(tillmat, P, T));
+		}
+		fprintf(fp,"\n");
+	}
+	fclose(fp);
+
+    /*
+     * Compare the difference in pressure when using rho(P, T).
+     */
+	fp = fopen("testrhoptemp_diff.txt", "w");
+	assert(fp != NULL);
+
+	fprintf(stderr, "Printing grid...\n");
+
+	for (i=0; i<nT; i+=1)
+	{
+		T = T_min + i*dT;
+
+		for (j=0; j<nP; j+=1)
+		{
+		    P = P_min + j*dP;
+
+			rho = tillRhoPTemp(tillmat, P, T);
+
+			fprintf(fp," %15.7E", tillPressureRhoT(tillmat, rho, T)-P);
 		}
 		fprintf(fp,"\n");
 	}
