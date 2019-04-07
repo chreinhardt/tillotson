@@ -1285,6 +1285,27 @@ double tillRhoPTemp(TILLMATERIAL *material, double P, double T)
     assert (Pa < P && P < Pb);	
 #endif
 
+    /*
+     * Check if P_min < P < P_max so the root finder does not crash.
+     *
+     * Note: In the future we might want to expand the lookup table if P>=P_max.
+     */
+    if (P <= eosPressureRhoT(material, rho_min, T)) {       
+#ifdef TILL_VERBOSE
+        fprintf(stderr, "tillRhoPTemp: P <= P(rho_min, T) (P= %g, rho_min= %g, P_min= %g T=%g).\n",
+                P, rho_min, eosPressure(material, rho_min, T), T);
+#endif
+        return -1.0;
+    }
+    
+    if (P >= eosPressureRhoT(material, rho_max, T)) {       
+#ifdef TILL_VERBOSE
+        fprintf(stderr, "tillRhoPTemp: P >= P(rho_max, T) (P= %g, rho_max= %g, P_max= %g T=%g).\n",
+                P, rho_max, eosPressure(material, rho_max, T), T);
+#endif
+        return -1.0;
+    }
+    
     for (i=0; i<max_iter; i++)
     {
         // Do one iteration of the root solver
