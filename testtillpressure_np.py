@@ -174,6 +174,28 @@ colorbar()
 
 savefig('testtillpressure_np_region.png', dpi=300, bbox_inches='tight')
 
+fig.clear()
+
+"""
+Plot P(rho, T).
+"""
+data = loadtxt('testtillpressure_np_rhot.txt')
+
+rho = data[:,0]
+
+for i in range(1,size(data[1,:]),1):
+    plot(data[:,0],data[:,i],'-',color='red',markersize=1,label='T')
+
+rho_min = min(rho)
+rho_max = max(rho)
+
+xlim(rho_min, rho_max)
+#ylim(0, 4)
+
+xlabel("Density [code units]")
+ylabel("Pressure [code units]")
+
+savefig('testtillpressure_np_rhot.png', dpi=300, bbox_inches='tight')
 
 show()
 
