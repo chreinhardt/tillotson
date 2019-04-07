@@ -3,6 +3,7 @@
  *
  * Author:   Christian Reinhardt
  * Date:     04.03.2019
+ * Modified: 05.03.2019
  *
  * Calculate the pressure of a material with tillPressureSoundNP() and check if it agrees with
  * tillPressure().
@@ -16,30 +17,32 @@
 #define INDEX(i, j) ((i*tillmat->nTableV) + (j))
 
 void main(int argc, char **argv) {
-	double dKpcUnit = 2.06701e-13;
-	double dMsolUnit = 4.80438e-08;
+    // Tillotson EOS library
+	TILLMATERIAL *tillmat;
+    double dKpcUnit = 2.06701e-13;
+    double dMsolUnit = 4.80438e-08;
+    double vmax = 100.0;
+    int iMat = GRANITE;
     // Define the size of the grid
     double rhomin = 1e-4;
 	double rhomax = 10.0;
-    double vmax = 100.0;
 	double umax = 25.0;
 	double umin = 0.0;
+    double T_min = 0.0;
+    double T_max = 1e4;
 	int nRho = 1000;
 	int nU = 1000;
-    double drho, dU;
-
-	double rho;
-    double u;
-
-	TILLMATERIAL *tillmat;
+	int nV = 1000;
+	int nT = 100;
+    double drho, dU, dT;
+	double rho, u, T;
 	FILE *fp = NULL;
-
-	int i = 0;
-	int j = 0;
+	int i, j;
 
 	fprintf(stderr, "Initializing material...\n");
-	tillmat = tillInitMaterial(GRANITE, dKpcUnit, dMsolUnit);
-	fprintf(stderr, "Done.\n");
+	tillmat = tillInitMaterial(iMat, dKpcUnit, dMsolUnit);
+	tillInitLookup(tillmat, nRho, nV, rhomin, rhomax, vmax);
+    fprintf(stderr, "Done.\n");
 
     /*
      * Zoom in to the expanded states.
@@ -51,6 +54,7 @@ void main(int argc, char **argv) {
 
     drho = (rhomax-rhomin)/(nRho-1);
     dU = (umax-umin)/(nU-1);
+    dT = (T_max-T_min)/(nT-1);
 
 	/*
 	 * Print P on a rho x u grid.
@@ -145,5 +149,28 @@ void main(int argc, char **argv) {
 		fprintf(fp,"\n");
 	}
 	fclose(fp);
+
+    /*
+     * Plot a few isotherms.
+     */
+	fp = fopen("testtillpressure_np_rhot.txt", "w");
+	assert(fp != NULL);
+
+	for (i=0; i<nRho; i+=1)
+	{
+        rho = rhomin + i*drho;
+
+		fprintf(fp,"%15.7E", rho);
+
+		for (j=0; j<nT; j+=1)
+		{
+            T = T_min + j*dT;
+            u = eosURhoTemp(tillmat, rho, T);
+			fprintf(fp," %15.7E", tillPressureSoundNP(tillmat, rho, u, NULL));
+		}
+		fprintf(fp,"\n");
+	}
+	fclose(fp);
+
 	tillFinalizeMaterial(tillmat);
 }
