@@ -49,7 +49,7 @@ int main(int argc, char **argv) {
     dT = (T_max-T_min)/(nT-1);
     
     // Zoom in
-	rho_max = 10.0;
+	rho_max = 8.0;
     rho_min = 1e-4;
     drho = (rho_max-rho_min)/(nRho-1);
 
