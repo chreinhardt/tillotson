@@ -87,11 +87,14 @@ rho_max = 8.0602
 u_min   = 0.0
 u_max   = 19.8035
 """
-P_min = 0.0
-P_max = 1e3
+P_min   = 0.0
+P_max   = 1e3
 
-T_min = 0.0
-T_max = 1e3
+T_min   = 0.0
+T_max   = 1e3
+
+rho_min = 1e-4
+rho_max = 8.0
 
 """
 # Convert to cgs
@@ -151,7 +154,7 @@ data = loadtxt('testrhoptemp_rhot.txt')
 
 print where(fabs(data) < 1e-10)
 
-imshow(data, origin='lower', extent=(P_min, P_max, T_min, T_max), aspect='auto')
+imshow(data, origin='lower', extent=(rho_min, rho_max, T_min, T_max), aspect='auto')
 
 xlabel("Density [code units]")
 ylabel("Temperature [K]")
@@ -159,4 +162,4 @@ ylabel("Temperature [K]")
 colorbar()
 
 savefig('testrhoptemp_rhot.png', dpi=300, bbox_inches='tight')
-
+show()
