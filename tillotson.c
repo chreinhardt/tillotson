@@ -1247,10 +1247,6 @@ double tillRhoPTemp(TILLMATERIAL *material, double P, double T)
 
     gsl_root_fsolver_set(Solver, &F, rho_min, rho_max);
 
-#if TILL_VERBOSE
-//      fprintf(stderr, "tillRhoPTemp: Using solver %s.\n", gsl_root_fsolver_name(Solver));
-#endif
-
 #if 0
     // Make sure that Pb > P. If nescessary the lookup table has to be expanded.
     while (Pmax < P)
