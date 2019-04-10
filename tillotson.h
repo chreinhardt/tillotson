@@ -9,10 +9,10 @@
 /*
  * Version.
  */
-#define TILL_VERSION_TEXT    "3.2.3"
+#define TILL_VERSION_TEXT    "3.3.0"
 #define TILL_VERSION_MAJOR   3
-#define TILL_VERSION_MINOR   2
-#define TILL_VERSION_PATCH   3
+#define TILL_VERSION_MINOR   3
+#define TILL_VERSION_PATCH   0
 
 /*
  * Error codes.
