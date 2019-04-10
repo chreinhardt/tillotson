@@ -1,6 +1,6 @@
 #!/usr/bin/env python2
 """
-This script plots the results of plottillpressure.c.
+This script plots the results of testrhoptemp.c.
 """
 from matplotlib import *
 rcParams['font.family'] = 'serif'
@@ -71,83 +71,89 @@ dSecUnit = sqrt(1/(dGmPerCcUnit*GCGS))
 Lunit = dKpcUnit*KPCCM
 Munit = dMsolUnit*MSOLG
 
-"""
-data1 = loadtxt('out.old.dat',skiprows=3)
-data2 = loadtxt('out.dat',skiprows=3)
-"""
-
-# Load values for rho and u
-data = loadtxt('plottillpressure-axis.txt')
-
-rho = data[:, 0]
-u   = data[:, 1]
-T   = data[:, 2]
-
-print "rho_min=", min(rho), "rho_max=", max(rho)
-print "u_min  =", min(u), "u_max  =", max(u)
-
-# Convert to cgs
-rho *= dGmPerCcUnit
-u   *= dErgPerGmUnit
-
-#data /= (dErgPerGmUnit*dGmPerCcUnit)
-#data /= (dGmPerCcUnit*dErgPerGmUnit)
-
-rho_min = min(rho)
-rho_max = max(rho)
-
-u_min   = min(u)
-u_max   = max(u)
-
-T_min   = min(T)
-T_max   = max(T)
-
-print "rho_min=", min(rho), "rho_max=", max(rho)
-print "u_min  =", min(u), "u_max  =", max(u)
-
 # Reference density (material dependent)
 rho0 = 2.7
 us   = 3.5e10
 us2  = 1.8e11
 
-# Plot P(rho, u)
-data = loadtxt('plottillpressure.txt')
+"""
+rho_min = 1e-4
+rho_max = 10.0
+u_min   = 0.0
+u_max   = 25.0
+
+rho_min = 1e-4
+rho_max = 8.0602
+u_min   = 0.0
+u_max   = 19.8035
+"""
+P_min   = 0.0
+P_max   = 1e3
+
+T_min   = 0.0
+T_max   = 1e3
+
+rho_min = 1e-4
+rho_max = 8.0
+
+"""
+# Convert to cgs
+rho_min *= dGmPerCcUnit
+rho_max *= dGmPerCcUnit
+
+u_min   *= dErgPerGmUnit
+u_max   *= dErgPerGmUnit
+
+print dGmPerCcUnit
+print dErgPerGmUnit
+
+print "rho_min=", rho_min, "rho_max=", rho_max
+print "u_min  =", u_min, "u_max  =", u_max
+"""
+
+"""
+Plot rho(P, T).
+"""
+data = loadtxt('testrhoptemp.txt')
 
 print where(fabs(data) < 1e-10)
 
-#figure(1)
-imshow(data, origin='lower', extent=(rho_min, rho_max, u_min, u_max), aspect='auto')
+imshow(data, origin='lower', extent=(P_min, P_max, T_min, T_max), aspect='auto')
 
-plot([rho0, rho0], [u_min, u_max], '--', color='red')
-plot([rho_min, rho_max], [us, us], '--', color='red')
-plot([rho_min, rho_max], [us2, us2], '--', color='red')
-
-xlabel("Density [code units]")
-ylabel("Int. energy [code units]")
+xlabel("Pressure [code units]")
+ylabel("Temperature [K]")
 
 colorbar()
 
-savefig('plottillpressure.press.png', dpi=300, bbox_inches='tight')
-
-# Plot where P(rho, u) <= 0
-data = loadtxt('plottillpressure2.txt')
-
-#figure(2)
+savefig('testrhoptemp.png', dpi=300, bbox_inches='tight')
 
 fig.clear()
 
-imshow(data, origin='lower', extent=(rho_min, rho_max, u_min, u_max), aspect='auto')
-
-colorbar()
-
-savefig('plottillpressure.np.png', dpi=300, bbox_inches='tight')
-
-# Plot P(rho, T)
-data = loadtxt('plottillpressure-rhot.txt')
+"""
+Plot P(rho, T)-P.
+"""
+data = loadtxt('testrhoptemp_diff.txt')
 
 print where(fabs(data) < 1e-10)
 
-#figure(1)
+imshow(data, origin='lower', extent=(P_min, P_max, T_min, T_max), aspect='auto')
+
+xlabel("Pressure [code units]")
+ylabel("Temperature [K]")
+
+colorbar()
+
+savefig('testrhoptemp_diff.png', dpi=300, bbox_inches='tight')
+
+fig.clear()
+
+"""
+Plot rho(P, T)-rho.
+"""
+data = loadtxt('testrhoptemp_rhot.txt')
+
+print where(fabs(data) < 1e-10)
+
 imshow(data, origin='lower', extent=(rho_min, rho_max, T_min, T_max), aspect='auto')
 
 xlabel("Density [code units]")
@@ -155,23 +161,5 @@ ylabel("Temperature [K]")
 
 colorbar()
 
-savefig('plottillpressure.press.rhot.png', dpi=300, bbox_inches='tight')
-
-# Plot where P(rho, u) <= 0
-data = loadtxt('plottillpressure2-rhot.txt')
-
-#figure(2)
-
-fig.clear()
-
-imshow(data, origin='lower', extent=(rho_min, rho_max, T_min, T_max), aspect='auto')
-
-colorbar()
-
-savefig('plottillpressure.np.rhot.png', dpi=300, bbox_inches='tight')
-
-
-
+savefig('testrhoptemp_rhot.png', dpi=300, bbox_inches='tight')
 show()
-
-

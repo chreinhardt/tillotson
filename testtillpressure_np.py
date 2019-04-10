@@ -76,8 +76,9 @@ data1 = loadtxt('out.old.dat',skiprows=3)
 data2 = loadtxt('out.dat',skiprows=3)
 """
 
+"""
 # Load values for rho and u
-data = loadtxt('plottillpressure-axis.txt')
+data = loadtxt('testtillpressure_np_diff.txt')
 
 rho = data[:, 0]
 u   = data[:, 1]
@@ -87,8 +88,8 @@ print "rho_min=", min(rho), "rho_max=", max(rho)
 print "u_min  =", min(u), "u_max  =", max(u)
 
 # Convert to cgs
-rho *= dGmPerCcUnit
-u   *= dErgPerGmUnit
+rho /= dGmPerCcUnit
+u   /= dErgPerGmUnit
 
 #data /= (dErgPerGmUnit*dGmPerCcUnit)
 #data /= (dGmPerCcUnit*dErgPerGmUnit)
@@ -104,18 +105,42 @@ T_max   = max(T)
 
 print "rho_min=", min(rho), "rho_max=", max(rho)
 print "u_min  =", min(u), "u_max  =", max(u)
-
+"""
 # Reference density (material dependent)
 rho0 = 2.7
 us   = 3.5e10
 us2  = 1.8e11
 
-# Plot P(rho, u)
-data = loadtxt('plottillpressure.txt')
+rho_min = 1e-4
+rho_max = 10.0
+u_min   = 0.0
+u_max   = 25.0
+
+rho_min = 1e-4
+rho_max = 8.0602
+u_min   = 0.0
+u_max   = 19.8035
+
+# Convert to cgs
+rho_min *= dGmPerCcUnit
+rho_max *= dGmPerCcUnit
+
+u_min   *= dErgPerGmUnit
+u_max   *= dErgPerGmUnit
+
+print dGmPerCcUnit
+print dErgPerGmUnit
+
+print "rho_min=", rho_min, "rho_max=", rho_max
+print "u_min  =", u_min, "u_max  =", u_max
+
+"""
+Plot the difference between tillPressureSoundNP and tillPressure.
+"""
+data = loadtxt('testtillpressure_np_diff.txt')
 
 print where(fabs(data) < 1e-10)
 
-#figure(1)
 imshow(data, origin='lower', extent=(rho_min, rho_max, u_min, u_max), aspect='auto')
 
 plot([rho0, rho0], [u_min, u_max], '--', color='red')
@@ -127,50 +152,50 @@ ylabel("Int. energy [code units]")
 
 colorbar()
 
-savefig('plottillpressure.press.png', dpi=300, bbox_inches='tight')
-
-# Plot where P(rho, u) <= 0
-data = loadtxt('plottillpressure2.txt')
-
-#figure(2)
+savefig('testtillpressure_np_diff.png', dpi=300, bbox_inches='tight')
 
 fig.clear()
+
+"""
+Plot where the pressure is negative.
+"""
+data = loadtxt('testtillpressure_np_region.txt')
 
 imshow(data, origin='lower', extent=(rho_min, rho_max, u_min, u_max), aspect='auto')
 
-colorbar()
-
-savefig('plottillpressure.np.png', dpi=300, bbox_inches='tight')
-
-# Plot P(rho, T)
-data = loadtxt('plottillpressure-rhot.txt')
-
-print where(fabs(data) < 1e-10)
-
-#figure(1)
-imshow(data, origin='lower', extent=(rho_min, rho_max, T_min, T_max), aspect='auto')
+plot([rho0, rho0], [u_min, u_max], '--', color='red')
+plot([rho_min, rho_max], [us, us], '--', color='red')
+plot([rho_min, rho_max], [us2, us2], '--', color='red')
 
 xlabel("Density [code units]")
-ylabel("Temperature [K]")
+ylabel("Int. energy [code units]")
 
 colorbar()
 
-savefig('plottillpressure.press.rhot.png', dpi=300, bbox_inches='tight')
-
-# Plot where P(rho, u) <= 0
-data = loadtxt('plottillpressure2-rhot.txt')
-
-#figure(2)
+savefig('testtillpressure_np_region.png', dpi=300, bbox_inches='tight')
 
 fig.clear()
 
-imshow(data, origin='lower', extent=(rho_min, rho_max, T_min, T_max), aspect='auto')
+"""
+Plot P(rho, T).
+"""
+data = loadtxt('testtillpressure_np_rhot.txt')
 
-colorbar()
+rho = data[:,0]
 
-savefig('plottillpressure.np.rhot.png', dpi=300, bbox_inches='tight')
+for i in range(1,size(data[1,:]),1):
+    plot(data[:,0],data[:,i],'-',color='red',markersize=1,label='T')
 
+rho_min = min(rho)
+rho_max = max(rho)
 
+xlim(rho_min, rho_max)
+#ylim(0, 4)
+
+xlabel("Density [code units]")
+ylabel("Pressure [code units]")
+
+savefig('testtillpressure_np_rhot.png', dpi=300, bbox_inches='tight')
 
 show()
 
