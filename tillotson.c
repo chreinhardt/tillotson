@@ -107,12 +107,7 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit)
 //          material->dMeanMolMass = 11.5;  // 5x solar value (mu=2.3)
 //          material->dMeanMolMass = 17.25; // 7.5x solar value (mu=2.3)
 //          material->dMeanMolMass = 2.3;   // solar value (mu=2.3)
-#if 0
-            /*
-             * This doesnt work as cv is converted to code units below.
-             */
-            material->cv = material->dGasConst/((material->dConstGamma-1.0)*material->dMeanMolMass);
-#endif
+
             // cv = kb/mp
             material->cv = KBOLTZ/((material->dConstGamma-1.0)*MHYDR*material->dMeanMolMass);
             material->rho0 = 0.001;
