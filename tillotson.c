@@ -134,10 +134,6 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit)
             material->b = 26.6/(material->dMeanMolMass*MHYDR*NA);
             material->b = 0.0; 
             material->a = 0.0;
-#ifdef TILL_VERBOSE
-            fprintf(stderr, "tillInitMaterial: Modified ideal gas: b=  %g [cm^3/g]\n", material->b);
-            fprintf(stderr, "tillInitMaterial: Modified ideal gas: mu= %g [1/m_H]\n", material->dMeanMolMass);
-#endif
 			break;
 		case GRANITE:
 			/*
