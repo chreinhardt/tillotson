@@ -260,15 +260,7 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit)
     if (iMaterial == IDEALGAS)
     {
         material->b *=material->dGmPerCcUnit;
-//        fprintf(stderr, "b= %g [RE^3/Munit]\n", material->b);
     }
-
-#if 0
-    if (material->iMaterial == IDEALGAS)
-    {
-        fprintf(stderr, "Ideal gas: cv= %g\n in code units.\n", material->cv);
-    }
-#endif
 
     return material;
 }
