@@ -103,19 +103,12 @@ void tillInitLookup(TILLMATERIAL *material, int nTableRho, int nTableV, double r
     /* This is the same for all materials. */
     material->dv = material->vmax/(material->nTableV-1);
 
-#ifdef TILL_VERBOSE
-    fprintf(stderr, "tillInitLookup: iMat= %i n= %i dlogrho= %g dv= %g.\n", material->iMaterial, material->n, material->dlogrho, material->dv);
-    fprintf(stderr, "tillInitLookup: nTableRho= %i nTableV= %i.\n", material->nTableRho, material->nTableV);
-#endif
-
 	/* We arrange the look up table as a 1D array with Lookup[i][j] = Lookup[i*Ntable+j] */
     material->Lookup = calloc(material->nTableRho*material->nTableV, sizeof(TILL_LOOKUP_ENTRY));
     assert(material->Lookup != NULL);
 
 	v = 0.0;
 	dv = material->dv;
-
-	fprintf(stderr,"tillInitLookup: Solving ODEs.\n");
     
 	/*
      * Integrate the isentropes for different v.
@@ -136,9 +129,7 @@ void tillInitLookup(TILLMATERIAL *material, int nTableRho, int nTableV, double r
 	}
 
     /* Solve splines for both u and u1 in v storing the 2nd derivatives wrt v */
-	fprintf(stderr,"tillInitLookup: Init splines.\n");
 	tillInitSplines(material);
-	fprintf(stderr,"tillInitLookup: Splines initialised.\n");	
 }
 
 TILL_LOOKUP_ENTRY *tillSolveIsentrope(TILLMATERIAL *material, double v)

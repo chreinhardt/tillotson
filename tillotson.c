@@ -107,12 +107,7 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit)
 //          material->dMeanMolMass = 11.5;  // 5x solar value (mu=2.3)
 //          material->dMeanMolMass = 17.25; // 7.5x solar value (mu=2.3)
 //          material->dMeanMolMass = 2.3;   // solar value (mu=2.3)
-#if 0
-            /*
-             * This doesnt work as cv is converted to code units below.
-             */
-            material->cv = material->dGasConst/((material->dConstGamma-1.0)*material->dMeanMolMass);
-#endif
+
             // cv = kb/mp
             material->cv = KBOLTZ/((material->dConstGamma-1.0)*MHYDR*material->dMeanMolMass);
             material->rho0 = 0.001;
@@ -134,10 +129,6 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit)
             material->b = 26.6/(material->dMeanMolMass*MHYDR*NA);
             material->b = 0.0; 
             material->a = 0.0;
-#ifdef TILL_VERBOSE
-            fprintf(stderr, "tillInitMaterial: Modified ideal gas: b=  %g [cm^3/g]\n", material->b);
-            fprintf(stderr, "tillInitMaterial: Modified ideal gas: mu= %g [1/m_H]\n", material->dMeanMolMass);
-#endif
 			break;
 		case GRANITE:
 			/*
@@ -269,15 +260,7 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit)
     if (iMaterial == IDEALGAS)
     {
         material->b *=material->dGmPerCcUnit;
-//        fprintf(stderr, "b= %g [RE^3/Munit]\n", material->b);
     }
-
-#if 0
-    if (material->iMaterial == IDEALGAS)
-    {
-        fprintf(stderr, "Ideal gas: cv= %g\n in code units.\n", material->cv);
-    }
-#endif
 
     return material;
 }
