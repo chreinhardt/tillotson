@@ -109,8 +109,6 @@ void tillInitLookup(TILLMATERIAL *material, int nTableRho, int nTableV, double r
 
 	v = 0.0;
 	dv = material->dv;
-
-	fprintf(stderr,"tillInitLookup: Solving ODEs.\n");
     
 	/*
      * Integrate the isentropes for different v.
