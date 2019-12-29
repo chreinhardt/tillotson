@@ -294,6 +294,12 @@ tillpressrhotemp_monotonic: tillpressrhotemp_monotonic.o $(objects)
 plottillpressure: plottillpressure.o $(objects)
 	cc -o plottillpressure plottillpressure.o $(objects) $(LIBS)
 
+#
+# Calculate for which points the pressure is negative or the sound speed is imaginary.
+#
+tillmarkneg: tillmarkneg.o $(objects)
+	cc -o tillmarkneg tillmarkneg.o $(objects) $(LIBS)
+
 clean:
 	rm $(objects)
 
