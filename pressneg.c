@@ -18,14 +18,7 @@ int main(int argc, char **argv) {
 	double dMsolUnit = 4.80438e-08;
 	double rho, a, b, c, Pa, Pb, Pc;
 
-	int i = 0;
-	int j = 0;
-	int n = 2;
-
-	fprintf(stderr, "Initializing material...\n");
-
-	tillMat = tillInitMaterial(GRANITE, dKpcUnit, dMsolUnit);
-	
+	tillMat = tillInitMaterial(GRANITE, dKpcUnit, dMsolUnit);	
 	
 	/*
 	** Find where P<0 for 0 < rho < rho0.
@@ -45,15 +38,15 @@ int main(int argc, char **argv) {
 		b = tillMat->us2;
 		c = 0.0;
 
-		Pa = tillPressureNP(tillMat, rho, a);
-		Pb = tillPressureNP(tillMat, rho, b);
+		Pa = tillPressureSoundNP(tillMat, rho, a, NULL);
+		Pb = tillPressureSoundNP(tillMat, rho, b, NULL);
 		Pc = 0.0;
 
 		while (b-a > 1e-14)
 		{
 //			printf("rho=%g a=%g b=%g c=%g Pa=%g Pb=%g Pc=%g\n",rho,a,b,c,Pa,Pb,Pc);
 			c = 0.5*(a + b);
-			Pc = tillPressureNP(tillMat, rho, c);
+			Pc = tillPressureSoundNP(tillMat, rho, c, NULL);
 
 			if (Pc < 0)
 			{
@@ -74,4 +67,6 @@ int main(int argc, char **argv) {
 	fprintf(stderr,"Done.\n");
 
 	tillFinalizeMaterial(tillMat);
+
+    return 0;
 }
