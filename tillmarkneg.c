@@ -22,8 +22,8 @@ int main(int argc, char **argv)
     double u_min, u_max;
     double drho;
     double du;
-    int nRho = 100;
-    int nU = 100;
+    int nRho = 1000;
+    int nU = 1000;
     FILE *fp1;
     FILE *fp2;
     int i, j;
