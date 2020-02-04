@@ -116,8 +116,17 @@ printderiv: printderiv.o $(objects)
 printpress: printpress.o $(objects)
 	cc -o printpress printpress.o $(objects) $(LIBS)
 
+#
+# Print the curve below which P < 0.
+#
 pressneg: pressneg.o $(objects)
 	cc -o pressneg pressneg.o $(objects) $(LIBS)
+
+#
+# Print the curve below which cs2 < 0.
+#
+csneg: csneg.o $(objects)
+	cc -o csneg csneg.o $(objects) $(LIBS)
 
 testisintable: testisintable.o $(objects)
 	cc -o testisintable testisintable.o $(objects) $(LIBS)
@@ -299,6 +308,12 @@ plottillpressure: plottillpressure.o $(objects)
 #
 tillmarkneg: tillmarkneg.o $(objects)
 	cc -o tillmarkneg tillmarkneg.o $(objects) $(LIBS)
+
+#
+# Calculate the generalized Gruneisen parameter along different isentropes.
+#
+tillcalcgamma: tillcalcgamma.o $(objects)
+	cc -o tillcalcgamma tillcalcgamma.o $(objects) $(LIBS)
 
 clean:
 	rm $(objects)
