@@ -44,10 +44,10 @@ int main(int argc, char **argv) {
 		Pa = tillPressureSoundNP(tillMat, rho, a, &cs2a);
 		Pb = tillPressureSoundNP(tillMat, rho, b, &cs2b);
 		cs2c = 0.0;
-
+        
+        fprintf(stderr, "a= %g b= %g c= %g cs2a= %g cs2b= %g cs2c= %g\n", a, b, c, cs2a, cs2b, cs2c);
 		while (b-a > 1e-14)
 		{
-//			printf("rho=%g a=%g b=%g c=%g Pa=%g Pb=%g Pc=%g\n",rho,a,b,c,Pa,Pb,Pc);
 			c = 0.5*(a + b);
 			Pc = tillPressureSoundNP(tillMat, rho, c, &cs2c);
 
@@ -61,6 +61,8 @@ int main(int argc, char **argv) {
 				b = c;
 				cs2b = cs2c;
 			}
+
+        fprintf(stderr, "a= %g b= %g c= %g cs2a= %g cs2b= %g cs2c= %g\n", a, b, c, cs2a, cs2b, cs2c);
 		}
 
 		printf("%15.7E %15.7E\n", rho, c);
