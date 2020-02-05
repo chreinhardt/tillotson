@@ -77,60 +77,66 @@ rho = data[:, 0]
 P_H = data[:, 1]
 P_S = data[:, 2]
 
-i = where(rho < 22.0)
+# Convert to cgs
+rho *= dGmPerCcUnit
+
+P_H *= (dErgPerGmUnit*dGmPerCcUnit)
+P_S *= (dErgPerGmUnit*dGmPerCcUnit)
+
+rho_min = min(rho)
+rho_max = max(rho)
+
+P_min   = min(min(P_H), min(P_S))
+P_max   = max(max(P_H), max(P_S))
+
+print "rho_min=", rho_min, "rho_max=", rho_max
+print "P_min  =", P_min, "P_max  =", P_max
+
+# Material parameters for granite
+a     = 0.5;
+b     = 1.3;
+u0    = 1.6e11;
+rho0  = 2.7;
+A     = 1.8e11;
+B     = 1.8e11;
+us    = 3.5e10;
+us2   = 1.8e11;
+alpha = 5.0;
+beta  = 5.0;
+
+# Calculate the linear Hugoniot
+Gamma0 = a + b
+s = 0.5*(1 + B/A + 0.5*(a+b))
+
+rho_max = rho0*s/(s-1.0)
+
+print "rho_max=", rho_max
+
+print rho_max/rho0
+rho_max = 2*rho0
+
+# Limit the density
+i = where(rho < rho_max)
 
 rho = rho[i]
 P_H = P_H[i]
 P_S = P_S[i]
 
-"""
-# Convert to cgs
-rho /= dGmPerCcUnit
-u   /= dErgPerGmUnit
-
-#data /= (dErgPerGmUnit*dGmPerCcUnit)
-#data /= (dGmPerCcUnit*dErgPerGmUnit)
-
 rho_min = min(rho)
 rho_max = max(rho)
 
-u_min   = min(u)
-u_max   = max(u)
+P_min   = min(min(P_H), min(P_S))
+P_max   = max(max(P_H), max(P_S))
 
-T_min   = min(T)
-T_max   = max(T)
+# Add the reference point to the plot
+P0 = 0.0
 
-print "rho_min=", min(rho), "rho_max=", max(rho)
-print "u_min  =", min(u), "u_max  =", max(u)
+rho = numpy.append(rho0, rho)
+P_H = numpy.append(P0, P_H)
+P_S = numpy.append(P0, P_S)
 
-# Reference density (material dependent)
-rho0 = 2.7
-us   = 3.5e10
-us2  = 1.8e11
-
-rho_min = 1e-4
-rho_max = 10.0
-u_min   = 0.0
-u_max   = 25.0
-
-rho_min = 1e-4
-rho_max = 8.0602
-u_min   = 0.0
-u_max   = 19.8035
-
-# Convert to cgs
-rho_min *= dGmPerCcUnit
-rho_max *= dGmPerCcUnit
-
-u_min   *= dErgPerGmUnit
-u_max   *= dErgPerGmUnit
-
-print dGmPerCcUnit
-print dErgPerGmUnit
-
-print "rho_min=", rho_min, "rho_max=", rho_max
-print "u_min  =", u_min, "u_max  =", u_max
-"""
+# Mark the reference state
+scatter(rho0, P0, s=10, color='black')
 
 """
 Plot the Hugoniot.
@@ -138,9 +144,23 @@ Plot the Hugoniot.
 plot(rho, P_H, '-', color='blue')
 plot(rho, P_S, '--', color='green')
 
-xlabel("Density [code units]")
-ylabel("Pressure [code units]")
+xlim(rho0, rho_max)
+ylim(-1e10, P_max)
+
+i = where(abs(rho-1.8*rho0)<5e-2)
+
+rho1 = min(rho[i])
+P1   = min(P_H[i])
+
+print rho1, P1
+
+#scatter(rho1, P1, s=25, color='blue')
+#plot([rho0, rho1], [P0, P1], '-', color='red')
+
+xlabel("Density [g]")
+ylabel("Pressure [erg cm$^3$]")
 
 savefig('testtillhugoniotpressure.png', dpi=300, bbox_inches='tight')
-
+savefig('testtillhugoniotpressure.pdf', dpi=300, bbox_inches='tight')
+show()
 
