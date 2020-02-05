@@ -315,6 +315,12 @@ tillmarkneg: tillmarkneg.o $(objects)
 tillcalcgamma: tillcalcgamma.o $(objects)
 	cc -o tillcalcgamma tillcalcgamma.o $(objects) $(LIBS)
 
+#
+# Calculate the Hugoniot curve.
+#
+testtillhugoniotpressure: testtillhugoniotpressure.o $(objects)
+	cc -o testtillhugoniotpressure testtillhugoniotpressure.o $(objects) $(LIBS)
+
 clean:
 	rm $(objects)
 

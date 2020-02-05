@@ -1513,3 +1513,21 @@ int tillSolveBC(TILLMATERIAL *mat1, TILLMATERIAL *mat2, double rho1, double u1, 
     return iRet;
 }
 
+double tillHugoniotPressure(TILLMATERIAL *material, double rho) {
+    double X;
+    double C0;
+    double s;
+    double P0 = 0.0;
+
+    assert(rho > material->rho0);
+    X = 1.0 - material->rho0/rho;
+
+    /*
+     * Calculate the linear Hugoniot from Melosh (1989).
+     */
+    C0 = sqrt(material->A/material->rho0);
+    s = 0.5*(1 + material->B/material->A + 0.5*(material->a + material->b));
+
+
+    return (material->rho0*X*C0*C0)/pow((1.0-s*X), 2.0);
+}

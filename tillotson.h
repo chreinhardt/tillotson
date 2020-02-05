@@ -199,6 +199,8 @@ double tilldudrho(TILLMATERIAL *material, double rho, double u);
 double tilldudlogrho(TILLMATERIAL *material, double logrho, double u);
 int tillSolveBC(TILLMATERIAL *mat1, TILLMATERIAL *mat2, double rho1, double u1, double *prho2, double *pu2);
 
+double tillHugoniotPressure(TILLMATERIAL *material, double rho);
+
 /*
  * tillinitlookup.c
  */
