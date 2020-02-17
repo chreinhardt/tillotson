@@ -64,42 +64,37 @@ int main(int argc, char **argv) {
     tillMat = tillInitMaterial(iMat, dKpcUnit, dMsolUnit);
 
     rhomin = 0.99*tillMat->rho0;
-    rhomax = 10000.0*tillMat->rho0;
-    vmax = 25.0;
+    rhomax = 20.0*tillMat->rho0;
+    vmax = 1200.0;
     //assert(rhomax > rhomin);
 
+    // Print material information
+    tillPrintMat(tillMat);
 
     tillInitLookup(tillMat, nTableRho, nTableV, rhomin, rhomax, vmax);
 
-    rho = tillMat->rho0;
-    u = 0.0;
-    fprintf(stderr, "Gamma(rho=%15.7E, u=%15.7E)=%15.7E\n", rho, u, Gamma(tillMat, rho, u));
+    fprintf(stderr, "rhomin= %15.7E rhomax= %15.7E vmax= %15.7E\n", tillMat->rhomin, tillMat->rhomax,tillMat->vmax);
 
-    i = 999;
-    j = 999;
-    rho = tillLookupRho(tillMat, i);
-    u = tillMat->Lookup[INDEX(i, j)].u;
-    fprintf(stderr, "Gamma(rho=%15.7E, u=%15.7E)=%15.7E\n", rho, u, Gamma(tillMat, rho, u));
-
-    exit(1);
-    fprintf(stderr, "i=%i\n", tillMat->n);
+#if 0
     /*
      * Calculate Gamma(rho, u) for the cold curve.
      */
     for (i=tillMat->n+1; i<tillMat->nTableRho; i+=10)
     {
-        fprintf(stderr, "i=%i\n", i);
+        //fprintf(stderr, "i=%i\n", i);
         rho = tillLookupRho(tillMat, i);
-        printf("%15.7E", rho/tillMat->rho0);
+        //printf("%15.7E", rho/tillMat->rho0);
+        printf("%15.7E", rho);
 
         j = 0;
+        j = tillMat->nTableV-1;
         u = tillMat->Lookup[INDEX(i, j)].u;
 
         printf("%15.7E", Gamma(tillMat, rho, u));
 
         printf("\n");
     }
-#if 0
+#endif
     /*
      * Calculate Gamma(rho, u) for different isentropes.
      */
@@ -116,7 +111,6 @@ int main(int argc, char **argv) {
         }
         printf("\n");
     }
-#endif
 
     tillFinalizeMaterial(tillMat);
 
