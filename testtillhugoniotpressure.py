@@ -20,6 +20,7 @@ rcParams['legend.handlelength']  = 0.5
 rcParams['legend.frameon']       = False
 rcParams['legend.numpoints']     = 1
 rcParams['legend.scatterpoints'] = 1
+rcParams['legend.fontsize']      = 'xx-small'
 
 # Adjust axes line width
 rcParams['axes.linewidth']   = 0.5
@@ -31,9 +32,9 @@ rcParams['ytick.major.size'] = 4
 rcParams['ytick.minor.size'] = 2
 
 # Adjust Font Size
-rcParams['xtick.labelsize']  = 'xx-small'
-rcParams['ytick.labelsize']  = 'xx-small'
-rcParams['axes.labelsize']   = 'x-small'
+rcParams['xtick.labelsize']  = 'x-small'
+rcParams['ytick.labelsize']  = 'x-small'
+rcParams['axes.labelsize']   = 'small'
 
 # Set Up Figure, Single Column MNRAS
 fig = gcf()
@@ -49,12 +50,12 @@ GCGS   = 6.67e-8		# G in cgs
 KPCCM  = 3.085678e21		# kiloparsec in centimeters
 
 # These two values define the unit system we use
-dKpcUnit  = 2.06701e-13	        # kiloparsec in code units
-dMsolUnit = 4.80438e-08	        # solar mass in code units
+dKpcUnit  = 2.06701e-13 # kiloparsec in code units
+dMsolUnit = 4.80438e-08 # solar mass in code units
 
 # Mass of Earth
 MEarth = 5.98e27		# g
-MSun   = 1.989e33	        # g
+MSun   = 1.989e33	    # g
 
 """
 Convert kboltz/mhydrogen to system units, assuming that
@@ -104,6 +105,10 @@ us2   = 1.8e11;
 alpha = 5.0;
 beta  = 5.0;
 
+c1 = '#66c2a5'
+c2 = '#fc8d62'
+c3 = '#8da0cb'
+
 # Calculate the linear Hugoniot
 Gamma0 = a + b
 s = 0.5*(1 + B/A + 0.5*(a+b))
@@ -136,13 +141,13 @@ P_H = numpy.append(P0, P_H)
 P_S = numpy.append(P0, P_S)
 
 # Mark the reference state
-scatter(rho0, P0, s=10, color='black')
+#scatter(rho0, P0, s=10, color=c3)
 
 """
 Plot the Hugoniot.
 """
-plot(rho, P_H, '-', color='blue')
-plot(rho, P_S, '--', color='green')
+plot(rho, P_H, '-', color=c1)
+plot(rho, P_S, '--', color=c2)
 
 xlim(rho0, rho_max)
 ylim(-1e10, P_max)
@@ -152,6 +157,29 @@ i = where(abs(rho-1.8*rho0)<5e-2)
 rho1 = min(rho[i])
 P1   = min(P_H[i])
 
+# Annotate the Hugoniot and the cold cruve
+rho_min = 0.0
+P_min = 0.0
+
+"""
+i_min = where(abs(rho-4.1)<5e-2)
+print i_min
+
+i_max = where(abs(rho-4.1)<5e-2)
+print i_max
+
+x_text_min = min(rho[i_min])
+
+x_text_max = 4.7
+
+y_text_min = 0.35e12
+y_text_max = 4.7
+"""
+
+annotate("Hugoniot", xy=(rho1, P1), xytext=(0.65, 0.45), textcoords='axes fraction', horizontalalignment='center', fontsize='x-small', rotation=41) 
+#annotate("Hugoniot", xy=(0,0), xytext=(rho_min+0.5*(rho_max-rho_min), P_min+0.5*(P_max-P_min))) 
+
+annotate("Isentrope", xy=(rho1, P1), xytext=(0.65, 0.245), textcoords='axes fraction', horizontalalignment='center', fontsize='x-small', rotation=25.5) 
 print rho1, P1
 
 #scatter(rho1, P1, s=25, color='blue')
@@ -162,5 +190,5 @@ ylabel("Pressure [erg cm$^3$]")
 
 savefig('testtillhugoniotpressure.png', dpi=300, bbox_inches='tight')
 savefig('testtillhugoniotpressure.pdf', dpi=300, bbox_inches='tight')
-show()
+#show()
 
