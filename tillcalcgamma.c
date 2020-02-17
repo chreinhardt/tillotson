@@ -20,7 +20,7 @@ double Gamma(TILLMATERIAL *tillMat, double rho, double u) {
     double eta;
     double omega0;
 
-    assert(rho >= tillMat->rho0);
+    //assert(rho >= tillMat->rho0);
     eta = rho/tillMat->rho0;
     omega0 = u/(tillMat->u0*eta*eta)+1.0;
 
