@@ -18,6 +18,7 @@ int main(int argc, char **argv) {
     double dKpcUnit = 2.06701e-13;
     double dMsolUnit = 4.80438e-08;
     double rho, u;
+    double P, cs;
     //int nSteps;
     int iMat;
     int i, j;
@@ -30,6 +31,14 @@ int main(int argc, char **argv) {
 
     /* Print the material parameters. */
     tillPrintMat(tillMat);
+
+    /* Print the pressure and sound speed at the reference state. */
+    rho = tillMat->rho0;
+    u = 0.0;
+
+    P = tillPressureSound(tillMat, rho, u, &cs);
+
+    printf("P= %15.7E cs= %15.7E\n", P, cs);
 
     tillFinalizeMaterial(tillMat);
 
