@@ -26,8 +26,8 @@ int main(int argc, char **argv) {
     iMat = 1;
 
     /* Initalize the material in cgs. */
-    //tillMat = tillInitMaterial(iMat, dKpcUnit, dMsolUnit);
-    tillMat = tillInitMaterial(iMat, 0.0, 0.0);
+    tillMat = tillInitMaterial(iMat, dKpcUnit, dMsolUnit);
+    //tillMat = tillInitMaterial(iMat, 0.0, 0.0);
 
     /* Print the material parameters. */
     tillPrintMat(tillMat);
@@ -36,9 +36,10 @@ int main(int argc, char **argv) {
     rho = tillMat->rho0;
     u = 0.0;
 
+    /* Note that tillPressureSound returns cs2 not the sound speed. */
     P = tillPressureSound(tillMat, rho, u, &cs);
 
-    printf("P= %15.7E cs= %15.7E\n", P, cs);
+    printf("P= %15.7E cs= %15.7E K= %15.7E\n", P, sqrt(cs), rho*cs);
 
     tillFinalizeMaterial(tillMat);
 
