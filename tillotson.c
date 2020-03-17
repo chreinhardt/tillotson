@@ -819,7 +819,6 @@ double tillPressureSound(TILLMATERIAL *material, double rho, double u, double *p
         /* Melosh 1989 suggests to cut the pressure in the expanded cold states for rho/rho < 0.8 */
         if (eta < 0.8)
         {
-            //			fprintf(stderr,"Setting pressure to zero for eta=%g\n",eta);
             Pc = 0.0;
         }
 #endif
@@ -871,7 +870,6 @@ double tillPressureSound(TILLMATERIAL *material, double rho, double u, double *p
         /* Melosh 1989 suggests to cut the pressure in the expanded cold states for rho/rho < 0.8 */
         if (eta < 0.8)
         {
-            //			fprintf(stderr,"Setting pressure to zero for eta=%g\n",eta);
             Pc = 0.0;
         }
 #endif
@@ -883,7 +881,6 @@ double tillPressureSound(TILLMATERIAL *material, double rho, double u, double *p
         if (pcSound != NULL)
         {
             /* calculate the sound speed */
-            //			c2c = (Gammac+1.0)*Pc/rho + (material->A+material->B*(eta*eta-1.0))/rho + material->b/(w0*w0)*(w0-1.0)*(2*u-Pc/rho);
             c2c =material->a*u+material->b*u/(w0*w0)*(3.0*w0-2.0)+(material->A+2.0*material->B*mu)/material->rho0 + Pc/(rho*rho)*(material->a*rho+material->b*rho/(w0*w0));
             c2e = (Gammae+1.0)*Pe/rho + material->A/material->rho0*exp(-(material->alpha*z+material->beta*z*z))*(1.0+mu/(eta*eta)*(material->alpha+2.0*material->beta*z-eta)) + material->b*rho*u/(w0*w0*eta*eta)*exp(-material->beta*z*z)*(2.0*material->beta*z*w0/material->rho0+1.0/(material->u0*rho)*(2.0*u-Pe/rho));
 
