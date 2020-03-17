@@ -304,6 +304,9 @@ void tilliMatString(TILLMATERIAL *material, char *MatName)
         case WATER:
             sprintf(MatName, "WATER");
             break;
+        case DUNITE:
+            sprintf(MatName, "DUNITE");
+            break;
         default:
             /* Unknown material */
             assert(0);
