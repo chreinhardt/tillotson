@@ -256,6 +256,12 @@ testtillcoldu: testtillcoldu.o $(objects)
 	cc -o testtillcoldu testtillcoldu.o $(objects)  $(LIBS)
 
 #
+# Test if the materials are correctly initialized if dKpcUnit and dMsolUnit are not set.
+#
+testtillcgs: testtillcgs.o $(objects)
+	cc -o testtillcgs testtillcgs.o $(objects)  $(LIBS)
+
+#
 # Calculate the cold energy for a given density.
 #
 till_calc_u_cold: till_calc_u_cold.o $(objects)
