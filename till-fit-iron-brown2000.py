@@ -123,18 +123,15 @@ def pressure_hugoniot_wrapper_lin(C0, s, rho0, a, b, A):
     return func
 
 
-def pressure_hugoniot(rho, C0, s, q, rho0, u0, a, b, A, B):
+def pressure_hugoniot(rho, Us, Up, rho0, u0, a, b, A, B):
     """
-    Calculate the pressure along the principal hugoniot of the Tillotson EOS assuming
-    
-    Us = C0 + s*Up + q*Up^2
-
-    between Us and Up.
+    Calculate the pressure along the principal hugoniot of the Tillotson EOS.
 
     Paramters:
     ----------
     rho:        Density
-    C0, s, q:   Fitting parameters
+    Us:         Shock velocity
+    Up:         Particle velocity
 
     rho0, u0, a, b, A, B are Tillotson EOS material parameters     
 
@@ -142,27 +139,16 @@ def pressure_hugoniot(rho, C0, s, q, rho0, u0, a, b, A, B):
     -------
     P:          Pressure
     """
-
-    """
-    # Us = C0 + s*Up + q*Up^2
-    C0 = 3.691
-    s  = 1.788
-    q  = -0.038
-    """
-    
-    Us = C0 + s*Up + q*Up**2
-
     # Calculate u(rho, P) from the Rankine-Hugoniot equations 
     P_H = rho0*Us*Up
 
     u = 0.5*P_H*(1.0/rho0 - 1.0/rho)
 
     P = pressure(rho, u, rho0, u0, a, b, A, B)
-
     return P
 
 
-def pressure_hugoniot_wrapper(C0, s, rho0, a, b, A):
+def pressure_hugoniot_wrapper(rho0, a, b, A):
     """
     A wrapper of pressure_hugoniot for optimize.curve_fit.
 
@@ -176,13 +162,13 @@ def pressure_hugoniot_wrapper(C0, s, rho0, a, b, A):
     -------
     func:   A function that returns P(rho) for optimize.cuve_fit
     """
-    def func(rho, u0, B):
+    def func(xData, u0, B):
+        rho, Us, Up = xData
 
-        P = pressure_hugoniot(rho, C0, s, q, rho0, u0, a, b, A, B)
+        P = pressure_hugoniot(rho, Up, Us, rho0, u0, a, b, A, B)
         return P
 
     return func
-
 
 
 def dudrho(u, rho, param):
@@ -284,6 +270,7 @@ def main():
     """
     a     = 0.5         # a = 0.5 provides the best asympthotic fit (Tillotson 1962)
     b     = 1.5         # Gamma0 = a + b, again from Tillotson (1962)
+    b     = 1.28        # Gamma0 = a + b, again from Tillotson (1962)
     u0    = 0.0
     rho0  = 7.85        # Reference density at zero compression from Brown et al (2000)
     A     = 1.28e12     # Bulk modulus at the reference state (Tillotson 1962)
@@ -311,14 +298,14 @@ def main():
     """
     Fitting parameters from Brown et al. (2000).
     """
-    #C0 = 3.691
-    #s  = 1.788
-    #q  = -0.038
+    C0 = 3.691
+    s  = 1.788
+    q  = -0.038
 
     # Linear Hugoniot from Brown et al. (2000)
-    C0 = 3.935
-    s  = 1.578
-    
+    C0_lin = 3.935
+    s_lin  = 1.578
+
     # Convert to cgs (note that s is not converted)
     C0 *= 1e5
     
@@ -326,6 +313,7 @@ def main():
     print "rho0=", rho0
     print "C0=  ", C0
     print "s=   ", s
+    print "q=   ", q
 
     rho_max = numpy.max(rho_H)
     rho = numpy.linspace(rho0, rho_max, 1000)
@@ -345,18 +333,11 @@ def main():
     Us = C0 + s*Up + q*Up**2
     """
 
-    """
-    # Plot the data
-    scatter(rho_H, P_H, color='red', marker='x', label="Hugoniot")
-    
-    P = pressure_hugoniot_lin(rho, C0, s, rho0, u0, a, b, A, B)
-    plot(rho, P, color='blue', label="Pressure")
-    
-    show()
-    exit(1)
-    """
+    xData = numpy.array([rho_H, Us, Up])
 
-    popt, pcov = optimize.curve_fit(pressure_hugoniot_wrapper_lin(C0, s, rho0, a, b, A), rho_H, P_H, bounds=(1e9, numpy.inf))
+    print xData
+
+    popt, pcov = optimize.curve_fit(pressure_hugoniot_wrapper(rho0, a, b, A), xData, P_H, bounds=(1e9, numpy.inf))
     #popt, pcov = optimize.curve_fit(pressure_hugoniot_wrapper(rho0, a, b, A), numpy.array([rho_H, Us, Up]), P_H, bounds=(0, numpy.inf))
 
     print P_H
@@ -368,6 +349,12 @@ def main():
     print pcov
     exit(1)
 
+    # Plot the data
+    scatter(rho_H, P_H, color='red', marker='x', label="Hugoniot")
+    scatter(rho_H, pressure_hugoniot(rho_H, Us, Up, rho0, u0, a, b, A, B), color='blue', marker='o') 
+    
+    show()
+    exit(1)
 
     rho_max = 1e5*rho0
     u_max   = 10.0*us2
