@@ -116,6 +116,8 @@ def pressure_hugoniot_wrapper_lin(C0, s, rho0, a, b, A):
         
         print "u0=", u0, "B=", B
         P = pressure_hugoniot_lin(rho, C0, s, rho0, u0, a, b, A, B)
+
+        print P
         return P
 
     return func
@@ -354,8 +356,10 @@ def main():
     exit(1)
     """
 
-    popt, pcov = optimize.curve_fit(pressure_hugoniot_wrapper_lin(C0, s, rho0, a, b, A), rho_H, P_H)
+    popt, pcov = optimize.curve_fit(pressure_hugoniot_wrapper_lin(C0, s, rho0, a, b, A), rho_H, P_H, bounds=(1e9, numpy.inf))
     #popt, pcov = optimize.curve_fit(pressure_hugoniot_wrapper(rho0, a, b, A), numpy.array([rho_H, Us, Up]), P_H, bounds=(0, numpy.inf))
+
+    print P_H
 
     u0 = popt[0]
     B  = popt[1]
