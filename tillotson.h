@@ -9,10 +9,10 @@
 /*
  * Version.
  */
-#define TILL_VERSION_TEXT    "3.4.0"
+#define TILL_VERSION_TEXT    "3.4.1"
 #define TILL_VERSION_MAJOR   3
 #define TILL_VERSION_MINOR   4
-#define TILL_VERSION_PATCH   0
+#define TILL_VERSION_PATCH   1
 
 /*
  * Error codes.
@@ -50,6 +50,11 @@ enum till_error_lookup
 
 
 #define TILL_N_MATERIAL_MAX 102
+
+/* Compile the code with a pressure cutoff at negative pressures in the expanded cold states. */
+#ifndef TILL_PRESS_NP
+#define TILL_PRESS_NP
+#endif
 
 /* We write the look up table as a 1D array where a(i,j)=a(i*N+j) */
 #define TILL_INDEX(i, j) (((i)*material->nTableV) + (j))
