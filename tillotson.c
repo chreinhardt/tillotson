@@ -359,24 +359,24 @@ void tillPrintMat(TILLMATERIAL *material, FILE *fp)
      */
     if (material->iMaterial == IDEALGAS)
     {
-        fprintf(fp,"# dConstGamma: %g\n", material->dConstGamma);
+        fprintf(fp,"# dConstGamma:  %g\n", material->dConstGamma);
         fprintf(fp,"# dMeanMolMass: %g\n", material->dMeanMolMass);    
-        fprintf(fp,"# rho0: %g\n", material->rho0);
-        fprintf(fp,"# cv: %g\n", material->cv);
-        fprintf(fp,"# a: %g\n", material->a);
-        fprintf(fp,"# b: %g\n", material->b);
+        fprintf(fp,"# rho0:         %g\n", material->rho0);
+        fprintf(fp,"# cv:           %g\n", material->cv);
+        fprintf(fp,"# a:            %g\n", material->a);
+        fprintf(fp,"# b:            %g\n", material->b);
     } else {
-        fprintf(fp,"# a: %g\n", material->a);
-        fprintf(fp,"# b: %g\n", material->b);
-        fprintf(fp,"# A: %g\n", material->A);
-        fprintf(fp,"# B: %g\n", material->B);
-        fprintf(fp,"# rho0: %g\n", material->rho0);
-        fprintf(fp,"# u0: %g\n", material->u0);
-        fprintf(fp,"# us: %g\n", material->us);
-        fprintf(fp,"# us2: %g\n", material->us2);
-        fprintf(fp,"# alpha: %g\n", material->alpha);
-        fprintf(fp,"# beta: %g\n", material->beta);
-        fprintf(fp,"# cv: %g\n", material->cv);
+        fprintf(fp,"# a:            %g\n", material->a);
+        fprintf(fp,"# b:            %g\n", material->b);
+        fprintf(fp,"# A:            %g\n", material->A);
+        fprintf(fp,"# B:            %g\n", material->B);
+        fprintf(fp,"# rho0:         %g\n", material->rho0);
+        fprintf(fp,"# u0:           %g\n", material->u0);
+        fprintf(fp,"# us:           %g\n", material->us);
+        fprintf(fp,"# us2:          %g\n", material->us2);
+        fprintf(fp,"# alpha:        %g\n", material->alpha);
+        fprintf(fp,"# beta:         %g\n", material->beta);
+        fprintf(fp,"# cv:           %g\n", material->cv);
     }
 }
 
