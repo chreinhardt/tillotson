@@ -345,38 +345,38 @@ void tillErrorString(int iError, char *ErrorString)
 /*
  * This function prints the material constants for a given material.
  */
-void tillPrintMat(TILLMATERIAL *material)
+void tillPrintMat(TILLMATERIAL *material, FILE *fp)
 {
     char MatName[256];
 
     assert(material != NULL);
     tilliMatString(material, MatName);
 
-    fprintf(stderr,"Material: %i (%s)\n", material->iMaterial, MatName);
+    fprintf(fp,"# Material: %i (%s)\n", material->iMaterial, MatName);
 
     /*
      * Currently the ideal gas is treated differently.
      */
     if (material->iMaterial == IDEALGAS)
     {
-        fprintf(stderr,"dConstGamma: %g\n", material->dConstGamma);
-        fprintf(stderr,"dMeanMolMass: %g\n", material->dMeanMolMass);    
-        fprintf(stderr,"rho0: %g\n", material->rho0);
-        fprintf(stderr,"cv: %g\n", material->cv);
-        fprintf(stderr,"a: %g\n", material->a);
-        fprintf(stderr,"b: %g\n", material->b);
+        fprintf(fp,"# dConstGamma: %g\n", material->dConstGamma);
+        fprintf(fp,"# dMeanMolMass: %g\n", material->dMeanMolMass);    
+        fprintf(fp,"# rho0: %g\n", material->rho0);
+        fprintf(fp,"# cv: %g\n", material->cv);
+        fprintf(fp,"# a: %g\n", material->a);
+        fprintf(fp,"# b: %g\n", material->b);
     } else {
-        fprintf(stderr,"a: %g\n", material->a);
-        fprintf(stderr,"b: %g\n", material->b);
-        fprintf(stderr,"A: %g\n", material->A);
-        fprintf(stderr,"B: %g\n", material->B);
-        fprintf(stderr,"rho0: %g\n", material->rho0);
-        fprintf(stderr,"u0: %g\n", material->u0);
-        fprintf(stderr,"us: %g\n", material->us);
-        fprintf(stderr,"us2: %g\n", material->us2);
-        fprintf(stderr,"alpha: %g\n", material->alpha);
-        fprintf(stderr,"beta: %g\n", material->beta);
-        fprintf(stderr,"cv: %g\n", material->cv);
+        fprintf(fp,"# a: %g\n", material->a);
+        fprintf(fp,"# b: %g\n", material->b);
+        fprintf(fp,"# A: %g\n", material->A);
+        fprintf(fp,"# B: %g\n", material->B);
+        fprintf(fp,"# rho0: %g\n", material->rho0);
+        fprintf(fp,"# u0: %g\n", material->u0);
+        fprintf(fp,"# us: %g\n", material->us);
+        fprintf(fp,"# us2: %g\n", material->us2);
+        fprintf(fp,"# alpha: %g\n", material->alpha);
+        fprintf(fp,"# beta: %g\n", material->beta);
+        fprintf(fp,"# cv: %g\n", material->cv);
     }
 }
 
