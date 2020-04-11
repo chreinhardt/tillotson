@@ -164,7 +164,7 @@ void tillFinalizeMaterial(TILLMATERIAL *material);
 
 void tilliMatString(TILLMATERIAL *material, char *MatName);
 void tillErrorString(int iError, char *ErrorString);
-void tillPrintMat(TILLMATERIAL *material);
+void tillPrintMat(TILLMATERIAL *material, FILE *fp);
 
 // Some functions that provide a general interface for EOS calls where other EOS, e.g., an ideal gas EOS can be implemented
 double eosPressureSound(TILLMATERIAL *material, double rho, double u, double *pcSound);
