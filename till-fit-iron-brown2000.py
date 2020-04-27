@@ -270,7 +270,6 @@ def main():
     """
     a     = 0.5         # a = 0.5 provides the best asympthotic fit (Tillotson 1962)
     b     = 1.5         # Gamma0 = a + b, again from Tillotson (1962)
-    b     = 1.28        # Gamma0 = a + b, again from Tillotson (1962)
     u0    = 0.0
     rho0  = 7.85        # Reference density at zero compression from Brown et al (2000)
     A     = 1.28e12     # Bulk modulus at the reference state (Tillotson 1962)
@@ -345,14 +344,16 @@ def main():
     u0 = popt[0]
     B  = popt[1]
 
-    print popt
-    print pcov
-    exit(1)
+    print "u0=", u0
+    print "B=", B
 
     # Plot the data
     scatter(rho_H, P_H, color='red', marker='x', label="Hugoniot")
     scatter(rho_H, pressure_hugoniot(rho_H, Us, Up, rho0, u0, a, b, A, B), color='blue', marker='o') 
+
     
+    P = pressure(rho, u, rho0, u0, a, b, A, B)
+     
     show()
     exit(1)
 
