@@ -29,6 +29,14 @@ enum till_error_lookup
     TILL_LOOKUP_OUTSIDE_VMAX
 };
 
+/*
+ * Phase.
+ */
+#define TILL_PHASE_FAIL      -1
+#define TILL_PHASE_CONDENSED  1
+#define TILL_PHASE_EXP_COLD   2
+#define TILL_PHASE_EXP_HOT    3
+#define TILL_PHASE_EXP_INT    4
 
 /*
  * Warning: redefined the material constants on 10.10.2017!
