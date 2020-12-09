@@ -263,5 +263,7 @@ double tillLookupV(TILLMATERIAL *material, int j);
 // A general version of tillLookupU() that can be used as an interface for different EOS
 double eosLookupU(TILLMATERIAL *material,double rho1,double u1,double rho2,int iOrder);
 
+int tillPhase(TILLMATERIAL *material, double rho, double u);
+
 #endif
 
