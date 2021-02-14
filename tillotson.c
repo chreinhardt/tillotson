@@ -1510,3 +1510,35 @@ int tillSolveBC(TILLMATERIAL *mat1, TILLMATERIAL *mat2, double rho1, double u1, 
     return iRet;
 }
 
+/*
+ * Determine the region of the EOS.
+ */
+int tillPhase(TILLMATERIAL *material, double rho, double u)
+{
+    /*
+     *  Evaluate which part of the equation of state we need.
+     */
+    if (rho >= material->rho0) {
+        /*
+         *  Condensed states (rho > rho0).
+         */
+        return TILL_PHASE_CONDENSED;
+    } else if (u < material->us) {
+        /*
+         * Expanded cold states (rho < rho0 and u < us).
+         */
+        return TILL_PHASE_EXP_COLD;
+    } else if (u > material->us2) {
+        /*
+         * Expanded hot states (rho < rho0 and u > us2).
+         */
+        return TILL_PHASE_EXP_HOT;
+    } else {
+        /*
+         *  intermediate states (rho < rho0 and us < u < us2)
+         */
+        return TILL_PHASE_EXP_INT;
+    }
+
+    return -1;
+}

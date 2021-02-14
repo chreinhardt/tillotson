@@ -29,6 +29,14 @@ enum till_error_lookup
     TILL_LOOKUP_OUTSIDE_VMAX
 };
 
+/*
+ * Phase.
+ */
+#define TILL_PHASE_FAIL      -1
+#define TILL_PHASE_CONDENSED  1
+#define TILL_PHASE_EXP_COLD   2
+#define TILL_PHASE_EXP_HOT    3
+#define TILL_PHASE_EXP_INT    4
 
 /*
  * Warning: redefined the material constants on 10.10.2017!
@@ -254,6 +262,8 @@ double tillLookupV(TILLMATERIAL *material, int j);
 
 // A general version of tillLookupU() that can be used as an interface for different EOS
 double eosLookupU(TILLMATERIAL *material,double rho1,double u1,double rho2,int iOrder);
+
+int tillPhase(TILLMATERIAL *material, double rho, double u);
 
 #endif
 
