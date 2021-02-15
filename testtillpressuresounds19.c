@@ -115,7 +115,7 @@ int main(int argc, char **argv) {
 	double rhomax = 10.0;
     double umin = 0.0;
     double umax = 25.0;
-    int nRho = 100;
+    int nRho = 1000;
     int nU = 100;
     double drho;
     double du;
@@ -130,29 +130,47 @@ int main(int argc, char **argv) {
 	fprintf(stderr, "Done.\n");
 	fprintf(stderr, "\n");
 
+    /* Print the rho and u axis. */
+	drho = (rhomax-rhomin)/(nRho-1);
+    du = (umax-umin)/(nU-1);
+
+    fp1 = fopen("testtillpressuresounds19_rhoaxis.txt", "w");
+    fp2 = fopen("testtillpressuresounds19_uaxis.txt", "w");
+
+    assert(fp1 != NULL);
+    assert(fp2 != NULL);
+
+    for (i=0; i<nRho; i++) {
+        rho = rhomin + i*drho;
+        fprintf(fp1, "%15.7E\n", rho);
+    }
+        
+    for (j=0; j<nU; j++) {
+        u = umin + j*du;
+        fprintf(fp2, "%15.7E\n", u);
+    }
+    fclose(fp1);
+    fclose(fp2);
+
+	/* Calculate P(rho, u) and cs(rho, u) at the grid points and print the relative error. */	
     fp1 = fopen("testtillpressures19.txt", "w");
     fp2 = fopen("testtillsounds19.txt", "w");
 
     assert(fp1 != NULL);
     assert(fp2 != NULL);
 
-	/* Calculate P(rho, u) and cs(rho, u) at the grid points and print the relative error. */	
-	drho = (rhomax-rhomin)/(nRho-1);
-    du = (umax-umin)/(nU-1);
-
-	for (i=0; i<nRho; i++) {
-        rho = rhomin + i*drho;
-
-		for (j=0; j<nU; j++) {
-            u = umin + j*du;
-			P = tillPressureSound(tillMat, rho, u, &cs);
+    for (j=0; j<nU; j++) {
+        u = umin + j*du;
+        for (i=0; i<nRho; i++) {
+            rho = rhomin + i*drho;
+            P = tillPressureSound(tillMat, rho, u, &cs);
             PS19 = tillPressureSoundS19(tillMat, rho, u, &csS19);
             fprintf(fp1, "  %15.7E", (P-PS19)/P);
             fprintf(fp2, "  %15.7E", (cs-csS19)/cs);
-		}
-		fprintf(fp1, "\n");
-		fprintf(fp2, "\n");
-	}
+        }
+        fprintf(fp1, "\n");
+        fprintf(fp2, "\n");
+    }
 
     fclose(fp1);
     fclose(fp2);
