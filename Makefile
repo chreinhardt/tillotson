@@ -262,6 +262,13 @@ testtillcgs: testtillcgs.o $(objects)
 	cc -o testtillcgs testtillcgs.o $(objects)  $(LIBS)
 
 #
+# Tst how much the pressure and sound speed deviate if the intermediate states are calculated at in
+# Stewart (2019).
+#
+testtillpressuresounds19: testtillpressuresounds19.o $(objects)
+	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
+
+#
 # Calculate the cold energy for a given density.
 #
 till_calc_u_cold: till_calc_u_cold.o $(objects)
