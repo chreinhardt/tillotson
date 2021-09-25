@@ -110,7 +110,10 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit)
 
             // cv = kb/mp
             material->cv = KBOLTZ/((material->dConstGamma-1.0)*MHYDR*material->dMeanMolMass);
-            material->rho0 = 0.001;
+            //material->rho0 = 0.001;
+            // CR: 18.09.2021 changed to build very low density models
+            material->rho0 = 1e-11;
+            material->rho0 = 1e-9;
 
             /*
              * Add a finite volume to each gas particle to avoid crazy densities at large pressure

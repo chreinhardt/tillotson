@@ -262,6 +262,12 @@ testtillcgs: testtillcgs.o $(objects)
 	cc -o testtillcgs testtillcgs.o $(objects)  $(LIBS)
 
 #
+# Test if each error code returns the desired error message.
+#
+testtillerrormsg: testtillerrormsg.o $(objects)
+	cc -o testtillerrormsg testtillerrormsg.o $(objects)  $(LIBS)
+
+#
 # Calculate the cold energy for a given density.
 #
 till_calc_u_cold: till_calc_u_cold.o $(objects)
