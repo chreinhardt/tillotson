@@ -100,7 +100,10 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit)
              * Gasoline.
              */
             material->dConstGamma = 5.0/3.0;
-            material->dMeanMolMass = 1.0;
+            //material->dMeanMolMass = 1.0;
+            
+            // Model a H-He mixture
+            material->dMeanMolMass = 2.3;
 
 //          material->dMeanMolMass = 23.0; // 10x solar value (mu=2.3)
 //          material->dMeanMolMass = 11.5; // 5x solar value (mu=2.3)
