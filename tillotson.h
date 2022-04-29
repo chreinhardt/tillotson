@@ -59,8 +59,13 @@ enum till_error_lookup
 /* We write the look up table as a 1D array where a(i,j)=a(i*N+j) */
 #define TILL_INDEX(i, j) (((i)*material->nTableV) + (j))
 
+#ifndef MAX
 #define MAX(A,B) ((A) > (B) ? (A) : (B))
+#endif
+
+#ifndef MIN
 #define MIN(A,B) ((A) > (B) ? (B) : (A))
+#endif
 
 /* Define a minimum density for the look up table */
 #ifndef TILL_RHO_MIN
