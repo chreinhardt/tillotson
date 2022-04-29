@@ -49,15 +49,7 @@ enum till_error_lookup
 #define WATER       5
 #define DUNITE      6
 
-/* 
- * ANEOS and M-ANEOS.
- */
-#define ANEOS_IRON   100
-#define ANEOS_DUNITE 101
-
-
-
-#define TILL_N_MATERIAL_MAX 102
+#define TILL_N_MATERIAL_MAX 10
 
 /* Compile the code with a pressure cutoff at negative pressures in the expanded cold states. */
 #ifndef TILL_PRESS_NP
