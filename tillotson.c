@@ -236,6 +236,22 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit)
 			material->beta = 5.0;
 			material->cv = 0.84e7;		/* ergs/g K */ 
 			break;
+		case LIQUID_ROCK:
+			/*
+			 * Liquid EOS from Melosh (1989) with material parameters for granite from Benz et al. (1986).
+			 */
+			material->a = 0.0;
+			material->b = 0.0;
+			material->u0 = 1.6e11;		/* in ergs/g */
+			material->rho0 = 2.7;		/* g/cc */
+			material->A = 1.8e11;		/* ergs/cc */
+			material->B = 0.0;  		/* ergs/cc */
+			material->us = 3.5e10;		/* ergs/g */
+			material->us2 = 1.8e11;		/* ergs/g */
+			material->alpha = 0.0;
+			material->beta = 0.0;
+			material->cv = 0.79e7;		/* ergs/g K (or 790 J/kg K) */ 
+			break;
 		default:
 			/* Unknown material */
 			assert(0);

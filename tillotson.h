@@ -9,10 +9,10 @@
 /*
  * Version.
  */
-#define TILL_VERSION_TEXT    "3.4.3"
+#define TILL_VERSION_TEXT    "3.4.4"
 #define TILL_VERSION_MAJOR   3
 #define TILL_VERSION_MINOR   4
-#define TILL_VERSION_PATCH   3
+#define TILL_VERSION_PATCH   4
 
 /*
  * Error codes.
@@ -48,6 +48,7 @@ enum till_error_lookup
 #define ICE         4
 #define WATER       5
 #define DUNITE      6
+#define LIQUID_ROCK 9
 
 #define TILL_N_MATERIAL_MAX 10
 
