@@ -236,6 +236,23 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit)
 			material->beta = 5.0;
 			material->cv = 0.84e7;		/* ergs/g K */ 
 			break;
+		case FORSTERITE:
+			/*
+			 * Material parameters for Forsterite from S. Raducan.
+			 */
+			material->a = 0.1;
+			material->b = 1.0;
+			material->u0 = 4.87e12;		/* in ergs/g */
+            // Key difference is the reference density
+			material->rho0 = 3.3;		/* g/cc */
+			material->A = 9.5e11;		/* ergs/cc */
+			material->B = 9.5e11;		/* ergs/cc */
+			material->us = 4.72e10;		/* ergs/g */
+			material->us2 = 1.82e11;	/* ergs/g */
+			material->alpha = 5.0;
+			material->beta = 5.0;
+			material->cv = 1e7;		/* ergs/g K */ 
+			break;
 		default:
 			/* Unknown material */
 			assert(0);
@@ -306,6 +323,9 @@ void tilliMatString(TILLMATERIAL *material, char *MatName)
             break;
         case DUNITE:
             sprintf(MatName, "DUNITE");
+            break;
+        case FORSTERITE:
+            sprintf(MatName, "FORSTERITE");
             break;
         default:
             /* Unknown material */

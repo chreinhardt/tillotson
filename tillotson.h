@@ -48,6 +48,7 @@ enum till_error_lookup
 #define ICE         4
 #define WATER       5
 #define DUNITE      6
+#define FORSTERITE  7
 
 #define TILL_N_MATERIAL_MAX 10
 
