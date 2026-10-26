@@ -8,34 +8,52 @@
 /*
  * Version.
  */
-#define TILL_VERSION_TEXT    "3.4.4"
-#define TILL_VERSION_MAJOR   3
-#define TILL_VERSION_MINOR   4
-#define TILL_VERSION_PATCH   4
+#define TILL_VERSION_TEXT    "4.0.0"
+#define TILL_VERSION_MAJOR   4
+#define TILL_VERSION_MINOR   0
+#define TILL_VERSION_PATCH   0
 
 #include <stdlib.h>
 #include <assert.h>
 
 /*
- * Error codes.
+ * Status codes (EOSlib convention: 0 is success, -99 a generic failure; the values -1..-4 are
+ * reserved for the OUTSIDE_* codes, see enum till_error_lookup).
  */
 #define TILL_SUCCESS 0
-#define TILL_FAIL   -1
+#define TILL_FAIL  -99
 
 /*
- * Error handling convention (the same as in ANEOSmaterial).
+ * Failure contract (the EOSlib convention, shared by all EOS libraries).
  *
- * Initialization errors (unknown material, invalid table parameters) are fatal. Every evaluation
- * that cannot deliver a value returns exactly TILL_SENTINEL (-1e50) for doubles or TILL_FAIL for
- * status codes, in any unit system, so callers can test for (value < -1e40). Each such failure is
- * counted in material->nLookupFail and reported to stderr only if EOSLIB_VERBOSE is defined.
+ * A failed evaluation never exits. Every function returning a double returns exactly
+ * TILL_FAIL_VALUE (-1e50), in any unit system, when it cannot deliver a value (rho outside the
+ * lookup table for the cold curve and u(rho, T); (rho, u) below the cold curve or above the table
+ * for the isentrope lookups; rho(P, T) not bracketed); status functions return TILL_FAIL. The one
+ * exception is tillTempRhoU, which never fails: outside the table it returns T = 0, the cold
+ * curve, which is the "lowest tabulated temperature" of this EOS (same contract as ANEOSTofRhoU).
+ * The pressure, sound speed and their derivatives are analytic and never fail.
+ *
+ * Every failure is counted in material->nLookupFail and reported on stderr only when the library
+ * is compiled with -DEOSLIB_VERBOSE (TILL_WARN). Test a returned value with tillFailed(x) (true
+ * for the sentinel and for NaN); EOSlib exposes the same test as EOSFailed(). Initialization
+ * errors (unknown material, invalid table parameters) are fatal.
  */
-#define TILL_SENTINEL (-1e50)
+#define TILL_FAIL_VALUE (-1e50)
+#define TILL_SENTINEL TILL_FAIL_VALUE   /* name used by 3.x */
 
+static inline int tillFailed(double x) {
+    return !(x > -1e40);
+}
+
+/*
+ * Diagnostic messages of the lookups, only with -DEOSLIB_VERBOSE. The silent variant still
+ * type-checks the arguments but compiles to nothing.
+ */
 #ifdef EOSLIB_VERBOSE
 #define TILL_WARN(...) fprintf(stderr, __VA_ARGS__)
 #else
-#define TILL_WARN(...) ((void)0)
+#define TILL_WARN(...) do { if (0) fprintf(stderr, __VA_ARGS__); } while (0)
 #endif
 
 #define TILL_FAIL_RETURN(material, ret, ...) do { (material)->nLookupFail++; TILL_WARN(__VA_ARGS__); return (ret); } while (0)
@@ -48,13 +66,14 @@
 #define TILL_EDGE_TOL 1e-10
 #endif
 
+/* Return codes of tillIsInTable (EOSlib maps them one by one). */
 enum till_error_lookup
 {
-    TILL_LOOKUP_SUCCESS = 0,
-    TILL_LOOKUP_OUTSIDE_RHOMIN,
-    TILL_LOOKUP_OUTSIDE_RHOMAX,
-    TILL_LOOKUP_OUTSIDE_VMIN,
-    TILL_LOOKUP_OUTSIDE_VMAX
+    TILL_LOOKUP_SUCCESS        =  0,
+    TILL_LOOKUP_OUTSIDE_RHOMIN = -1,
+    TILL_LOOKUP_OUTSIDE_RHOMAX = -2,
+    TILL_LOOKUP_OUTSIDE_VMIN   = -3,
+    TILL_LOOKUP_OUTSIDE_VMAX   = -4
 };
 
 /*
@@ -200,7 +219,7 @@ double tilldudlogrho(TILLMATERIAL *material, double logrho, double u);
 /* Temperature: u(rho, T) = u_cold(rho) + cv*T. These need the lookup table (cold curve). */
 double tillTempRhoU(TILLMATERIAL *material, double rho, double u);
 double tillURhoTemp(TILLMATERIAL *material, double rho, double T);
-/* rho(P, T) by root finding; TILL_SENTINEL if P <= 0 or not bracketed. */
+/* rho(P, T) by root finding; TILL_FAIL_VALUE if P <= 0 or not bracketed. */
 double tillRhoPTemp(TILLMATERIAL *material, double P, double T);
 
 int tillPhase(TILLMATERIAL *material, double rho, double u);
@@ -241,11 +260,11 @@ double tillCubicIntGrid(TILLMATERIAL *material, int i, double e, int j);
 void tillLocateRho(TILLMATERIAL *material, double rho, int *pi, double *pe);
 
 double tillFindUonIsentrope(TILLMATERIAL *material,double s,double rho);
-/* Returns the table variable s of the isentrope through (rho, u), or TILL_SENTINEL. */
+/* Returns the table variable s of the isentrope through (rho, u), or TILL_FAIL_VALUE. */
 double tillFindEntropyCurve(TILLMATERIAL *material,double rho,double u,int iOrder);
-/* Returns u2 on the isentrope through (rho1, u1) at rho2, or TILL_SENTINEL. */
+/* Returns u2 on the isentrope through (rho1, u1) at rho2, or TILL_FAIL_VALUE. */
 double tillLookupU(TILLMATERIAL *material,double rho1,double u1,double rho2,int iOrder);
-/* u_cold(rho) = u(rho, s=0), or TILL_SENTINEL if rho is outside the table. */
+/* u_cold(rho) = u(rho, s=0), or TILL_FAIL_VALUE if rho is outside the table. */
 double tillColdULookup(TILLMATERIAL *material,double rho);
 
 int tillLookupIndexLogRho(TILLMATERIAL *material, double logrho);
@@ -259,3 +278,4 @@ double tillVofS(TILLMATERIAL *material, double s);
 double tillSofV(TILLMATERIAL *material, double v);
 
 #endif
+

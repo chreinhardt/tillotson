@@ -234,14 +234,14 @@ static void testIsentropes(TILLMATERIAL *material)
         n++;
         /* The isentrope label is recovered. */
         s = tillFindEntropyCurve(material, rho1, u1, k);
-        CHECK(s > TILL_SENTINEL, "entropy curve found rho= %g u= %g", rho1, u1);
+        CHECK(!tillFailed(s), "entropy curve found rho= %g u= %g", rho1, u1);
         CHECK_REL(tillVofS(material, s) + 1e-3*material->vmax, v + 1e-3*material->vmax, 1e-5, "isentrope label rho1= %g v= %g", rho1, v);
 
         /* Lookup against the ODE, compression and expansion. */
         rho2 = (k % 4 < 2) ? 2.0*rho1 : 0.5*rho1;
         ref = refU(material, rho1, u1, rho2, 2000);
         lk = tillLookupU(material, rho1, u1, rho2, k);
-        CHECK(lk > TILL_SENTINEL, "lookup rho1= %g u1= %g rho2= %g", rho1, u1, rho2);
+        CHECK(!tillFailed(lk), "lookup rho1= %g u1= %g rho2= %g", rho1, u1, rho2);
         CHECK(fabs(lk - ref) <= 1e-3*fabs(ref) + 1e-6*v, "lookup vs ODE rho1= %g v= %g rho2= %g: %g vs %g", rho1, v, rho2, lk, ref);
         if (fabs(lk - ref)/(fabs(ref) + 1e-300) > maxerr) maxerr = fabs(lk - ref)/(fabs(ref) + 1e-300);
 
@@ -288,7 +288,7 @@ static void testTemperature(TILLMATERIAL *material)
         P = tillPressure(material, rho, u);
         if (P > 0.0) {
             double r = tillRhoPTemp(material, P, T);
-            if (r <= TILL_SENTINEL) { nskip++; continue; }
+            if (tillFailed(r)) { nskip++; continue; }
             if (fabs(r - rho) > 1e-8*rho) {
                 /* Several densities give this P at this T: a property of the EOS, not an error. */
                 double ur = tillURhoTemp(material, r, T);
@@ -306,15 +306,15 @@ static void testSentinels(TILLMATERIAL *material)
     double ucold = tillColdULookup(material, 2.0*material->rho0);
     long nfail0 = material->nLookupFail;
 
-    CHECK(tillLookupU(material, 2.0*material->rho0, 0.5*ucold, material->rho0, 0) == TILL_SENTINEL, "lookup below cold curve");
-    CHECK(tillFindEntropyCurve(material, 2.0*material->rho0, 0.5*ucold, 0) == TILL_SENTINEL, "entropy curve below cold curve");
-    CHECK(tillFindEntropyCurve(material, material->rho0, 2.0*material->vmax, 0) == TILL_SENTINEL, "entropy curve above table");
-    CHECK(tillColdULookup(material, 2.0*material->rhomax) == TILL_SENTINEL, "cold curve above rhomax");
+    CHECK(tillLookupU(material, 2.0*material->rho0, 0.5*ucold, material->rho0, 0) == TILL_FAIL_VALUE, "lookup below cold curve");
+    CHECK(tillFindEntropyCurve(material, 2.0*material->rho0, 0.5*ucold, 0) == TILL_FAIL_VALUE, "entropy curve below cold curve");
+    CHECK(tillFindEntropyCurve(material, material->rho0, 2.0*material->vmax, 0) == TILL_FAIL_VALUE, "entropy curve above table");
+    CHECK(tillColdULookup(material, 2.0*material->rhomax) == TILL_FAIL_VALUE, "cold curve above rhomax");
     CHECK(tillColdULookup(material, 0.5*material->rhomin) == 0.0, "cold curve below rhomin is zero (rho < rho0)");
-    CHECK(tillTempRhoU(material, 2.0*material->rhomax, 1.0) == TILL_SENTINEL, "T above rhomax");
-    CHECK(tillURhoTemp(material, 2.0*material->rhomax, 1.0) == TILL_SENTINEL, "u(T) above rhomax");
-    CHECK(tillRhoPTemp(material, -1.0, 300.0) == TILL_SENTINEL, "rho(P<0, T)");
-    CHECK(tillRhoPTemp(material, 0.0, 300.0) == TILL_SENTINEL, "rho(P=0, T)");
+    CHECK(tillTempRhoU(material, 2.0*material->rhomax, 1.0) == 0.0, "T above rhomax falls back to T = 0 (cold curve)");
+    CHECK(tillURhoTemp(material, 2.0*material->rhomax, 1.0) == TILL_FAIL_VALUE, "u(T) above rhomax");
+    CHECK(tillRhoPTemp(material, -1.0, 300.0) == TILL_FAIL_VALUE, "rho(P<0, T)");
+    CHECK(tillRhoPTemp(material, 0.0, 300.0) == TILL_FAIL_VALUE, "rho(P=0, T)");
     CHECK(tillIsBelowColdCurve(material, 2.0*material->rhomax, 1.0) == TILL_FAIL, "isbelow above rhomax");
     CHECK(tillIsBelowColdCurve(material, 2.0*material->rho0, 0.5*ucold) == 1, "isbelow true");
     CHECK(tillIsBelowColdCurve(material, 2.0*material->rho0, 2.0*ucold) == 0, "isbelow false");

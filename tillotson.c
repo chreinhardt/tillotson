@@ -514,7 +514,9 @@ double tillTempRhoU(TILLMATERIAL *material, double rho, double u)
 {
     double ucold = tillColdULookup(material, rho);
 
-    if (ucold <= TILL_SENTINEL) return TILL_SENTINEL;
+    /* Never fails (EOSlib contract for T(rho, u)): outside the table, T = 0, the cold curve.
+     * The failure is counted and reported by tillColdULookup. */
+    if (tillFailed(ucold)) return 0.0;
     return ((u-ucold)/material->cv);
 }
 
@@ -525,7 +527,7 @@ double tillURhoTemp(TILLMATERIAL *material, double rho, double T)
 {
     double ucold = tillColdULookup(material, rho);
 
-    if (ucold <= TILL_SENTINEL) return TILL_SENTINEL;
+    if (tillFailed(ucold)) return TILL_FAIL_VALUE;
     return(ucold + material->cv*T);
 }
 
@@ -592,7 +594,7 @@ static double tillRhoPTempFunc(TILLMATERIAL *material, double rho, const void *c
 {
     const struct tillRhoPTempCtx *p = (const struct tillRhoPTempCtx *) ctx;
     double u = tillURhoTemp(material, rho, p->T);
-    if (u <= TILL_SENTINEL) return NAN;     /* propagates as a bracket failure */
+    if (tillFailed(u)) return NAN;     /* propagates as a bracket failure */
     return tillPressureSoundNP(material, rho, u, NULL) - p->P;
 }
 
@@ -600,7 +602,7 @@ static double tillRhoPTempFunc(TILLMATERIAL *material, double rho, const void *c
  * Calculate rho(P,T) for a material by root finding on the uncut pressure (tillPressureSoundNP),
  * which is monotonic in rho at fixed T where (dP/drho)_T > 0.
  *
- * Returns TILL_SENTINEL if P <= 0 or the root is not bracketed by [rho_min, 0.999*rhomax].
+ * Returns TILL_FAIL_VALUE if P <= 0 or the root is not bracketed by [rho_min, 0.999*rhomax].
  */
 double tillRhoPTemp(TILLMATERIAL *material, double P, double T)
 {
@@ -611,7 +613,7 @@ double tillRhoPTemp(TILLMATERIAL *material, double P, double T)
 
     /* For P <= 0 the inversion is not defined (pressure cutoff). */
     if (P <= 0.0)
-        TILL_FAIL_RETURN(material, TILL_SENTINEL, "tillRhoPTemp: Called for negative pressure (P= %g).\n", P);
+        TILL_FAIL_RETURN(material, TILL_FAIL_VALUE, "tillRhoPTemp: Called for negative pressure (P= %g).\n", P);
 
     ctx.P = P;
     ctx.T = T;
@@ -620,14 +622,14 @@ double tillRhoPTemp(TILLMATERIAL *material, double P, double T)
     fb = tillRhoPTempFunc(material, rho_max, &ctx);
 
     if (!(fa < 0.0))
-        TILL_FAIL_RETURN(material, TILL_SENTINEL, "tillRhoPTemp: P <= P(rho_min, T) (P= %g, rho_min= %g, P_min= %g, T= %g).\n",
+        TILL_FAIL_RETURN(material, TILL_FAIL_VALUE, "tillRhoPTemp: P <= P(rho_min, T) (P= %g, rho_min= %g, P_min= %g, T= %g).\n",
                          P, rho_min, fa + P, T);
     if (!(fb > 0.0))
-        TILL_FAIL_RETURN(material, TILL_SENTINEL, "tillRhoPTemp: P >= P(rho_max, T) (P= %g, rho_max= %g, P_max= %g, T= %g).\n",
+        TILL_FAIL_RETURN(material, TILL_FAIL_VALUE, "tillRhoPTemp: P >= P(rho_max, T) (P= %g, rho_max= %g, P_max= %g, T= %g).\n",
                          P, rho_max, fb + P, T);
 
     if (tillBrent(tillRhoPTempFunc, material, &ctx, rho_min, rho_max, fa, fb, 0.0, 1e-10, 1000, &rho) != TILL_SUCCESS)
-        TILL_FAIL_RETURN(material, TILL_SENTINEL, "tillRhoPTemp: root finder did not converge (P= %g, T= %g).\n", P, T);
+        TILL_FAIL_RETURN(material, TILL_FAIL_VALUE, "tillRhoPTemp: root finder did not converge (P= %g, T= %g).\n", P, T);
 
     return rho;
 }

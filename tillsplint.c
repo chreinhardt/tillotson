@@ -245,7 +245,7 @@ double tillFindUonIsentrope(TILLMATERIAL *material, double s, double rho)
 }
 
 /*
- * Find the isentrope through (rho, u): returns its table variable s, or TILL_SENTINEL if (rho, u)
+ * Find the isentrope through (rho, u): returns its table variable s, or TILL_FAIL_VALUE if (rho, u)
  * is below the cold curve (s < 0) or above the table (s > s_max). iOrder is only used in messages.
  *
  * u(rho, s) is monotonically increasing in s, so the cell [s_j, s_j+1] containing the root is
@@ -267,10 +267,10 @@ double tillFindEntropyCurve(TILLMATERIAL *material, double rho, double u, int iO
     uhi = tillCubicIntGrid(material, i, e, jhi);
 
     if (u < ulo - utol)
-        TILL_FAIL_RETURN(material, TILL_SENTINEL, "tillFindEntropyCurve: Particle %i (rho= %g, u= %g, iMat= %i) is below the cold curve.\n",
+        TILL_FAIL_RETURN(material, TILL_FAIL_VALUE, "tillFindEntropyCurve: Particle %i (rho= %g, u= %g, iMat= %i) is below the cold curve.\n",
                          iOrder, rho, u, material->iMaterial);
     if (u > uhi + utol)
-        TILL_FAIL_RETURN(material, TILL_SENTINEL, "tillFindEntropyCurve: Particle %i (rho= %g, u= %g, iMat= %i) is above the table.\n",
+        TILL_FAIL_RETURN(material, TILL_FAIL_VALUE, "tillFindEntropyCurve: Particle %i (rho= %g, u= %g, iMat= %i) is above the table.\n",
                          iOrder, rho, u, material->iMaterial);
 
     /* Bisection on the grid lines: u(s_jlo) <= u < u(s_jhi). */
@@ -300,14 +300,14 @@ double tillFindEntropyCurve(TILLMATERIAL *material, double rho, double u, int iO
             s = 0.5*(slo + shi);
         }
     }
-    TILL_FAIL_RETURN(material, TILL_SENTINEL, "tillFindEntropyCurve: Particle %i (rho= %g, u= %g, iMat= %i): root finder did not converge.\n",
+    TILL_FAIL_RETURN(material, TILL_FAIL_VALUE, "tillFindEntropyCurve: Particle %i (rho= %g, u= %g, iMat= %i): root finder did not converge.\n",
                      iOrder, rho, u, material->iMaterial);
 }
 
 /*
  * Calculate u2 on the isentrope through (rho1, u1) at rho2. Inside the lookup table this is an
  * interpolation; for rho outside [rhomin, rhomax] or u1 above the table the ODE is integrated
- * directly. Returns TILL_SENTINEL if (rho1, u1) is below the cold curve.
+ * directly. Returns TILL_FAIL_VALUE if (rho1, u1) is below the cold curve.
  */
 double tillLookupU(TILLMATERIAL *material, double rho1, double u1, double rho2, int iOrder)
 {
@@ -317,7 +317,7 @@ double tillLookupU(TILLMATERIAL *material, double rho1, double u1, double rho2, 
     iRet = tillIsInTable(material, rho1, u1);
 
     if (iRet == TILL_LOOKUP_OUTSIDE_VMIN)
-        TILL_FAIL_RETURN(material, TILL_SENTINEL, "tillLookupU: Particle %i (rho= %g, u= %g, iMat= %i) is below the cold curve.\n",
+        TILL_FAIL_RETURN(material, TILL_FAIL_VALUE, "tillLookupU: Particle %i (rho= %g, u= %g, iMat= %i) is below the cold curve.\n",
                          iOrder, rho1, u1, material->iMaterial);
 
     /* Check if the starting and end point are inside of the look up table. */
@@ -325,7 +325,7 @@ double tillLookupU(TILLMATERIAL *material, double rho1, double u1, double rho2, 
         (rho2 >= material->rhomin*(1.0 - TILL_EDGE_TOL)) && (rho2 <= material->rhomax*(1.0 + TILL_EDGE_TOL)))
     {
         s = tillFindEntropyCurve(material, rho1, u1, iOrder);
-        if (s <= TILL_SENTINEL) return TILL_SENTINEL;
+        if (tillFailed(s)) return TILL_FAIL_VALUE;
         return tillFindUonIsentrope(material, s, rho2);
     }
 
@@ -337,7 +337,7 @@ double tillLookupU(TILLMATERIAL *material, double rho1, double u1, double rho2, 
 /*
  * Calculate u_cold(rho) = u(rho, s=0) from the lookup table. The cold curve is zero for all
  * rho < rho0 (the pressure cutoff keeps u constant on the cold isentrope in tension), including
- * densities below rhomin. Returns TILL_SENTINEL for rho > rhomax.
+ * densities below rhomin. Returns TILL_FAIL_VALUE for rho > rhomax.
  */
 double tillColdULookup(TILLMATERIAL *material, double rho)
 {
@@ -349,7 +349,7 @@ double tillColdULookup(TILLMATERIAL *material, double rho)
         return 0.0;
 
     if (!(rho >= material->rhomin*(1.0 - TILL_EDGE_TOL)) || (rho > material->rhomax*(1.0 + TILL_EDGE_TOL)))
-        TILL_FAIL_RETURN(material, TILL_SENTINEL, "tillColdULookup: rho= %g outside of the lookup table (iMat= %i, rhomin= %g, rhomax= %g).\n",
+        TILL_FAIL_RETURN(material, TILL_FAIL_VALUE, "tillColdULookup: rho= %g outside of the lookup table (iMat= %i, rhomin= %g, rhomax= %g).\n",
                          rho, material->iMaterial, material->rhomin, material->rhomax);
 
     {

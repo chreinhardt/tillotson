@@ -257,7 +257,7 @@ int tillIsInTable(TILLMATERIAL *material, double rho, double u)
 /*
  * This function checks if a given (rho,u) is in an unphysical state below the cold curve.
  *
- * Returns 1 (true) if (rho,u) is below the cold curve, 0 (false) if not, and TILL_FAIL (-1) if
+ * Returns 1 (true) if (rho,u) is below the cold curve, 0 (false) if not, and TILL_FAIL if
  * rho is outside the table.
  */
 int tillIsBelowColdCurve(TILLMATERIAL *material, double rho, double u)
