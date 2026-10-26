@@ -132,6 +132,28 @@ void tillInitLookup(TILLMATERIAL *material, int nTableRho, int nTableV, double r
 	tillInitSplines(material);
 }
 
+/*
+ * One classical RK4 step of du/dlogrho = P/rho from (logrho, u) with the signed
+ * step h. For h < 0 the stages are evaluated at logrho + h/2 and logrho + h,
+ * i.e. below the starting point, which is what a downward integration needs.
+ */
+static double tillRK4Step(TILLMATERIAL *material, double logrho, double u, double h)
+{
+    double k1u, k2u, k3u, k4u;
+
+    k1u = h*tilldudlogrho(material, logrho, u);
+    k2u = h*tilldudlogrho(material, logrho+0.5*h, u+0.5*k1u);
+    k3u = h*tilldudlogrho(material, logrho+0.5*h, u+0.5*k2u);
+    k4u = h*tilldudlogrho(material, logrho+h, u+k3u);
+
+    return u + (k1u + 2.0*k2u + 2.0*k3u + k4u)/6.0;
+}
+
+/* Number of RK4 substeps per table interval dlogrho when integrating an isentrope. */
+#ifndef TILL_ISENTROPE_NSUB
+#define TILL_ISENTROPE_NSUB 10
+#endif
+
 TILL_LOOKUP_ENTRY *tillSolveIsentrope(TILLMATERIAL *material, double v)
 {
 	/*
@@ -238,108 +260,71 @@ TILL_LOOKUP_ENTRY *tillSolveIsentrope(TILLMATERIAL *material, double v)
 }
 
 /*
- * Integrate one isentrope for the look up table using a log(rho) as a variable. The parameter v
+ * Integrate one isentrope for the look up table using log(rho) as the variable. The parameter v
  * corresponds to u(log(rho)=log(rho0)) so v=0 gives the cold curve.
+ *
+ * The condensed (logrho > log rho0) and expanded (logrho < log rho0) branches are integrated
+ * separately, starting from the grid point i = n where rho = rho0, with TILL_ISENTROPE_NSUB RK4
+ * substeps per table interval. The step is +dlogrho/NSUB upward and -dlogrho/NSUB downward.
  */
 TILL_LOOKUP_ENTRY *tillSolveIsentropeLogRho(TILLMATERIAL *material, double v)
 {
-    double logrho;
-    double u;
-    double k1u,k2u,k3u,k4u;
-	double h;
-    int i,s;
+    const double logrho0 = log(material->rho0);
+    const double hs = material->dlogrho/TILL_ISENTROPE_NSUB;
+    TILL_LOOKUP_ENTRY *isentrope;
+    double logrho, u;
+    int i, s;
 
-	/* Use this as a temporary data structure because it is easy to sort with qsort. */
-	TILL_LOOKUP_ENTRY *isentrope;
     isentrope = malloc(material->nTableRho*sizeof(TILL_LOOKUP_ENTRY));
+    assert(isentrope != NULL);
 
-	logrho = log(material->rho0);
-	u = v;
-	h = material->dlogrho;
+    i = material->n;
+    isentrope[i].logrho = logrho0;
+    isentrope[i].v = v;
+    isentrope[i].u = v;
+    isentrope[i].u1 = tilldudlogrho(material, logrho0, v);
 
-	i = material->n;
+    /* Condensed states: integrate upward from rho0. */
+    logrho = logrho0;
+    u = v;
+    for (i = material->n+1; i < material->nTableRho; i++) {
+        for (s = 0; s < TILL_ISENTROPE_NSUB; s++) {
+            u = tillRK4Step(material, logrho, u, hs);
+            logrho += hs;
+            /* Assure that u >= 0.0. */
+            if (u < 0.0) u = 0.0;
+        }
+        /* Use the exact grid value, not the accumulated sum. */
+        logrho = logrho0 + (i - material->n)*material->dlogrho;
 
-	isentrope[i].logrho = logrho;
-	isentrope[i].v = v;
-	isentrope[i].u = u;
-	isentrope[i].u1 = tilldudlogrho(material, logrho, u); // du/drho
-	
-	/*
-	 * Integrate the condensed and expanded states separately.
-	 */
-	for (i=material->n+1;i<material->nTableRho;i++)
-	{
-		double hs = h/10.0;
-		
-		/* We do substeps that saved to increase the accuracy. */
-		for (s=0;s<10;s++)
-		{
-			/*
-             * Midpoint Runga-Kutta (4nd order).
-			 */
-			k1u = hs*tilldudlogrho(material,logrho,u);
-			k2u = hs*tilldudlogrho(material,logrho+0.5*hs,u+0.5*k1u);
-			k3u = hs*tilldudlogrho(material,logrho+0.5*hs,u+0.5*k2u);
-			k4u = hs*tilldudlogrho(material,logrho+hs,u+k3u);
+        isentrope[i].u = u;
+        isentrope[i].logrho = logrho;
+        isentrope[i].v = v;
+        isentrope[i].u1 = tilldudlogrho(material, logrho, u);
+    }
 
-			u += k1u/6.0+k2u/3.0+k3u/3.0+k4u/6.0;
+    /* Expanded states: integrate downward from rho0 (negative step). */
+    logrho = logrho0;
+    u = v;
+    for (i = material->n-1; i >= 0; i--) {
+        for (s = 0; s < TILL_ISENTROPE_NSUB; s++) {
+            u = tillRK4Step(material, logrho, u, -hs);
+            logrho -= hs;
+            /* Assure that u >= 0.0. */
+            if (u < 0.0) u = 0.0;
+        }
+        logrho = logrho0 - (material->n - i)*material->dlogrho;
 
-			/* Assure that u >= 0.0. */
-			if (u < 0.0) u = 0.0;
+        isentrope[i].u = u;
+        isentrope[i].logrho = logrho;
+        isentrope[i].v = v;
+        isentrope[i].u1 = tilldudlogrho(material, logrho, u);
+    }
 
-			logrho += hs;
-		}
+    /* Avoid issues because P/rho is diverging for rho -> 0: set u1(0) = u1(dlogrho). */
+    isentrope[0].u1 = isentrope[1].u1;
 
-	    isentrope[i].u = u;
-	    isentrope[i].logrho = logrho;
-		isentrope[i].v = v;
-		isentrope[i].u1 = tilldudlogrho(material, logrho, u);
-	}
-
-	/*
-     * Now the expanded states. Careful about the negative sign.
-	 */
-	logrho = log(material->rho0);
-	u = v;
-
-	for (i=material->n-1;i>=0;i--)
-	{
-		double hs = h/10.0;
-		
-		/* We do substeps that saved to increase the accuracy. */
-		for (s=0;s<10;s++)
-		{
-			/*
-			 * Midpoint Runga-Kutta (4nd order).
-			 */
-			k1u = hs*-tilldudlogrho(material,logrho,u);
-			k2u = hs*-tilldudlogrho(material,logrho+0.5*hs,u+0.5*k1u);
-			k3u = hs*-tilldudlogrho(material,logrho+0.5*hs,u+0.5*k2u);
-			k4u = hs*-tilldudlogrho(material,logrho+hs,u+k3u);
-
-			u += k1u/6.0+k2u/3.0+k3u/3.0+k4u/6.0;
-
-			/* Assure that u >= 0.0. */
-			if (u < 0.0) u = 0.0;
-
-			logrho -= hs;
-		}
-	
-		isentrope[i].u = u;
-	    isentrope[i].logrho = logrho;
-		isentrope[i].v = v;
-		isentrope[i].u1 = tilldudlogrho(material, logrho, u);
-
-        /*
-         * Avoid issues because P/rho is diverging for rho=0.
-         */
-		if (i == 0)
-		{
-			isentrope[i].u1 = isentrope[i+1].u1; // Set u1(0)=u1(dlogrho)
-		}
-	}
-	
-	return isentrope;
+    return isentrope;
 }
 
 /*
@@ -347,74 +332,43 @@ TILL_LOOKUP_ENTRY *tillSolveIsentropeLogRho(TILLMATERIAL *material, double v)
  *
  * du/dlogrho = P/rho
  *
- * with initial conitions (rho1, u1). Note that the integration is done in log(rho) because thhe
- * ODE is very stiff for small rho otherwise.
+ * with initial conditions (rho1, u1). The integration is done in log(rho) because the ODE is
+ * very stiff for small rho otherwise. The interval is split into an integer number of equal
+ * RK4 steps no larger than dlogrho/100 (or 1/100 of the interval if no table exists), so the
+ * last step lands exactly on log(rho2) in either direction.
  */
 double tillCalcU(TILLMATERIAL *material, double rho1, double u1, double rho2)
 {
-	/* Calculate u2 by solving the ODE */
-    double logrho;
-    double logrho2;
-    double u;
-    double k1u, k2u, k3u, k4u;
-	double h;
+    const double logrho1 = log(rho1);
+    const double logrho2 = log(rho2);
+    const double dlogrho = logrho2 - logrho1;
+    double hmax, h, u;
+    long nsteps, s;
 
-	logrho = log(rho1);
-	u = u1;
-    logrho2 = log(rho2);
+    if (dlogrho == 0.0) return u1;
 
-    /* Make sure that dlogrho is set. */
-    if (material->dlogrho > 0.0)
-    {
-        /* Make smaller steps than we used for look up table. */
-        h = material->dlogrho/100.0;
+    if (material->dlogrho > 0.0) {
+        /* Make smaller steps than we used for the look up table. */
+        hmax = material->dlogrho/100.0;
     } else {
-        h = fabs(logrho2-logrho)/100.0;
-        assert(h > 0.0);
+        hmax = fabs(dlogrho)/100.0;
     }
+    assert(hmax > 0.0);
+
+    nsteps = (long) ceil(fabs(dlogrho)/hmax);
+    if (nsteps < 1) nsteps = 1;
+    h = dlogrho/nsteps;     /* signed */
+
 #ifdef TILL_VERBOSE
-    fprintf(stderr, "tillCalcU: Solving ODE (rho1= %g u1= %g rho2= %g).\n", rho1, u1, rho2);
+    fprintf(stderr, "tillCalcU: Solving ODE (rho1= %g u1= %g rho2= %g, %ld steps).\n", rho1, u1, rho2, nsteps);
 #endif
-	
-    if (rho1 < rho2)
-	{
-		while (logrho < logrho2) {
-			/*
-			 * Midpoint Runga-Kutta (4nd order).
-			 */
-			k1u = h*tilldudlogrho(material, logrho, u);
-			k2u = h*tilldudlogrho(material, logrho+0.5*h, u+0.5*k1u);
-			k3u = h*tilldudlogrho(material, logrho+0.5*h, u+0.5*k2u);
-			k4u = h*tilldudlogrho(material, logrho+h, u+k3u);
 
-			u += k1u/6.0+k2u/3.0+k3u/3.0+k4u/6.0;
-			logrho += h;
+    u = u1;
+    for (s = 0; s < nsteps; s++) {
+        u = tillRK4Step(material, logrho1 + s*h, u, h);
+    }
 
-            /* For the last step we set h so that rho == rho2. */
-            if (fabs(logrho-logrho2) < h) {
-                h = logrho2-logrho;
-            }
-		}
-	} else if (rho1 > rho2) {
-		while (logrho > logrho2) {
-			/*
-			 * Midpoint Runga-Kutta (4nd order).
-			 */
-			k1u = h*tilldudlogrho(material, logrho, u);
-			k2u = h*tilldudlogrho(material, logrho+0.5*h, u+0.5*k1u);
-			k3u = h*tilldudlogrho(material, logrho+0.5*h, u+0.5*k2u);
-			k4u = h*tilldudlogrho(material, logrho+h, u+k3u);
-
-			u -= k1u/6.0+k2u/3.0+k3u/3.0+k4u/6.0;
-			logrho -= h;
-
-            /* For the last step we set h so that rho == rho2. */
-            if (fabs(logrho-logrho2) < h) {
-                h = logrho-logrho2;
-            }
-		}
-	}
-	return u;
+    return u;
 }
 
 /*
