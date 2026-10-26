@@ -57,7 +57,7 @@ void tillInitColdCurve(TILLMATERIAL *material)
 void tillInitLookup(TILLMATERIAL *material, int nTableRho, int nTableV, double rhomin, double rhomax, double vmax)
 {
 	TILL_LOOKUP_ENTRY *isentrope;
-	double v, dv;
+	double v;
     int i, j;
 
     /* Check if the material is properly initialized. */
@@ -100,21 +100,23 @@ void tillInitLookup(TILLMATERIAL *material, int nTableRho, int nTableV, double r
         material->rhomax = tillLookupRho(material, material->nTableRho-1);
     }
 
-    /* This is the same for all materials. */
-    material->dv = material->vmax/(material->nTableV-1);
+    /*
+     * The grid is uniform in s = log(1 + v/vmin) (see tillotson.h), so dv is the step in s and
+     * the last row is at s = log(1 + vmax/vmin), i.e. v = vmax.
+     */
+    material->vmin = TILL_VMIN_FRAC*material->vmax;
+    material->dv = log1p(material->vmax/material->vmin)/(material->nTableV-1);
 
 	/* We arrange the look up table as a 1D array with Lookup[i][j] = Lookup[i*Ntable+j] */
     material->Lookup = calloc(material->nTableRho*material->nTableV, sizeof(TILL_LOOKUP_ENTRY));
     assert(material->Lookup != NULL);
 
-	v = 0.0;
-	dv = material->dv;
-    
 	/*
-     * Integrate the isentropes for different v.
+     * Integrate the isentropes for different v = v(s_j).
      */
 	for (j=0; j<material->nTableV; j++)
 	{
+		v = tillLookupV(material, j);
 		isentrope = tillSolveIsentropeLogRho(material,v);
 		
 		/* Copy one row to the look up table. This is of course not efficient at all. */
@@ -125,7 +127,6 @@ void tillInitLookup(TILLMATERIAL *material, int nTableRho, int nTableV, double r
 		}
 		
 		free(isentrope);
-		v += dv;
 	}
 
     /* Solve splines for both u and u1 in v storing the 2nd derivatives wrt v */
@@ -379,7 +380,8 @@ double tillCalcU(TILLMATERIAL *material, double rho1, double u1, double rho2)
 int tillIsInTable(TILLMATERIAL *material, double rho, double u)
 {
     double logrho;
-    double v_eps = 0.1*material->dv;
+    double s_max = tillLookupS(material, material->nTableV-1);
+    double s_eps = 0.1*material->dv;
     double u1, u2;
     double A;
     int i;
@@ -409,12 +411,12 @@ int tillIsInTable(TILLMATERIAL *material, double rho, double u)
     /* 
      * Check if v(rho, u) < v_max. This requires interpolation. Currently we do a linear
      * interpolation between u(i,N-1) and u(i+1,N-1) to obtain umax(rho). There are certainly more
-     * sophisticated methods but this one should be quick and realiable. Note that eps=0.1*dv as
-     * for v close to vmax rounding errors can be problematic and cause problems with the brent
-     * root finder.
+     * sophisticated methods but this one should be quick and realiable. Note that eps=0.1*dv (in
+     * s) as for s close to s_max rounding errors can be problematic and cause problems with the
+     * brent root finder.
      */
-    u1 = tillSplineIntU(material, material->vmax-v_eps, i);
-    u2 = tillSplineIntU(material, material->vmax-v_eps, i+1);
+    u1 = tillSplineIntU(material, s_max-s_eps, i);
+    u2 = tillSplineIntU(material, s_max-s_eps, i+1);
 
     A = (tillLookupRho(material, i+1)-rho)/(tillLookupRho(material, i+1)-tillLookupRho(material, i));
     assert(A >= 0.0);

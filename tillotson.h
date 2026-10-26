@@ -1,3 +1,4 @@
+#include <stdio.h>
 /*
  * The header file for the Tillotson EOS library.
  */
@@ -48,6 +49,7 @@ enum till_error_lookup
 #define ICE         4
 #define WATER       5
 #define DUNITE      6
+#define FORSTERITE  7
 
 #define TILL_N_MATERIAL_MAX 10
 
@@ -74,6 +76,20 @@ enum till_error_lookup
 
 /* Define eps so that v <= v_max-eps. */
 #define V_EPS 1e-8
+
+/*
+ * The isentropes are labelled by v = u(rho0). The table is uniform in the internal variable s,
+ *
+ *     v(s) = vmin*(exp(s) - 1),   s(v) = log(1 + v/vmin),   s_j = j*dv,
+ *
+ * which is linear in v for v << vmin and logarithmic above, so that the first cell is at
+ * v ~ vmin*dv and the solid/liquid regime (u < us2) is resolved. vmin is set in tillInitLookup to
+ * TILL_VMIN_FRAC*vmax. All routines of tillsplint.c take and return s, not v; only
+ * tillInitLookup/tillSolveIsentropeLogRho see the physical v.
+ */
+#ifndef TILL_VMIN_FRAC
+#define TILL_VMIN_FRAC 1e-6
+#endif
 
 /* Define FALSE and TRUE. */
 //const int FALSE = 0;
@@ -111,6 +127,7 @@ typedef struct tillMaterial
 	double rhomin;	/* Min value for the lookup table */
 	double rhomax;	/* Max value for the lookup table */
 	double vmax;	/* Max value for the lookup table */
+	double vmin;	/* Scale of the v(s) mapping, see TILL_VMIN_FRAC */
 	/* Unit convertion factors */
 	double dKpcUnit;
 	double dMsolUnit;
@@ -147,7 +164,7 @@ typedef struct tillMaterial
 	TILL_LOOKUP_ENTRY *cold;
 	double drho;
 	double dlogrho;
-	double dv;
+	double dv;		/* step in s (not in v!) */
 
 	/* A look up table for u(rho) along an isentrope */
 //	TILL_LOOKUP *Lookup;	// this is an array of pointers
@@ -256,6 +273,9 @@ int tillLookupIndexV(TILLMATERIAL *material, double v);
 double tillLookupRho(TILLMATERIAL *material, int i);
 double tillLookupLogRho(TILLMATERIAL *material, int i);
 double tillLookupV(TILLMATERIAL *material, int j);
+double tillLookupS(TILLMATERIAL *material, int j);
+double tillVofS(TILLMATERIAL *material, double s);
+double tillSofV(TILLMATERIAL *material, double v);
 
 // A general version of tillLookupU() that can be used as an interface for different EOS
 double eosLookupU(TILLMATERIAL *material,double rho1,double u1,double rho2,int iOrder);
@@ -263,4 +283,3 @@ double eosLookupU(TILLMATERIAL *material,double rho1,double u1,double rho2,int i
 int tillPhase(TILLMATERIAL *material, double rho, double u);
 
 #endif
-

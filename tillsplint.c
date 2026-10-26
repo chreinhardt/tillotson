@@ -324,7 +324,7 @@ double tillCubicInt(TILLMATERIAL *material, double rhoint, double vint) {
 
 	/* Calculate dudv from udv2 */
 	A = ((j+1)*material->dv-vint)/material->dv;
-	B = (vint-material->dv)/material->dv;
+	B = (vint-j*material->dv)/material->dv;
 	
 	dudv[0] = (material->Lookup[TILL_INDEX(i, j+1)].u-material->Lookup[TILL_INDEX(i, j)].u)/dv-(3.0*A*A-1.0)/6.0*dv*material->Lookup[TILL_INDEX(i, j)].udv2+(3.0*B*B-1.0)/6.0*dv*material->Lookup[TILL_INDEX(i, j+1)].udv2;
 	dudv[1] = (material->Lookup[TILL_INDEX(i+1, j+1)].u-material->Lookup[TILL_INDEX(i+1, j)].u)/dv-(3.0*A*A-1.0)/6.0*dv*material->Lookup[TILL_INDEX(i+1, j)].udv2+(3.0*B*B-1.0)/6.0*dv*material->Lookup[TILL_INDEX(i+1, j+1)].udv2;
@@ -370,10 +370,10 @@ double denergy(TILLMATERIAL *material,double v,double rho,double u)
 double tillFindEntropyCurve(TILLMATERIAL *material,double rho,double u,int iOrder)
 {
 	double tol=1e-6;
-    double v_eps = V_EPS;
-    
-    /* Note that using vmax rather than vmax-eps can cause an error in the brent root finder. */
-	return brent(denergy,material,0.0,material->vmax-v_eps,rho,u,tol,iOrder);
+    double s_max = tillLookupS(material, material->nTableV-1);
+
+    /* Returns s, not v. Using s_max rather than s_max-eps can cause an error in the brent root finder. */
+	return brent(denergy,material,0.0,s_max-V_EPS,rho,u,tol,iOrder);
 }
 
 double tillLookupU(TILLMATERIAL *material, double rho1, double u1, double rho2, int iOrder)
@@ -496,13 +496,13 @@ int tillLookupIndexLogRho(TILLMATERIAL *material, double logrho)
 }
 
 /*
- * Return the index j, so that v_j and v_j+1 bracket v in the lookup table.
+ * Return the index j, so that s_j and s_j+1 bracket s in the lookup table (s, not v!).
  */
 int tillLookupIndexV(TILLMATERIAL *material, double v)
 {
     int j;
 
-    // Assume uniform spacing in v.
+    // Uniform spacing in s; the argument is s.
     j = (int) floor(v/material->dv);
 
     // Check if v is outside of the table.
@@ -534,10 +534,30 @@ double tillLookupLogRho(TILLMATERIAL *material, int i)
 }
 
 /*
- * Return v(j).
+ * Return s(j). The grid is uniform in s.
+ */
+double tillLookupS(TILLMATERIAL *material, int j)
+{
+    return (j*material->dv);
+}
+
+/*
+ * Return the physical v(j) = u(rho0) of isentrope j.
  */
 double tillLookupV(TILLMATERIAL *material, int j)
 {
-    // Assume uniform spacing in v.
-    return (j*material->dv);
+    return tillVofS(material, tillLookupS(material, j));
+}
+
+/*
+ * Mapping between the physical isentrope label v and the uniform table variable s.
+ */
+double tillVofS(TILLMATERIAL *material, double s)
+{
+    return material->vmin*expm1(s);
+}
+
+double tillSofV(TILLMATERIAL *material, double v)
+{
+    return log1p(v/material->vmin);
 }
