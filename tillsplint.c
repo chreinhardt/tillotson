@@ -337,9 +337,9 @@ double tillLookupU(TILLMATERIAL *material, double rho1, double u1, double rho2, 
 }
 
 /*
- * Calculate u_cold(rho) from the lookup table. Returns TILL_SENTINEL if rho is outside the table.
- *
- * 25.09.2018: Adapted it for the logarithmic lookup table.
+ * Calculate u_cold(rho) = u(rho, s=0) from the lookup table. The cold curve is zero for all
+ * rho < rho0 (the pressure cutoff keeps u constant on the cold isentrope in tension), including
+ * densities below rhomin. Returns TILL_SENTINEL for rho > rhomax.
  */
 double tillColdULookup(TILLMATERIAL *material, double rho)
 {
