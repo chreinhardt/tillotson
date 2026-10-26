@@ -611,7 +611,7 @@ double tillRhoPTemp(TILLMATERIAL *material, double P, double T)
 
     /* For P <= 0 the inversion is not defined (pressure cutoff). */
     if (P <= 0.0)
-        TILL_FAIL_RETURN(TILL_SENTINEL, "tillRhoPTemp: Called for negative pressure (P= %g).\n", P);
+        TILL_FAIL_RETURN(material, TILL_SENTINEL, "tillRhoPTemp: Called for negative pressure (P= %g).\n", P);
 
     ctx.P = P;
     ctx.T = T;
@@ -620,14 +620,14 @@ double tillRhoPTemp(TILLMATERIAL *material, double P, double T)
     fb = tillRhoPTempFunc(material, rho_max, &ctx);
 
     if (!(fa < 0.0))
-        TILL_FAIL_RETURN(TILL_SENTINEL, "tillRhoPTemp: P <= P(rho_min, T) (P= %g, rho_min= %g, P_min= %g, T= %g).\n",
+        TILL_FAIL_RETURN(material, TILL_SENTINEL, "tillRhoPTemp: P <= P(rho_min, T) (P= %g, rho_min= %g, P_min= %g, T= %g).\n",
                          P, rho_min, fa + P, T);
     if (!(fb > 0.0))
-        TILL_FAIL_RETURN(TILL_SENTINEL, "tillRhoPTemp: P >= P(rho_max, T) (P= %g, rho_max= %g, P_max= %g, T= %g).\n",
+        TILL_FAIL_RETURN(material, TILL_SENTINEL, "tillRhoPTemp: P >= P(rho_max, T) (P= %g, rho_max= %g, P_max= %g, T= %g).\n",
                          P, rho_max, fb + P, T);
 
     if (tillBrent(tillRhoPTempFunc, material, &ctx, rho_min, rho_max, fa, fb, 0.0, 1e-10, 1000, &rho) != TILL_SUCCESS)
-        TILL_FAIL_RETURN(TILL_SENTINEL, "tillRhoPTemp: root finder did not converge (P= %g, T= %g).\n", P, T);
+        TILL_FAIL_RETURN(material, TILL_SENTINEL, "tillRhoPTemp: root finder did not converge (P= %g, T= %g).\n", P, T);
 
     return rho;
 }

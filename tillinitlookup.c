@@ -211,9 +211,7 @@ double tillCalcU(TILLMATERIAL *material, double rho1, double u1, double rho2)
     if (nsteps < 1) nsteps = 1;
     h = dlogrho/nsteps;     /* signed */
 
-#ifdef TILL_VERBOSE
-    fprintf(stderr, "tillCalcU: Solving ODE (rho1= %g u1= %g rho2= %g, %ld steps).\n", rho1, u1, rho2, nsteps);
-#endif
+    TILL_WARN("tillCalcU: Solving ODE (rho1= %g u1= %g rho2= %g, %ld steps).\n", rho1, u1, rho2, nsteps);
 
     u = u1;
     for (s = 0; s < nsteps; s++) {
@@ -249,9 +247,7 @@ int tillIsInTable(TILLMATERIAL *material, double rho, double u)
         return TILL_LOOKUP_OUTSIDE_VMAX;
     if (u < ulo - utol)
     {
-#ifdef TILL_VERBOSE
-        fprintf(stderr, "tillIsInTable: Value (rho=%15.7E, u=%15.7E, iMat= %i) below the cold curve!\n", rho, u, material->iMaterial);
-#endif
+        TILL_WARN("tillIsInTable: Value (rho=%15.7E, u=%15.7E, iMat= %i) below the cold curve!\n", rho, u, material->iMaterial);
         return TILL_LOOKUP_OUTSIDE_VMIN;
     }
 
@@ -269,7 +265,7 @@ int tillIsBelowColdCurve(TILLMATERIAL *material, double rho, double u)
     int iRet = 1;
 
     if (!(rho >= material->rhomin*(1.0 - TILL_EDGE_TOL)) || (rho > material->rhomax*(1.0 + TILL_EDGE_TOL)))
-        TILL_FAIL_RETURN(TILL_FAIL, "tillIsBelowColdCurve: rho= %g outside of the lookup table (iMat= %i, rhomin= %g, rhomax= %g).\n",
+        TILL_FAIL_RETURN(material, TILL_FAIL, "tillIsBelowColdCurve: rho= %g outside of the lookup table (iMat= %i, rhomin= %g, rhomax= %g).\n",
                          rho, material->iMaterial, material->rhomin, material->rhomax);
 
     if (u >= tillColdULookup(material, rho)) {

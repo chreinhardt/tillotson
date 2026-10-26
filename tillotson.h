@@ -23,26 +23,22 @@
 #define TILL_FAIL   -1
 
 /*
- * Error handling convention (shared with the other EOS libraries of EOSlib).
+ * Error handling convention (the same as in ANEOSmaterial).
  *
- * A function that cannot deliver a value returns TILL_SENTINEL (for doubles) or TILL_FAIL (for
- * status codes). By default the library prints a message and aborts at that point; compiled with
- * -DTILL_NOEXIT it returns the sentinel/status to the caller instead (the message is printed only
- * with -DTILL_VERBOSE). TILL_FAIL_RETURN implements this; it is used as
- *
- *     TILL_FAIL_RETURN(TILL_SENTINEL, "tillFoo: rho= %g outside the table.\n", rho);
+ * Initialization errors (unknown material, invalid table parameters) are fatal. Every evaluation
+ * that cannot deliver a value returns exactly TILL_SENTINEL (-1e50) for doubles or TILL_FAIL for
+ * status codes, in any unit system, so callers can test for (value < -1e40). Each such failure is
+ * counted in material->nLookupFail and reported to stderr only if EOSLIB_VERBOSE is defined.
  */
 #define TILL_SENTINEL (-1e50)
 
-#ifdef TILL_NOEXIT
-#  ifdef TILL_VERBOSE
-#    define TILL_FAIL_RETURN(ret, ...) do { fprintf(stderr, __VA_ARGS__); return (ret); } while (0)
-#  else
-#    define TILL_FAIL_RETURN(ret, ...) return (ret)
-#  endif
+#ifdef EOSLIB_VERBOSE
+#define TILL_WARN(...) fprintf(stderr, __VA_ARGS__)
 #else
-#  define TILL_FAIL_RETURN(ret, ...) do { fprintf(stderr, __VA_ARGS__); assert(0); exit(1); } while (0)
+#define TILL_WARN(...) ((void)0)
 #endif
+
+#define TILL_FAIL_RETURN(material, ret, ...) do { (material)->nLookupFail++; TILL_WARN(__VA_ARGS__); return (ret); } while (0)
 
 /*
  * Relative tolerance with which the lookup table is treated as a closed interval at its edges,
@@ -174,6 +170,9 @@ typedef struct tillMaterial
 
 	/* The lookup table u(rho, s) along the isentropes, NULL until tillInitLookup */
 	TILL_LOOKUP_ENTRY *Lookup;
+
+	/* Diagnostics: number of failed evaluations since init (see TILL_FAIL_RETURN). */
+	long nLookupFail;
 } TILLMATERIAL;
 
 /*

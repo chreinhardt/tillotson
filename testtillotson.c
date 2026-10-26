@@ -7,8 +7,6 @@
  * the exit status is the number of failures (0 = pass). Known limitations of the EOS itself
  * (non-monotonic P(rho, T) of some materials) are reported and skipped, not counted.
  *
- * Build with -DTILL_NOEXIT (the sentinel checks need it):
- *
  *   make testtillotson && ./testtillotson [iMat ...]
  */
 #include <stdio.h>
@@ -16,10 +14,6 @@
 #include <string.h>
 #include <math.h>
 #include "tillotson.h"
-
-#ifndef TILL_NOEXIT
-#error "testtillotson.c must be compiled with -DTILL_NOEXIT"
-#endif
 
 static int nFail = 0, nCheck = 0, nSkip = 0;
 static const char *MatName = "";
@@ -310,6 +304,7 @@ static void testTemperature(TILLMATERIAL *material)
 static void testSentinels(TILLMATERIAL *material)
 {
     double ucold = tillColdULookup(material, 2.0*material->rho0);
+    long nfail0 = material->nLookupFail;
 
     CHECK(tillLookupU(material, 2.0*material->rho0, 0.5*ucold, material->rho0, 0) == TILL_SENTINEL, "lookup below cold curve");
     CHECK(tillFindEntropyCurve(material, 2.0*material->rho0, 0.5*ucold, 0) == TILL_SENTINEL, "entropy curve below cold curve");
@@ -323,8 +318,10 @@ static void testSentinels(TILLMATERIAL *material)
     CHECK(tillIsBelowColdCurve(material, 2.0*material->rhomax, 1.0) == TILL_FAIL, "isbelow above rhomax");
     CHECK(tillIsBelowColdCurve(material, 2.0*material->rho0, 0.5*ucold) == 1, "isbelow true");
     CHECK(tillIsBelowColdCurve(material, 2.0*material->rho0, 2.0*ucold) == 0, "isbelow false");
-    /* Outside the table in rho the lookup falls back to direct integration (and is finite). */
+    CHECK(material->nLookupFail == nfail0 + 9, "every failure is counted (%ld)", material->nLookupFail - nfail0);
+    /* Outside the table in rho the lookup falls back to direct integration (and is finite, not a failure). */
     CHECK(isfinite(tillLookupU(material, 0.5*material->rhomin, 1.0, material->rhomin, 0)), "lookup below rhomin integrates");
+    CHECK(material->nLookupFail == nfail0 + 9, "direct integration is not a failure");
 }
 
 static double fcube(TILLMATERIAL *m, double x, const void *ctx) { (void) m; (void) ctx; return x*x*x - 2.0; }

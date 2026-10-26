@@ -1,12 +1,11 @@
 # Tillotson EOS library (part of the EOSlib family).
 #
-# The library needs no external dependencies. Build it with -DTILL_NOEXIT to make failing
-# evaluations return TILL_SENTINEL/TILL_FAIL instead of aborting (recommended for use in EOSlib;
-# required by testtillotson). -DTILL_VERBOSE prints a message on every failed evaluation.
+# The library needs no external dependencies. Failed evaluations return TILL_SENTINEL/TILL_FAIL
+# (see tillotson.h); -DEOSLIB_VERBOSE prints a message for each of them.
 
 objects = tillotson.o tillinitlookup.o tillsplint.o
 
-defs = -DTILL_NOEXIT
+defs =
 CFLAGS ?= -O3 -Wall $(defs)
 LIBS ?= -lm
 

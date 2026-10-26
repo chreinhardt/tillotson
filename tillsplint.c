@@ -267,10 +267,10 @@ double tillFindEntropyCurve(TILLMATERIAL *material, double rho, double u, int iO
     uhi = tillCubicIntGrid(material, i, e, jhi);
 
     if (u < ulo - utol)
-        TILL_FAIL_RETURN(TILL_SENTINEL, "tillFindEntropyCurve: Particle %i (rho= %g, u= %g, iMat= %i) is below the cold curve.\n",
+        TILL_FAIL_RETURN(material, TILL_SENTINEL, "tillFindEntropyCurve: Particle %i (rho= %g, u= %g, iMat= %i) is below the cold curve.\n",
                          iOrder, rho, u, material->iMaterial);
     if (u > uhi + utol)
-        TILL_FAIL_RETURN(TILL_SENTINEL, "tillFindEntropyCurve: Particle %i (rho= %g, u= %g, iMat= %i) is above the table.\n",
+        TILL_FAIL_RETURN(material, TILL_SENTINEL, "tillFindEntropyCurve: Particle %i (rho= %g, u= %g, iMat= %i) is above the table.\n",
                          iOrder, rho, u, material->iMaterial);
 
     /* Bisection on the grid lines: u(s_jlo) <= u < u(s_jhi). */
@@ -300,7 +300,7 @@ double tillFindEntropyCurve(TILLMATERIAL *material, double rho, double u, int iO
             s = 0.5*(slo + shi);
         }
     }
-    TILL_FAIL_RETURN(TILL_SENTINEL, "tillFindEntropyCurve: Particle %i (rho= %g, u= %g, iMat= %i): root finder did not converge.\n",
+    TILL_FAIL_RETURN(material, TILL_SENTINEL, "tillFindEntropyCurve: Particle %i (rho= %g, u= %g, iMat= %i): root finder did not converge.\n",
                      iOrder, rho, u, material->iMaterial);
 }
 
@@ -317,7 +317,7 @@ double tillLookupU(TILLMATERIAL *material, double rho1, double u1, double rho2, 
     iRet = tillIsInTable(material, rho1, u1);
 
     if (iRet == TILL_LOOKUP_OUTSIDE_VMIN)
-        TILL_FAIL_RETURN(TILL_SENTINEL, "tillLookupU: Particle %i (rho= %g, u= %g, iMat= %i) is below the cold curve.\n",
+        TILL_FAIL_RETURN(material, TILL_SENTINEL, "tillLookupU: Particle %i (rho= %g, u= %g, iMat= %i) is below the cold curve.\n",
                          iOrder, rho1, u1, material->iMaterial);
 
     /* Check if the starting and end point are inside of the look up table. */
@@ -329,10 +329,8 @@ double tillLookupU(TILLMATERIAL *material, double rho1, double u1, double rho2, 
         return tillFindUonIsentrope(material, s, rho2);
     }
 
-#ifdef TILL_VERBOSE
-    fprintf(stderr, "tillLookupU: value (%g, %g, %g) outside of look up table, doing direct integration (Error: %i).\n",
+    TILL_WARN("tillLookupU: value (%g, %g, %g) outside of look up table, doing direct integration (Error: %i).\n",
             rho1, u1, rho2, iRet);
-#endif
     return tillCalcU(material, rho1, u1, rho2);
 }
 
@@ -351,7 +349,7 @@ double tillColdULookup(TILLMATERIAL *material, double rho)
         return 0.0;
 
     if (!(rho >= material->rhomin*(1.0 - TILL_EDGE_TOL)) || (rho > material->rhomax*(1.0 + TILL_EDGE_TOL)))
-        TILL_FAIL_RETURN(TILL_SENTINEL, "tillColdULookup: rho= %g outside of the lookup table (iMat= %i, rhomin= %g, rhomax= %g).\n",
+        TILL_FAIL_RETURN(material, TILL_SENTINEL, "tillColdULookup: rho= %g outside of the lookup table (iMat= %i, rhomin= %g, rhomax= %g).\n",
                          rho, material->iMaterial, material->rhomin, material->rhomax);
 
     {
