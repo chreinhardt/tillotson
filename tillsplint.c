@@ -11,7 +11,6 @@
 #include <assert.h>
 #include <stdio.h>
 #include "tillotson.h"
-//#include "tillsplint.h"
 
 /*
  * Basic functions:
@@ -22,8 +21,10 @@
  *
  * tillSplineIntU1: do a cubic spline interpolation of u1 in v.
  *
- * tillCubicInt: interpolate a value (i,i+1) in logrho and (j,j+1) in v (uses Joachim's 2D
+ * tillCubicInt: interpolate a value (i,i+1) in logrho and (j,j+1) in s (uses Joachim's 2D
  *               interpolator).
+ *
+ * tillLookupU: u2 on the isentrope through (rho1, u1) at rho2.
  */
 
 #include <stddef.h>   /* offsetof */
@@ -55,7 +56,7 @@ static void tillInitSplineField(TILLMATERIAL *material, size_t offY, size_t offY
     assert(w != NULL);
 
     for (i = 0; i < material->nTableRho; i++) {
-        TILL_LOOKUP_ENTRY *row = &material->Lookup[TILL_INDEX(i, 0)];
+        TILL_LOOKUP_ENTRY *row = &material->Lookup[TILL_INDEX(material, i, 0)];
 
         /* Natural b.c. at v = 0. */
         TILL_FIELD(row[0], offY2) = 0.0;
@@ -103,12 +104,6 @@ void tillInitSplineU1(TILLMATERIAL *material)
     tillInitSplineField(material, offsetof(TILL_LOOKUP_ENTRY, u1), offsetof(TILL_LOOKUP_ENTRY, u1dv2));
 }
 
-/* Kept for callers of the old name; identical to tillInitSplineU. */
-void tillInitSplineV(TILLMATERIAL *material)
-{
-    tillInitSplineU(material);
-}
-
 /*
  * Cubic spline interpolation in s of the table field at byte offset offY (with second
  * derivatives at offY2) along row i. s is clamped to the table so that the last interval is
@@ -117,7 +112,7 @@ void tillInitSplineV(TILLMATERIAL *material)
 static double tillSplineIntField(TILLMATERIAL *material, double s, int i, size_t offY, size_t offY2)
 {
     const double h = material->dv;
-    const TILL_LOOKUP_ENTRY *row = &material->Lookup[TILL_INDEX(i, 0)];
+    const TILL_LOOKUP_ENTRY *row = &material->Lookup[TILL_INDEX(material, i, 0)];
     int klo = tillLookupIndexV(material, s);
     double a, b;
 
@@ -142,40 +137,6 @@ double tillSplineIntU1(TILLMATERIAL *material, double s, int i)
     return tillSplineIntField(material, s, i, offsetof(TILL_LOOKUP_ENTRY, u1), offsetof(TILL_LOOKUP_ENTRY, u1dv2));
 }
 
-/* Old name of tillSplineIntU. */
-double tillSplineIntv(TILLMATERIAL *material, double s, int i)
-{
-    return tillSplineIntU(material, s, i);
-}
-
-#ifdef TILL_DEBUG_SPLINT
-double tillSplineIntrho(TILLMATERIAL *material, double rho, int iv)
-{
-	/*
-	** Do a cubic spline interpolation in rho.
-	*/
-	int klo,khi,k;
-	double h,b,a;
-	double u;
-
-    /// CR: Not yet adapted for logrho.
-    assert(0);
-
-    /* Use rho = rhomin + i*drho. */
-	klo = tillLookupIndexRho(material, rho);
-	khi = klo+1;
-
-	h = (khi-klo)*material->drho;
-	assert(h != 0.0);
-	assert(h == material->drho);
-
-	a=(khi*material->drho-rho)/h;
-	b=(rho-klo*material->drho)/h;
-	
-	return a*material->Lookup[TILL_INDEX(klo,iv)].u+b*material->Lookup[TILL_INDEX(khi,iv)].u+((a*a*a-a)*material->Lookup[TILL_INDEX(klo,iv)].udrho2+(b*b*b-b)*material->Lookup[TILL_INDEX(khi,iv)].udrho2)*(h*h)/6.0;
-}
-#endif
-
 /*
  * Do a bicubic spline interpolation in logrho and v.
  *
@@ -195,13 +156,9 @@ double tillSplineIntrho(TILLMATERIAL *material, double rho, int iv)
 void cubicint(double u[2],double dudlogrho[2], double dudv[2], double dudvdlogrho[2],
               double logrho[2], double logrhoint, double *intvalues) {
 	double dx, e, e1;
-	double *ce;
-	
-	assert(intvalues != NULL);
+	double ce[4];
 
-	/* Allocate memory */
-	ce = malloc(4*sizeof(double));
-	assert(ce != NULL);
+	assert(intvalues != NULL);
 
 	dx = logrho[1] - logrho[0];
 	e = (logrhoint - logrho[0])/dx;
@@ -219,9 +176,6 @@ void cubicint(double u[2],double dudlogrho[2], double dudv[2], double dudvdlogrh
 	*/
 	intvalues[0] = (ce[0]*u[0] + ce[1]*dudlogrho[0]*dx + ce[2]*u[1] + ce[3]*dudlogrho[1]*dx);
 	intvalues[1] = (ce[0]*dudv[0] + ce[1]*dudvdlogrho[0]*dx + ce[2]*dudv[1] + ce[3]*dudvdlogrho[1]*dx);
-	
-	// free memory
-	free(ce);
 }
 
 /*
@@ -282,12 +236,12 @@ double tillCubicInt(TILLMATERIAL *material, double rhoint, double vint) {
 	A = ((j+1)*material->dv-vint)/material->dv;
 	B = (vint-j*material->dv)/material->dv;
 	
-	dudv[0] = (material->Lookup[TILL_INDEX(i, j+1)].u-material->Lookup[TILL_INDEX(i, j)].u)/dv-(3.0*A*A-1.0)/6.0*dv*material->Lookup[TILL_INDEX(i, j)].udv2+(3.0*B*B-1.0)/6.0*dv*material->Lookup[TILL_INDEX(i, j+1)].udv2;
-	dudv[1] = (material->Lookup[TILL_INDEX(i+1, j+1)].u-material->Lookup[TILL_INDEX(i+1, j)].u)/dv-(3.0*A*A-1.0)/6.0*dv*material->Lookup[TILL_INDEX(i+1, j)].udv2+(3.0*B*B-1.0)/6.0*dv*material->Lookup[TILL_INDEX(i+1, j+1)].udv2;
+	dudv[0] = (material->Lookup[TILL_INDEX(material, i, j+1)].u-material->Lookup[TILL_INDEX(material, i, j)].u)/dv-(3.0*A*A-1.0)/6.0*dv*material->Lookup[TILL_INDEX(material, i, j)].udv2+(3.0*B*B-1.0)/6.0*dv*material->Lookup[TILL_INDEX(material, i, j+1)].udv2;
+	dudv[1] = (material->Lookup[TILL_INDEX(material, i+1, j+1)].u-material->Lookup[TILL_INDEX(material, i+1, j)].u)/dv-(3.0*A*A-1.0)/6.0*dv*material->Lookup[TILL_INDEX(material, i+1, j)].udv2+(3.0*B*B-1.0)/6.0*dv*material->Lookup[TILL_INDEX(material, i+1, j+1)].udv2;
 
 	/* Calculate dudvdlogrho from u1dv2 */
-	dudvdlogrho[0] = (material->Lookup[TILL_INDEX(i, j+1)].u1-material->Lookup[TILL_INDEX(i, j)].u1)/dv-(3.0*A*A-1.0)/6.0*dv*material->Lookup[TILL_INDEX(i, j)].u1dv2+(3.0*B*B-1.0)/6.0*dv*material->Lookup[TILL_INDEX(i, j+1)].u1dv2;
-	dudvdlogrho[1] = (material->Lookup[TILL_INDEX(i+1, j+1)].u1-material->Lookup[TILL_INDEX(i+1, j)].u1)/dv-(3.0*A*A-1.0)/6.0*dv*material->Lookup[TILL_INDEX(i+1, j)].u1dv2+(3.0*B*B-1.0)/6.0*dv*material->Lookup[TILL_INDEX(i+1, j+1)].u1dv2;
+	dudvdlogrho[0] = (material->Lookup[TILL_INDEX(material, i, j+1)].u1-material->Lookup[TILL_INDEX(material, i, j)].u1)/dv-(3.0*A*A-1.0)/6.0*dv*material->Lookup[TILL_INDEX(material, i, j)].u1dv2+(3.0*B*B-1.0)/6.0*dv*material->Lookup[TILL_INDEX(material, i, j+1)].u1dv2;
+	dudvdlogrho[1] = (material->Lookup[TILL_INDEX(material, i+1, j+1)].u1-material->Lookup[TILL_INDEX(material, i+1, j)].u1)/dv-(3.0*A*A-1.0)/6.0*dv*material->Lookup[TILL_INDEX(material, i+1, j)].u1dv2+(3.0*B*B-1.0)/6.0*dv*material->Lookup[TILL_INDEX(material, i+1, j+1)].u1dv2;
 
 	/*
 	 * Do the interpolation for u(i,v), u(i+1,v), udlogrho(i,v), udlogrho(i+1,v)
@@ -384,22 +338,6 @@ double tillLookupU(TILLMATERIAL *material, double rho1, double u1, double rho2, 
     return tillCalcU(material, rho1, u1, rho2);
 }
 
-double eosLookupU(TILLMATERIAL *material, double rho1, double u1, double rho2, int iOrder)
-{
-	/* Calculates u2 for a given rho1, u2, rho2. */
-
-    if (material->iMaterial == IDEALGAS)
-    {
-        /*
-         * For the ideal gas EOS there is an analytic expression.
-         */
-//        return(u1*pow(rho2/rho1, material->dConstGamma-1.0));
-        return(u1*pow(rho2/rho1*(1.0-material->b*rho1)/(1.0-material->b*rho2), material->dConstGamma-1.0));
-    }  else {
-        return tillLookupU(material, rho1, u1, rho2, iOrder);
-    }
-}
-
 /*
  * Calculate u_cold(rho) from the lookup table. Returns TILL_SENTINEL if rho is outside the table.
  *
@@ -419,26 +357,6 @@ double tillColdULookup(TILLMATERIAL *material, double rho)
                          rho, material->iMaterial, material->rhomin, material->rhomax);
 
     return tillCubicInt(material, rho, 0.0);
-}
-
-/*
- * Return the index i, so that rho_i and rho_i+1 bracket rho in the lookup table.
- */
-int tillLookupIndexRho(TILLMATERIAL *material, double rho)
-{
-    int i;
-
-    // Assume uniform spacing in rho.
-	i = floor((rho-material->rhomin)/material->drho);
-
-    // Check if logrho is outside of the table.
-    if (i < 0)
-        return -1;
-
-    if (i >= material->nTableRho-1)
-        return (material->nTableRho-1);
-
-    return i;
 }
 
 /*

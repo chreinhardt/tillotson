@@ -5,8 +5,6 @@
 #ifndef TILLOTSON_HINCLUDED
 #define TILLOTSON_HINCLUDED
 
-//#include "tillwoolfson.h"
-
 /*
  * Version.
  */
@@ -73,9 +71,9 @@ enum till_error_lookup
 #define TILL_PHASE_EXP_INT    4
 
 /*
- * Warning: redefined the material constants on 10.10.2017!
+ * Material constants (redefined on 10.10.2017). 0 is reserved for the ideal gas, which is
+ * provided by igeos in EOSlib and not by this library.
  */
-#define IDEALGAS    0
 #define GRANITE     1
 #define IRON        2
 #define BASALT      3
@@ -91,8 +89,8 @@ enum till_error_lookup
 #define TILL_PRESS_NP
 #endif
 
-/* We write the look up table as a 1D array where a(i,j)=a(i*N+j) */
-#define TILL_INDEX(i, j) (((i)*material->nTableV) + (j))
+/* The look up table is a 1D array with Lookup(i, j) = Lookup[i*nTableV + j], i in rho, j in s. */
+#define TILL_INDEX(m, i, j) (((i)*(m)->nTableV) + (j))
 
 #ifndef MAX
 #define MAX(A,B) ((A) > (B) ? (A) : (B))
@@ -100,11 +98,6 @@ enum till_error_lookup
 
 #ifndef MIN
 #define MIN(A,B) ((A) > (B) ? (B) : (A))
-#endif
-
-/* Define a minimum density for the look up table */
-#ifndef TILL_RHO_MIN
-#define TILL_RHO_MIN 1e-4
 #endif
 
 /* Define eps so that v <= v_max-eps. */
@@ -124,39 +117,31 @@ enum till_error_lookup
 #define TILL_VMIN_FRAC 1e-6
 #endif
 
-/* Define FALSE and TRUE. */
-//const int FALSE = 0;
-//const int TRUE = 1;
-
+/*
+ * One entry of the lookup table: the isentrope with label s_j = j*dv (v = u(rho0) = v(s_j)) at
+ * rho_i = rhomin*exp(i*dlogrho). logrho and v are stored for diagnostics only; the interpolators
+ * recompute them from the indices.
+ */
 typedef struct till_lookup_entry
 {
-	double u;
-	double rho;
-    double logrho;
-	double v;
-    double u1;		// du/drho
+    double u;
+    double u1;      // du/dlogrho = P/rho along the isentrope
     /*
-     * The following 2 variables are the second derivatives of the above variables (u and u1) with
-     * respect to v (which is the value of the constant entropy curve (adiabat) at rho_0). Both of
-     * these are obtained by fitting splines to u and u1 runs in the v axis.
+     * Second derivatives of u and u1 with respect to the table variable s (cubic splines along the
+     * s axis), set in tillInitSplines.
      */
-    double udv2; 	// d2u/dv2
-    double u1dv2;	// d2/dv2(du/drho)
-#ifdef TILL_DEBUG_SPLINT
-	// Only for debugging
-	double udrho2;  // d2u/drho2
-#endif
+    double udv2;    // d2u/ds2
+    double u1dv2;   // d2u1/ds2
+    double logrho;
+    double v;
 } TILL_LOOKUP_ENTRY;
-
-typedef TILL_LOOKUP_ENTRY* TILL_LOOKUP;
 
 typedef struct tillMaterial
 {
 	int iMaterial;	/* What material is it? */
-//	int nTableMax;	/* Max. number of entries in the look up table */
 	int nTableRho;	/* Number of entries in the look up table in rho */
-	int nTableV;	/* and in v */
-	int n;			/* number of steps from rho to zero */
+	int nTableV;	/* and in s */
+	int n;			/* index of rho0 in the rho grid */
 	double rhomin;	/* Min value for the lookup table */
 	double rhomax;	/* Max value for the lookup table */
 	double vmax;	/* Max value for the lookup table */
@@ -184,28 +169,19 @@ typedef struct tillMaterial
 	double alpha;
 	double beta;
 
-    /*
-     * The constants needed for the ideal gas EOS.
-     */
-    double dConstGamma;
-    double dMeanMolMass;        // in units of m_hydrogen
-
-	 /* the specific heat capacity (assumed constant) */
+	/* the specific heat capacity (assumed constant) */
 	double cv;
 
-	/* The cold curve */	
-	TILL_LOOKUP_ENTRY *cold;
-	double drho;
+	/* Grid spacing of the lookup table */
 	double dlogrho;
 	double dv;		/* step in s (not in v!) */
 
-	/* A look up table for u(rho) along an isentrope */
-//	TILL_LOOKUP *Lookup;	// this is an array of pointers
-	TILL_LOOKUP_ENTRY *Lookup;	// this is an array of pointers
+	/* The lookup table u(rho, s) along the isentropes, NULL until tillInitLookup */
+	TILL_LOOKUP_ENTRY *Lookup;
 } TILLMATERIAL;
 
 /*
- * Tillotson.c
+ * tillotson.c
  */
 TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit);
 void tillFinalizeMaterial(TILLMATERIAL *material);
@@ -214,38 +190,23 @@ void tilliMatString(TILLMATERIAL *material, char *MatName);
 void tillErrorString(int iError, char *ErrorString);
 void tillPrintMat(TILLMATERIAL *material, FILE *fp);
 
-// Some functions that provide a general interface for EOS calls where other EOS, e.g., an ideal gas EOS can be implemented
-double eosPressureSound(TILLMATERIAL *material, double rho, double u, double *pcSound);
-double eosPressureSoundRhoT(TILLMATERIAL *material, double rho, double T, double *pcSound);
-double eosPressure(TILLMATERIAL *material, double rho, double u);
-double eosPressureRhoT(TILLMATERIAL *material, double rho, double T);
-double eosdPdrho(TILLMATERIAL *material, double rho, double u);
-double eosdPdu(TILLMATERIAL *material, double rho, double u);
-double eosTempRhoU(TILLMATERIAL *material, double rho, double u);
-double eosURhoTemp(TILLMATERIAL *material, double rho, double T);
-double eosRhoPTemp(TILLMATERIAL *material, double P, double T);
-int eosSolveBC(TILLMATERIAL *mat1, TILLMATERIAL *mat2, double rho1, double u1, double *prho2, double *pu2);
-double eosPhi(TILLMATERIAL *material, double rho, double u);
-double eosGamma(TILLMATERIAL *material, double rho, double u);
-
+/* Pressure and sound speed. tillPressureSoundNP applies no pressure cutoff (used for inversions). */
 double tillPressureSoundNP(TILLMATERIAL *material, double rho, double u, double *pcSound);
 double tillPressureSound(TILLMATERIAL *material, double rho, double u, double *pcSound);
 double tillPressure(TILLMATERIAL *material, double rho, double u);
-double tillPressureNP(TILLMATERIAL *material, double rho, double u);
+double tillSoundSpeed(TILLMATERIAL *material, double rho, double u);
 double tilldPdrho(TILLMATERIAL *material, double rho, double u);
 double tilldPdu(TILLMATERIAL *material, double rho, double u);
-double tilldTdrho(TILLMATERIAL *material, double rho, double u);
-double tilldTdu(TILLMATERIAL *material, double rho, double u);
-double tillTempRhoU(TILLMATERIAL *material, double rho, double u);
-
-// Not implemented yet
-double tillTempRhoP(TILLMATERIAL *material, double rho, double P);
-double tillURhoTemp(TILLMATERIAL *material, double rho, double T);
-double tillRhoPTemp(TILLMATERIAL *material, double P, double T);
-double tillSoundSpeed(TILLMATERIAL *material, double rho, double u);
 double tilldudrho(TILLMATERIAL *material, double rho, double u);
 double tilldudlogrho(TILLMATERIAL *material, double logrho, double u);
-int tillSolveBC(TILLMATERIAL *mat1, TILLMATERIAL *mat2, double rho1, double u1, double *prho2, double *pu2);
+
+/* Temperature: u(rho, T) = u_cold(rho) + cv*T. These need the lookup table (cold curve). */
+double tillTempRhoU(TILLMATERIAL *material, double rho, double u);
+double tillURhoTemp(TILLMATERIAL *material, double rho, double T);
+/* rho(P, T) by root finding; TILL_SENTINEL if P <= 0 or not bracketed. */
+double tillRhoPTemp(TILLMATERIAL *material, double P, double T);
+
+int tillPhase(TILLMATERIAL *material, double rho, double u);
 
 /*
  * Brent root finder for f(material, x, ctx) = 0 on the bracket [a, b] with fa = f(a), fb = f(b)
@@ -259,46 +220,35 @@ int tillBrent(double (*f)(TILLMATERIAL *, double, const void *), TILLMATERIAL *m
 /*
  * tillinitlookup.c
  */
-void tillInitColdCurve(TILLMATERIAL *material);
 void tillInitLookup(TILLMATERIAL *material, int nTableRho, int nTableV, double rhomin, double rhomax, double vmax);
-TILL_LOOKUP_ENTRY *tillSolveIsentrope(TILLMATERIAL *material, double v);
 TILL_LOOKUP_ENTRY *tillSolveIsentropeLogRho(TILLMATERIAL *material, double v);
-/* Use bsstep.c from the Numerical Recipes */
-TILL_LOOKUP_ENTRY *tillSolveIsentropeBS(TILLMATERIAL *material, double v);
 double tillCalcU(TILLMATERIAL *material,double rho1,double u1,double rho2);
 int tillIsInTable(TILLMATERIAL *material,double rho,double u);
-int eosIsBelowColdCurve(TILLMATERIAL *material,double rho,double u);
+/* 1 if (rho, u) is below the cold curve, 0 if not, TILL_FAIL if rho is outside the table. */
 int tillIsBelowColdCurve(TILLMATERIAL *material,double rho,double u);
 
 /*
  * tillsplint.c
  */
 void tillInitSplines(TILLMATERIAL *material);
-void tillInitSplineRho(TILLMATERIAL *material);
-void tillInitSplineV(TILLMATERIAL *material);
 void tillInitSplineU(TILLMATERIAL *material);
 void tillInitSplineU1(TILLMATERIAL *material);
-// Just for debugging
-double tillSplineIntrho(TILLMATERIAL *material, double rho, int iv);
-double tillSplineIntv(TILLMATERIAL *material, double v, int irho);
-// These two are needed for the interpolator
-double tillSplineIntU(TILLMATERIAL *material, double v, int irho);
-double tillSplineIntU1(TILLMATERIAL *material, double v, int irho);
+double tillSplineIntU(TILLMATERIAL *material, double s, int i);
+double tillSplineIntU1(TILLMATERIAL *material, double s, int i);
 
-double tillCubicInt(TILLMATERIAL *material, double rho, double v);
-void cubicint(double u[2],double dudrho[2], double dudv[2], double dudvdrho[2], double rho[2], double rhoint, double *intvalues);
+double tillCubicInt(TILLMATERIAL *material, double rho, double s);
+void cubicint(double u[2],double dudlogrho[2], double dudv[2], double dudvdlogrho[2], double logrho[2], double logrhoint, double *intvalues);
 
 double tillFindUonIsentrope(TILLMATERIAL *material,double s,double rho);
 /* Returns the table variable s of the isentrope through (rho, u), or TILL_SENTINEL. */
 double tillFindEntropyCurve(TILLMATERIAL *material,double rho,double u,int iOrder);
 /* Returns u2 on the isentrope through (rho1, u1) at rho2, or TILL_SENTINEL. */
 double tillLookupU(TILLMATERIAL *material,double rho1,double u1,double rho2,int iOrder);
-double tillCubicIntRho(TILLMATERIAL *material, double rhoint, int iv);
+/* u_cold(rho) = u(rho, s=0), or TILL_SENTINEL if rho is outside the table. */
 double tillColdULookup(TILLMATERIAL *material,double rho);
 
-int tillLookupIndexRho(TILLMATERIAL *material, double rho);
 int tillLookupIndexLogRho(TILLMATERIAL *material, double logrho);
-int tillLookupIndexV(TILLMATERIAL *material, double v);
+int tillLookupIndexV(TILLMATERIAL *material, double s);
 
 double tillLookupRho(TILLMATERIAL *material, int i);
 double tillLookupLogRho(TILLMATERIAL *material, int i);
@@ -306,10 +256,5 @@ double tillLookupV(TILLMATERIAL *material, int j);
 double tillLookupS(TILLMATERIAL *material, int j);
 double tillVofS(TILLMATERIAL *material, double s);
 double tillSofV(TILLMATERIAL *material, double v);
-
-// A general version of tillLookupU() that can be used as an interface for different EOS
-double eosLookupU(TILLMATERIAL *material,double rho1,double u1,double rho2,int iOrder);
-
-int tillPhase(TILLMATERIAL *material, double rho, double u);
 
 #endif
