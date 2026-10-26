@@ -26,148 +26,87 @@
  *               interpolator).
  */
 
+#include <stddef.h>   /* offsetof */
+
+/*
+ * Natural cubic spline in v along one row of the lookup table, for a field of
+ * TILL_LOOKUP_ENTRY. The data is at byte offset offY in each entry, the second
+ * derivatives d2y/dv2 are written to byte offset offY2. The grid in v is
+ * uniform (dv), so the tridiagonal system is
+ *
+ *   y2[j-1] + 4 y2[j] + y2[j+1] = 6/dv^2 (y[j+1] - 2 y[j] + y[j-1]),   y2[0] = y2[n-1] = 0,
+ *
+ * solved by the usual forward sweep and back substitution (Thomas algorithm).
+ * nTableV >= 3 is required.
+ */
+static void tillInitSplineField(TILLMATERIAL *material, size_t offY, size_t offY2)
+{
+    const int n = material->nTableV;
+    const double h = material->dv;
+    double *w;      /* work array of the forward sweep */
+    int i, j;
+
+#define TILL_FIELD(entry, off) (*(double *)((char *)&(entry) + (off)))
+
+    assert(n >= 3);
+    assert(h > 0.0);
+
+    w = malloc(n*sizeof(double));
+    assert(w != NULL);
+
+    for (i = 0; i < material->nTableRho; i++) {
+        TILL_LOOKUP_ENTRY *row = &material->Lookup[TILL_INDEX(i, 0)];
+
+        /* Natural b.c. at v = 0. */
+        TILL_FIELD(row[0], offY2) = 0.0;
+        w[0] = 0.0;
+
+        /* Forward sweep. */
+        for (j = 1; j <= n-2; j++) {
+            double p = 0.5*TILL_FIELD(row[j-1], offY2) + 2.0;
+            double r = (TILL_FIELD(row[j+1], offY) - 2.0*TILL_FIELD(row[j], offY)
+                        + TILL_FIELD(row[j-1], offY))/h;
+            TILL_FIELD(row[j], offY2) = -0.5/p;
+            w[j] = (3.0*r/h - 0.5*w[j-1])/p;
+        }
+
+        /* Natural b.c. at v = vmax, then back substitution. */
+        TILL_FIELD(row[n-1], offY2) = 0.0;
+        for (j = n-2; j >= 0; j--) {
+            TILL_FIELD(row[j], offY2) = TILL_FIELD(row[j], offY2)*TILL_FIELD(row[j+1], offY2) + w[j];
+        }
+    }
+
+    free(w);
+#undef TILL_FIELD
+}
+
+/*
+ * Calculate the second derivatives of u and u1 (du/dlogrho) with respect to v
+ * for every row of the lookup table.
+ */
 void tillInitSplines(TILLMATERIAL *material)
 {
-	/*
-     * Calculate the second derivatives for u and u1 in v. For this we use routines from the
-     * Numerical Recipes.
-	 */
-	tillInitSplineU1(material);
-	tillInitSplineU(material);
+    tillInitSplineU(material);
+    tillInitSplineU1(material);
 }
 
-void tillInitSplineV(TILLMATERIAL *material)
-{
-	/*
-	** Calculate the second derivatives for u in v.
-	*/
-	int i,j,k,n;
-	double yp1, ypn;	// dudv(v=0) and dudv(v=n-1)
-	double p,qn,sig,un,*u;
-
-	n = material->nTableV;
-	/* Allocate memory for temporary array */
-	u = malloc(n*sizeof(double));
-	
-	/* Set b.c. for natural cubic spline */
-	yp1 = 1e30;
-	ypn = 1e30;
-
-	for (i=0; i<material->nTableRho; i++)
-	{
-		/*
-		** Set up splines in u(v) for a given rho.
-		*/
-
-		/* Set b.c */	
-		if (yp1 > 0.99e30)
-			material->Lookup[TILL_INDEX(i,0)].udv2=u[0]=0.0;
-		else {
-			material->Lookup[TILL_INDEX(i,0)].udv2 = -0.5;
-//			u[0]=(3.0/(x[2]-x[1]))*((y[2]-y[1])/(x[2]-x[1])-yp1);
-			/* (CR) This part has to be changed if dv is not constant! */
-			u[0]=(3.0/(material->dv))*((material->Lookup[TILL_INDEX(i,1)].u-material->Lookup[TILL_INDEX(i,0)].u)/(material->dv)-yp1);
-		}
-
-		/* Calculate second derivatives of u in v */
-		for (j=1;j<=n-2;j++) {
-//			sig=(x[j]-x[j-1])/(x[j+1]-x[j-1]);
-			/* (CR) This part has to be changed if dv is not constant! */
-			sig=material->dv/(2.0*material->dv);
-			p=sig*material->Lookup[TILL_INDEX(i,j-1)].udv2+2.0;
-			material->Lookup[TILL_INDEX(i,j)].udv2=(sig-1.0)/p;
-//			u[j]=(y[j+1]-y[j])/(x[j+1]-x[j]) - (y[j]-y[j-1])/(x[j]-x[j-1]);
-			/* (CR) This part has to be changed if dv is not constant! */
-			u[j]=(material->Lookup[TILL_INDEX(i,j+1)].u-material->Lookup[TILL_INDEX(i,j)].u)/(material->dv) - (material->Lookup[TILL_INDEX(i,j)].u-material->Lookup[TILL_INDEX(i,j-1)].u)/(material->dv);
-//			u[j]=(6.0*u[j]/(x[j+1]-x[j-1])-sig*u[j-1])/p;
-			/* (CR) This part has to be changed if dv is not constant! */
-			u[j]=(6.0*u[j]/(2.0*material->dv)-sig*u[j-1])/p;
-		}
-
-		/* Set b.c. */
-		if (ypn > 0.99e30)
-			qn=un=0.0;
-		else {
-			qn=0.5;
-//			Careful with index!! This array ends at n-1, so this code is already using the right indices.			
-//			un=(3.0/(x[n-1]-x[n-2]))*(ypn-(y[n-1]-y[n-2])/(x[n-1]-x[n-2]));
-			/* (CR) This part has to be changed if dv is not constant! */
-			un=(3.0/(material->dv))*(ypn-(material->Lookup[TILL_INDEX(i,n-1)].u-material->Lookup[TILL_INDEX(i,n-2)].u)/(material->dv));
-		}
-		material->Lookup[TILL_INDEX(i,n-1)].udv2=(un-qn*u[n-2])/(qn*material->Lookup[TILL_INDEX(i,n-2)].udv2+1.0);
-		for (k=n-2;k>=0;k--)
-			material->Lookup[TILL_INDEX(i,k)].udv2=material->Lookup[TILL_INDEX(i,k)].udv2*material->Lookup[TILL_INDEX(i,k+1)].udv2+u[k];
-	}
-}
-
-void tillInitSplineU1(TILLMATERIAL *material)
-{
-	/*
-     * Calculate the second derivatives for u1 in v. For this we use routines from the
-     * Numerical Recipes.
-     */
-	int i,j,k,n;
-	double yp1, ypn;	// du1dv(v=0) and d1udv(v=n-1)
-	double p,qn,sig,un,*u;
-
-	n = material->nTableV;
-	/* Allocate memory for temporary array */
-	u = malloc(n*sizeof(double));
-		
-	/* Set b.c. for natural cubic spline */
-	yp1 = 1e30;
-	ypn = 1e30;
-
-	for (i=0; i<material->nTableRho; i++)
-	{
-		/*
-		** Set up splines in u(v) for a given rho.
-		*/
-
-		/* Set b.c */	
-		if (yp1 > 0.99e30)
-			material->Lookup[TILL_INDEX(i,0)].u1dv2=u[0]=0.0;
-		else {
-			material->Lookup[TILL_INDEX(i,0)].u1dv2 = -0.5;
-//			u[0]=(3.0/(x[2]-x[1]))*((y[2]-y[1])/(x[2]-x[1])-yp1);
-			/* (CR) This part has to be changed if dv is not constant! */
-			u[0]=(3.0/(material->dv))*((material->Lookup[TILL_INDEX(i,1)].u-material->Lookup[TILL_INDEX(i,0)].u)/(material->dv)-yp1);
-		}
-
-		/* Calculate second derivatives of u in v */
-		for (j=1;j<=n-2;j++) {
-//			sig=(x[j]-x[j-1])/(x[j+1]-x[j-1]);
-			/* (CR) This part has to be changed if dv is not constant! */
-			sig=material->dv/(2.0*material->dv);
-			p=sig*material->Lookup[TILL_INDEX(i,j-1)].u1dv2+2.0;
-			material->Lookup[TILL_INDEX(i,j)].u1dv2=(sig-1.0)/p;
-//			u[j]=(y[j+1]-y[j])/(x[j+1]-x[j]) - (y[j]-y[j-1])/(x[j]-x[j-1]);
-			/* (CR) This part has to be changed if dv is not constant! */
-			u[j]=(material->Lookup[TILL_INDEX(i,j+1)].u-material->Lookup[TILL_INDEX(i,j)].u)/(material->dv) - (material->Lookup[TILL_INDEX(i,j)].u-material->Lookup[TILL_INDEX(i,j-1)].u)/(material->dv);
-//			u[j]=(6.0*u[j]/(x[j+1]-x[j-1])-sig*u[j-1])/p;
-			/* (CR) This part has to be changed if dv is not constant! */
-			u[j]=(6.0*u[j]/(2.0*material->dv)-sig*u[j-1])/p;
-		}
-
-		/* Set b.c. */
-		if (ypn > 0.99e30)
-			qn=un=0.0;
-		else {
-			qn=0.5;
-//			Careful with index!! This array ends at n-1, so this code is already using the right indices.			
-//			un=(3.0/(x[n-1]-x[n-2]))*(ypn-(y[n-1]-y[n-2])/(x[n-1]-x[n-2]));
-			/* (CR) This part has to be changed if dv is not constant! */
-			un=(3.0/(material->dv))*(ypn-(material->Lookup[TILL_INDEX(i,n-1)].u-material->Lookup[TILL_INDEX(i,n-2)].u)/(material->dv));
-		}
-		material->Lookup[TILL_INDEX(i,n-1)].u1dv2=(un-qn*u[n-2])/(qn*material->Lookup[TILL_INDEX(i,n-2)].u1dv2+1.0);
-		for (k=n-2;k>=0;k--)
-			material->Lookup[TILL_INDEX(i,k)].u1dv2=material->Lookup[TILL_INDEX(i,k)].u1dv2*material->Lookup[TILL_INDEX(i,k+1)].u1dv2+u[k];
-	}
-}
-
+/* Spline of u in v: udv2 = d2u/dv2. */
 void tillInitSplineU(TILLMATERIAL *material)
 {
-	tillInitSplineV(material);
+    tillInitSplineField(material, offsetof(TILL_LOOKUP_ENTRY, u), offsetof(TILL_LOOKUP_ENTRY, udv2));
+}
+
+/* Spline of u1 = du/dlogrho in v: u1dv2 = d2u1/dv2. */
+void tillInitSplineU1(TILLMATERIAL *material)
+{
+    tillInitSplineField(material, offsetof(TILL_LOOKUP_ENTRY, u1), offsetof(TILL_LOOKUP_ENTRY, u1dv2));
+}
+
+/* Kept for callers of the old name; identical to tillInitSplineU. */
+void tillInitSplineV(TILLMATERIAL *material)
+{
+    tillInitSplineU(material);
 }
 
 /*
