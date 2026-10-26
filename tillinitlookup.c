@@ -6,11 +6,13 @@
  * and convenient to use equation of state that can describe matter over
  * a large range of pressures, densities and internal energies.
  * 
- * Basic functions:
+ * tillInitLookup: generate the look up table for the isentropes (allocates memory).
  *
- * tillInitLookup: generate the look up table for the isentropes (allocate memory!)
+ * tillSolveIsentropeLogRho: integrate du/dlogrho = P/rho for a given initial value v = u(rho0).
  *
- * tillSolveIsentrope: solve the ODE du/drho=P/(rho*rho) for a given initial value v=u(rho0).
+ * tillCalcU: the same for an arbitrary start and end point (used outside the table).
+ *
+ * tillIsInTable: classify a state (rho, u) with respect to the table.
  */
 #include <stdlib.h>
 #include <math.h>
@@ -18,46 +20,13 @@
 #include <stdio.h>
 #include "tillotson.h"
 
-int comparerho(const void* a, const void* b)
-/*
- * This function compares two entries in the look up table and returns -1 if a1.rho < a2.rho,
- * 1 if a1.rho > a2.rho or 0 if they are equal (needed to sort the particles with qsort).
- */
-{
-	TILL_LOOKUP_ENTRY a1 = *(const TILL_LOOKUP_ENTRY*)(a);
-    TILL_LOOKUP_ENTRY a2 = *(const TILL_LOOKUP_ENTRY*)(b);
-    
-    if (a1.rho < a2.rho) return -1;
-    if (a1.rho > a2.rho) return 1;
-    return 0;
-}
-
-/// CR: Needs to be adapted for the logrho table
-void tillInitColdCurve(TILLMATERIAL *material)
-{
-    assert(0);
-	/* Generate the look up table for the cold curve */
-	TILL_LOOKUP_ENTRY *isentrope;
-
-	/* Lookup table */
-    material->cold = malloc(material->nTableRho*sizeof(TILL_LOOKUP_ENTRY));
-    assert(material->cold != NULL);
-
-	/* v = u(rho=rho0) */
-	isentrope = tillSolveIsentrope(material, 0.0);
-
-	material->cold = isentrope;
-	/* Now sort the look up table. */
-	// qsort(material->cold,material->nTable,sizeof(TILL_LOOKUP_ENTRY),comparerho);
-}
-
 /*
  * Generate the look up table for the isentropic evolution of the internal energy.
  */
 void tillInitLookup(TILLMATERIAL *material, int nTableRho, int nTableV, double rhomin, double rhomax, double vmax)
 {
 	TILL_LOOKUP_ENTRY *isentrope;
-	double v, dv;
+	double v;
     int i, j;
 
     /* Check if the material is properly initialized. */
@@ -84,262 +53,130 @@ void tillInitLookup(TILLMATERIAL *material, int nTableRho, int nTableV, double r
     assert(material->nTableRho > 0);
     assert(material->nTableV > 0);
 
-    /* The stuff below does not have to be done for the ideal gas as there is no lookup table. */
-    if (material->iMaterial == IDEALGAS)
-    {
-        material->rhomin = 0.0;
-        material->n = 0;
-        /* rhomax is set already. */
-        material->dlogrho = 0.0;
-    } else {
-        /* Set dlogrho so that log(rho0) lies on the grid. */
-        material->n = floor((log(material->rho0)-log(material->rhomin))/(log(material->rhomax)-log(material->rhomin))*material->nTableRho);
-        material->dlogrho = (log(material->rho0)-log(material->rhomin))/material->n;
+    /* Set dlogrho so that log(rho0) lies on the grid. */
+    material->n = floor((log(material->rho0)-log(material->rhomin))/(log(material->rhomax)-log(material->rhomin))*material->nTableRho);
+    assert(material->n >= 1 && material->n <= material->nTableRho-2);
+    material->dlogrho = (log(material->rho0)-log(material->rhomin))/material->n;
 
-        /* Set the actual rhomax (note that rhomax can differ more after the correction when using log(rho) as variable. */ 
-        material->rhomax = tillLookupRho(material, material->nTableRho-1);
-    }
+    /* Set the actual rhomax (it can differ from the requested value after the correction). */
+    material->rhomax = tillLookupRho(material, material->nTableRho-1);
 
-    /* This is the same for all materials. */
-    material->dv = material->vmax/(material->nTableV-1);
+    /*
+     * The grid is uniform in s = log(1 + v/vmin) (see tillotson.h), so dv is the step in s and
+     * the last row is at s = log(1 + vmax/vmin), i.e. v = vmax.
+     */
+    material->vmin = TILL_VMIN_FRAC*material->vmax;
+    material->dv = log1p(material->vmax/material->vmin)/(material->nTableV-1);
 
 	/* We arrange the look up table as a 1D array with Lookup[i][j] = Lookup[i*Ntable+j] */
-    material->Lookup = calloc(material->nTableRho*material->nTableV, sizeof(TILL_LOOKUP_ENTRY));
+    if (material->Lookup != NULL) free(material->Lookup);
+    material->Lookup = calloc((size_t) material->nTableRho*material->nTableV, sizeof(TILL_LOOKUP_ENTRY));
     assert(material->Lookup != NULL);
 
-	v = 0.0;
-	dv = material->dv;
-    
 	/*
-     * Integrate the isentropes for different v.
+     * Integrate the isentropes for different v = v(s_j).
      */
 	for (j=0; j<material->nTableV; j++)
 	{
+		v = tillLookupV(material, j);
 		isentrope = tillSolveIsentropeLogRho(material,v);
 		
 		/* Copy one row to the look up table. This is of course not efficient at all. */
 		for (i=0; i<material->nTableRho; i++)
 		{
-			/* Careful with the indices! Lookup[i][j] = Lookup(rho,v). */
-			material->Lookup[TILL_INDEX(i,j)] = isentrope[i];		
+			/* Careful with the indices! Lookup[i][j] = Lookup(rho,s). */
+			material->Lookup[TILL_INDEX(material,i,j)] = isentrope[i];		
 		}
 		
 		free(isentrope);
-		v += dv;
 	}
 
     /* Solve splines for both u and u1 in v storing the 2nd derivatives wrt v */
 	tillInitSplines(material);
 }
 
-TILL_LOOKUP_ENTRY *tillSolveIsentrope(TILLMATERIAL *material, double v)
+/*
+ * One classical RK4 step of du/dlogrho = P/rho from (logrho, u) with the signed
+ * step h. For h < 0 the stages are evaluated at logrho + h/2 and logrho + h,
+ * i.e. below the starting point, which is what a downward integration needs.
+ */
+static double tillRK4Step(TILLMATERIAL *material, double logrho, double u, double h)
 {
-	/*
-	 * Integrate one isentrope for the look up table. The parameter v corresponds to u(rho=rho0)
-     * so v=0 gives the cold curve.
-     */
-    double rho;
-    double u;
-    double k1u,k2u,k3u,k4u;
-	double h;
-    int i,s;
+    double k1u, k2u, k3u, k4u;
 
-	/* Use this as a temporary data structure because it is easy to sort with qsort. */
-	TILL_LOOKUP_ENTRY *isentrope;
-    isentrope = malloc(material->nTableRho*sizeof(TILL_LOOKUP_ENTRY));
+    k1u = h*tilldudlogrho(material, logrho, u);
+    k2u = h*tilldudlogrho(material, logrho+0.5*h, u+0.5*k1u);
+    k3u = h*tilldudlogrho(material, logrho+0.5*h, u+0.5*k2u);
+    k4u = h*tilldudlogrho(material, logrho+h, u+k3u);
 
-	rho = material->rho0;
-	u = v;
-	h = material->drho;
-
-	i = material->n;
-
-	isentrope[i].rho = rho;
-	isentrope[i].v = v;
-	isentrope[i].u = u;
-	isentrope[i].u1 = tilldudrho(material, rho, u); // du/drho
-	
-	/*
-	 * Integrate the condensed and expanded states separately.
-	 */
-	for (i=material->n+1;i<material->nTableRho;i++)
-	{
-		double hs = h/10.0;
-		
-		/* We do substeps that saved to increase the accuracy. */
-		for (s=0;s<10;s++)
-		{
-			/*
-			 * Midpoint Runga-Kutta (4nd order).
-			 */
-			k1u = hs*tilldudrho(material,rho,u);
-			k2u = hs*tilldudrho(material,rho+0.5*hs,u+0.5*k1u);
-			k3u = hs*tilldudrho(material,rho+0.5*hs,u+0.5*k2u);
-			k4u = hs*tilldudrho(material,rho+hs,u+k3u);
-
-			u += k1u/6.0+k2u/3.0+k3u/3.0+k4u/6.0;
-
-			/* Assure that u >= 0.0. */
-			if (u < 0.0) u = 0.0;
-
-			rho += hs;
-		}
-
-	    isentrope[i].u = u;
-	    isentrope[i].rho = rho;
-		isentrope[i].v = v;
-		isentrope[i].u1 = tilldudrho(material, rho, u);
-	}
-
-	/*
-	 * Now the expanded states. Careful about the negative sign.
-	 */
-	rho = material->rho0;
-	u = v;
-
-	for (i=material->n-1;i>=0;i--)
-	{
-		double hs = h/10.0;
-		
-		/* We do substeps that saved to increase the accuracy. */
-		for (s=0;s<10;s++)
-		{
-			/*
-			 * Midpoint Runga-Kutta (4nd order).
-			 */
-			k1u = hs*-tilldudrho(material,rho,u);
-			k2u = hs*-tilldudrho(material,rho+0.5*hs,u+0.5*k1u);
-			k3u = hs*-tilldudrho(material,rho+0.5*hs,u+0.5*k2u);
-			k4u = hs*-tilldudrho(material,rho+hs,u+k3u);
-
-			u += k1u/6.0+k2u/3.0+k3u/3.0+k4u/6.0;
-
-			/* Assure that u >= 0.0. */
-			if (u < 0.0) u = 0.0;
-
-			rho -= hs;
-		}
-	
-		isentrope[i].u = u;
-	    isentrope[i].rho = rho;
-		isentrope[i].v = v;
-		isentrope[i].u1 = tilldudrho(material, rho, u);
-
-        /*
-         * Avoid issues because P/rho^2 is diverging for rho=0.
-         */
-		if (i == 0)
-		{
-			isentrope[i].u1 = isentrope[i+1].u1; // Set u1(0)=u1(drho)
-		}
-	}
-	
-	return isentrope;
+    return u + (k1u + 2.0*k2u + 2.0*k3u + k4u)/6.0;
 }
 
+/* Number of RK4 substeps per table interval dlogrho when integrating an isentrope. */
+#ifndef TILL_ISENTROPE_NSUB
+#define TILL_ISENTROPE_NSUB 10
+#endif
+
 /*
- * Integrate one isentrope for the look up table using a log(rho) as a variable. The parameter v
+ * Integrate one isentrope for the look up table using log(rho) as the variable. The parameter v
  * corresponds to u(log(rho)=log(rho0)) so v=0 gives the cold curve.
+ *
+ * The condensed (logrho > log rho0) and expanded (logrho < log rho0) branches are integrated
+ * separately, starting from the grid point i = n where rho = rho0, with TILL_ISENTROPE_NSUB RK4
+ * substeps per table interval. The step is +dlogrho/NSUB upward and -dlogrho/NSUB downward.
  */
 TILL_LOOKUP_ENTRY *tillSolveIsentropeLogRho(TILLMATERIAL *material, double v)
 {
-    double logrho;
-    double u;
-    double k1u,k2u,k3u,k4u;
-	double h;
-    int i,s;
+    const double logrho0 = log(material->rho0);
+    const double hs = material->dlogrho/TILL_ISENTROPE_NSUB;
+    TILL_LOOKUP_ENTRY *isentrope;
+    double logrho, u;
+    int i, s;
 
-	/* Use this as a temporary data structure because it is easy to sort with qsort. */
-	TILL_LOOKUP_ENTRY *isentrope;
     isentrope = malloc(material->nTableRho*sizeof(TILL_LOOKUP_ENTRY));
+    assert(isentrope != NULL);
 
-	logrho = log(material->rho0);
-	u = v;
-	h = material->dlogrho;
+    i = material->n;
+    isentrope[i].u = v;
+    isentrope[i].u1 = tilldudlogrho(material, logrho0, v);
 
-	i = material->n;
+    /* Condensed states: integrate upward from rho0. */
+    logrho = logrho0;
+    u = v;
+    for (i = material->n+1; i < material->nTableRho; i++) {
+        for (s = 0; s < TILL_ISENTROPE_NSUB; s++) {
+            u = tillRK4Step(material, logrho, u, hs);
+            logrho += hs;
+            /* Assure that u >= 0.0. */
+            if (u < 0.0) u = 0.0;
+        }
+        /* Use the exact grid value, not the accumulated sum. */
+        logrho = logrho0 + (i - material->n)*material->dlogrho;
 
-	isentrope[i].logrho = logrho;
-	isentrope[i].v = v;
-	isentrope[i].u = u;
-	isentrope[i].u1 = tilldudlogrho(material, logrho, u); // du/drho
-	
-	/*
-	 * Integrate the condensed and expanded states separately.
-	 */
-	for (i=material->n+1;i<material->nTableRho;i++)
-	{
-		double hs = h/10.0;
-		
-		/* We do substeps that saved to increase the accuracy. */
-		for (s=0;s<10;s++)
-		{
-			/*
-             * Midpoint Runga-Kutta (4nd order).
-			 */
-			k1u = hs*tilldudlogrho(material,logrho,u);
-			k2u = hs*tilldudlogrho(material,logrho+0.5*hs,u+0.5*k1u);
-			k3u = hs*tilldudlogrho(material,logrho+0.5*hs,u+0.5*k2u);
-			k4u = hs*tilldudlogrho(material,logrho+hs,u+k3u);
+        isentrope[i].u = u;
+        isentrope[i].u1 = tilldudlogrho(material, logrho, u);
+    }
 
-			u += k1u/6.0+k2u/3.0+k3u/3.0+k4u/6.0;
+    /* Expanded states: integrate downward from rho0 (negative step). */
+    logrho = logrho0;
+    u = v;
+    for (i = material->n-1; i >= 0; i--) {
+        for (s = 0; s < TILL_ISENTROPE_NSUB; s++) {
+            u = tillRK4Step(material, logrho, u, -hs);
+            logrho -= hs;
+            /* Assure that u >= 0.0. */
+            if (u < 0.0) u = 0.0;
+        }
+        logrho = logrho0 - (material->n - i)*material->dlogrho;
 
-			/* Assure that u >= 0.0. */
-			if (u < 0.0) u = 0.0;
+        isentrope[i].u = u;
+        isentrope[i].u1 = tilldudlogrho(material, logrho, u);
+    }
 
-			logrho += hs;
-		}
+    /* Avoid issues because P/rho is diverging for rho -> 0: set u1(0) = u1(dlogrho). */
+    isentrope[0].u1 = isentrope[1].u1;
 
-	    isentrope[i].u = u;
-	    isentrope[i].logrho = logrho;
-		isentrope[i].v = v;
-		isentrope[i].u1 = tilldudlogrho(material, logrho, u);
-	}
-
-	/*
-     * Now the expanded states. Careful about the negative sign.
-	 */
-	logrho = log(material->rho0);
-	u = v;
-
-	for (i=material->n-1;i>=0;i--)
-	{
-		double hs = h/10.0;
-		
-		/* We do substeps that saved to increase the accuracy. */
-		for (s=0;s<10;s++)
-		{
-			/*
-			 * Midpoint Runga-Kutta (4nd order).
-			 */
-			k1u = hs*-tilldudlogrho(material,logrho,u);
-			k2u = hs*-tilldudlogrho(material,logrho+0.5*hs,u+0.5*k1u);
-			k3u = hs*-tilldudlogrho(material,logrho+0.5*hs,u+0.5*k2u);
-			k4u = hs*-tilldudlogrho(material,logrho+hs,u+k3u);
-
-			u += k1u/6.0+k2u/3.0+k3u/3.0+k4u/6.0;
-
-			/* Assure that u >= 0.0. */
-			if (u < 0.0) u = 0.0;
-
-			logrho -= hs;
-		}
-	
-		isentrope[i].u = u;
-	    isentrope[i].logrho = logrho;
-		isentrope[i].v = v;
-		isentrope[i].u1 = tilldudlogrho(material, logrho, u);
-
-        /*
-         * Avoid issues because P/rho is diverging for rho=0.
-         */
-		if (i == 0)
-		{
-			isentrope[i].u1 = isentrope[i+1].u1; // Set u1(0)=u1(dlogrho)
-		}
-	}
-	
-	return isentrope;
+    return isentrope;
 }
 
 /*
@@ -347,74 +184,41 @@ TILL_LOOKUP_ENTRY *tillSolveIsentropeLogRho(TILLMATERIAL *material, double v)
  *
  * du/dlogrho = P/rho
  *
- * with initial conitions (rho1, u1). Note that the integration is done in log(rho) because thhe
- * ODE is very stiff for small rho otherwise.
+ * with initial conditions (rho1, u1). The integration is done in log(rho) because the ODE is
+ * very stiff for small rho otherwise. The interval is split into an integer number of equal
+ * RK4 steps no larger than dlogrho/100 (or 1/100 of the interval if no table exists), so the
+ * last step lands exactly on log(rho2) in either direction.
  */
 double tillCalcU(TILLMATERIAL *material, double rho1, double u1, double rho2)
 {
-	/* Calculate u2 by solving the ODE */
-    double logrho;
-    double logrho2;
-    double u;
-    double k1u, k2u, k3u, k4u;
-	double h;
+    const double logrho1 = log(rho1);
+    const double logrho2 = log(rho2);
+    const double dlogrho = logrho2 - logrho1;
+    double hmax, h, u;
+    long nsteps, s;
 
-	logrho = log(rho1);
-	u = u1;
-    logrho2 = log(rho2);
+    if (dlogrho == 0.0) return u1;
 
-    /* Make sure that dlogrho is set. */
-    if (material->dlogrho > 0.0)
-    {
-        /* Make smaller steps than we used for look up table. */
-        h = material->dlogrho/100.0;
+    if (material->dlogrho > 0.0) {
+        /* Make smaller steps than we used for the look up table. */
+        hmax = material->dlogrho/100.0;
     } else {
-        h = fabs(logrho2-logrho)/100.0;
-        assert(h > 0.0);
+        hmax = fabs(dlogrho)/100.0;
     }
-#ifdef TILL_VERBOSE
-    fprintf(stderr, "tillCalcU: Solving ODE (rho1= %g u1= %g rho2= %g).\n", rho1, u1, rho2);
-#endif
-	
-    if (rho1 < rho2)
-	{
-		while (logrho < logrho2) {
-			/*
-			 * Midpoint Runga-Kutta (4nd order).
-			 */
-			k1u = h*tilldudlogrho(material, logrho, u);
-			k2u = h*tilldudlogrho(material, logrho+0.5*h, u+0.5*k1u);
-			k3u = h*tilldudlogrho(material, logrho+0.5*h, u+0.5*k2u);
-			k4u = h*tilldudlogrho(material, logrho+h, u+k3u);
+    assert(hmax > 0.0);
 
-			u += k1u/6.0+k2u/3.0+k3u/3.0+k4u/6.0;
-			logrho += h;
+    nsteps = (long) ceil(fabs(dlogrho)/hmax);
+    if (nsteps < 1) nsteps = 1;
+    h = dlogrho/nsteps;     /* signed */
 
-            /* For the last step we set h so that rho == rho2. */
-            if (fabs(logrho-logrho2) < h) {
-                h = logrho2-logrho;
-            }
-		}
-	} else if (rho1 > rho2) {
-		while (logrho > logrho2) {
-			/*
-			 * Midpoint Runga-Kutta (4nd order).
-			 */
-			k1u = h*tilldudlogrho(material, logrho, u);
-			k2u = h*tilldudlogrho(material, logrho+0.5*h, u+0.5*k1u);
-			k3u = h*tilldudlogrho(material, logrho+0.5*h, u+0.5*k2u);
-			k4u = h*tilldudlogrho(material, logrho+h, u+k3u);
+    TILL_WARN("tillCalcU: Solving ODE (rho1= %g u1= %g rho2= %g, %ld steps).\n", rho1, u1, rho2, nsteps);
 
-			u -= k1u/6.0+k2u/3.0+k3u/3.0+k4u/6.0;
-			logrho -= h;
+    u = u1;
+    for (s = 0; s < nsteps; s++) {
+        u = tillRK4Step(material, logrho1 + s*h, u, h);
+    }
 
-            /* For the last step we set h so that rho == rho2. */
-            if (fabs(logrho-logrho2) < h) {
-                h = logrho-logrho2;
-            }
-		}
-	}
-	return u;
+    return u;
 }
 
 /*
@@ -424,112 +228,49 @@ double tillCalcU(TILLMATERIAL *material, double rho1, double u1, double rho2)
  */
 int tillIsInTable(TILLMATERIAL *material, double rho, double u)
 {
-    double logrho;
-    double v_eps = 0.1*material->dv;
-    double u1, u2;
-    double A;
+    double e, ulo, uhi, utol;
     int i;
 
-	/* Check if rho < rhomin or rho >= rhomax */
-	if (rho < material->rhomin)
-	{
-		return TILL_LOOKUP_OUTSIDE_RHOMIN;
-	}
+    /* The table is closed at both ends with the tolerance TILL_EDGE_TOL (a NaN rho fails too). */
+    if (!(rho >= material->rhomin*(1.0 - TILL_EDGE_TOL)))
+        return TILL_LOOKUP_OUTSIDE_RHOMIN;
+    if (rho > material->rhomax*(1.0 + TILL_EDGE_TOL))
+        return TILL_LOOKUP_OUTSIDE_RHOMAX;
 
-	if (rho >= material->rhomax)
-	{
-		return TILL_LOOKUP_OUTSIDE_RHOMAX;
-	}
+    /* u on the cold curve (j = 0) and on the top row of the table at this rho. */
+    tillLocateRho(material, rho, &i, &e);
+    ulo = tillCubicIntGrid(material, i, e, 0);
+    uhi = tillCubicIntGrid(material, i, e, material->nTableV-1);
+    utol = TILL_EDGE_TOL*(fabs(u) + 1.0);
 
-    /*
-     * Now find rho_i and rho_i+1 so that rho is bracketed (only works for equal spaced grid).
-     * 
-     * CR: Note that if rho lies on a grid point this can be problematic as, e.g., rho_i can either
-     *     be in the interval [i-1, i] or [i, i+1] which is rare cases affects wether or not a
-     *     point close to vmax is in the table. Tests however show, that even if it fails (is in
-     *     the table when it should not be) the brent rootfinder still works.
-     */
-	i = tillLookupIndexLogRho(material, log(rho));
-	assert(i >= 0 && i < material->nTableRho-1);
-
-    /* 
-     * Check if v(rho, u) < v_max. This requires interpolation. Currently we do a linear
-     * interpolation between u(i,N-1) and u(i+1,N-1) to obtain umax(rho). There are certainly more
-     * sophisticated methods but this one should be quick and realiable. Note that eps=0.1*dv as
-     * for v close to vmax rounding errors can be problematic and cause problems with the brent
-     * root finder.
-     */
-    u1 = tillSplineIntU(material, material->vmax-v_eps, i);
-    u2 = tillSplineIntU(material, material->vmax-v_eps, i+1);
-
-    A = (tillLookupRho(material, i+1)-rho)/(tillLookupRho(material, i+1)-tillLookupRho(material, i));
-    assert(A >= 0.0);
-
-    if (u < (A*u1 + (1.0-A)*u2))
-    {
-        /* Check if v(rho, u) > v_0 (so if u > u(rho, 0)). */
-        if ((u >= tillCubicInt(material, rho, 0.0)))
-        {
-            /* u(rho, v) is definitely inside of the lookup table. */
-            /// CR: debug
-#if 0
-            fprintf(stderr, "\n");
-            fprintf(stderr, "rho= %15.7E u=%15.7E  A= %15.7E umax= %15.7E (i= %i rho(i)= %15.7E\n",
-                    rho, u, A, A*u1+(1.0-A)*u2, i, tillLookupRho(material, i));
-            fprintf(stderr, "rho-rho_i= %15.7E u-umax=%15.7E  u1= %15.7E u2= %15.7E\n", rho-
-                    tillLookupRho(material, i), u-(A*u1+(1.0-A)*u2), u1, u2);
-            fprintf(stderr, "u-u1= %15.7E u-u2=%15.7E\n", u-u1, u-u2);
-            fprintf(stderr, "\n");
-#endif
-            return TILL_LOOKUP_SUCCESS;
-        } else {
-            /* u(rho, v) is below the cold curve. */
-#ifdef TILL_VERBOSE
-            fprintf(stderr, "tillIsInTable: Value (rho=%15.7E, u=%15.7E, iMat= %i) below the cold curve!\n", rho, u, material->iMaterial);
-#endif
-            return TILL_LOOKUP_OUTSIDE_VMIN;
-        }
-    } else {
-        /* u(rho, v) is larger than u(rho, v_max) so the lookup table has to be extended. */
+    if (!(u <= uhi + utol))        /* also NaN */
         return TILL_LOOKUP_OUTSIDE_VMAX;
+    if (u < ulo - utol)
+    {
+        TILL_WARN("tillIsInTable: Value (rho=%15.7E, u=%15.7E, iMat= %i) below the cold curve!\n", rho, u, material->iMaterial);
+        return TILL_LOOKUP_OUTSIDE_VMIN;
     }
-}
 
-/*
- * Check if a given (rho,u) is in an unphysical state below the cold curve.
- *
- * Returns 1 (true) if (rho,u) is below the cold curve and 0 (false) if not.
- */
-int eosIsBelowColdCurve(TILLMATERIAL *material, double rho, double u)
-{
-    if (material->iMaterial == IDEALGAS) {
-        return 0;
-    } else {
-        return tillIsBelowColdCurve(material, rho, u);
-    }
+    return TILL_LOOKUP_SUCCESS;
 }
 
 /*
  * This function checks if a given (rho,u) is in an unphysical state below the cold curve.
  *
- * Returns 1 (true) if (rho,u) is below the cold curve and 0 (false) if not.
+ * Returns 1 (true) if (rho,u) is below the cold curve, 0 (false) if not, and TILL_FAIL if
+ * rho is outside the table.
  */
 int tillIsBelowColdCurve(TILLMATERIAL *material, double rho, double u)
 {
-	int iRet = 1;
+    int iRet = 1;
 
-    if ((rho < material->rhomin) || (rho >= material->rhomax))
-    {
-        fprintf(stderr, "tillIsBelowColdCurve: rho= %g outside of the lookup table (iMat= %i, rhomin= %g, rhomax= %g).\n",
-                rho, material->iMaterial, material->rhomin, material->rhomax);
-        assert(0);
+    if (!(rho >= material->rhomin*(1.0 - TILL_EDGE_TOL)) || (rho > material->rhomax*(1.0 + TILL_EDGE_TOL)))
+        TILL_FAIL_RETURN(material, TILL_FAIL, "tillIsBelowColdCurve: rho= %g outside of the lookup table (iMat= %i, rhomin= %g, rhomax= %g).\n",
+                         rho, material->iMaterial, material->rhomin, material->rhomax);
+
+    if (u >= tillColdULookup(material, rho)) {
+        iRet = 0;
     }
 
-	if (u >= tillCubicInt(material, rho, 0.0))
-	{
-//		printf("tillIsBelowColdCurve: value (%g,%g) below the cold curve (iMat=%i)!\n",rho,u,material->iMaterial);
-		iRet = 0;
-	}
-
-	return iRet;
+    return iRet;
 }
