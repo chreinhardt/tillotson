@@ -110,84 +110,42 @@ void tillInitSplineV(TILLMATERIAL *material)
 }
 
 /*
- * Do a cubic spline interpolation of u in v.
- *
- * (CR) 10.08.2016: Integrated splint() into the function, allowing to use the TILL_LOOKUP_ENTRY
- * structure for the interpolation.
+ * Cubic spline interpolation in s of the table field at byte offset offY (with second
+ * derivatives at offY2) along row i. s is clamped to the table so that the last interval is
+ * closed; callers check the range themselves.
  */
-double tillSplineIntv(TILLMATERIAL *material, double v, int ilogrho)
+static double tillSplineIntField(TILLMATERIAL *material, double s, int i, size_t offY, size_t offY2)
 {
-	int klo,khi,k;
-	double h,b,a;
-	double u;
+    const double h = material->dv;
+    const TILL_LOOKUP_ENTRY *row = &material->Lookup[TILL_INDEX(i, 0)];
+    int klo = tillLookupIndexV(material, s);
+    double a, b;
 
-	/* Use v=k*material->dv */	
-	klo = tillLookupIndexV(material, v);
-	khi = klo+1;
+#define TILL_FIELD(entry, off) (*(const double *)((const char *)&(entry) + (off)))
+    a = ((klo+1)*h - s)/h;
+    b = 1.0 - a;
 
-	h = (khi-klo)*material->dv;
-	assert(h != 0.0);
-	assert(h == material->dv);
-
-	a=(khi*material->dv-v)/h;
-	b=(v-klo*material->dv)/h;
-
-	u=a*material->Lookup[TILL_INDEX(ilogrho,klo)].u+b*material->Lookup[TILL_INDEX(ilogrho,khi)].u+((a*a*a-a)*material->Lookup[TILL_INDEX(ilogrho,klo)].udv2+(b*b*b-b)*material->Lookup[TILL_INDEX(ilogrho,khi)].udv2)*(h*h)/6.0;
-
-	return u;
+    return a*TILL_FIELD(row[klo], offY) + b*TILL_FIELD(row[klo+1], offY)
+         + ((a*a*a - a)*TILL_FIELD(row[klo], offY2) + (b*b*b - b)*TILL_FIELD(row[klo+1], offY2))*(h*h)/6.0;
+#undef TILL_FIELD
 }
 
-/*
- * Do a cubic spline interpolation of u in v.
- */
-double tillSplineIntU(TILLMATERIAL *material, double v, int ilogrho)
+/* Cubic spline interpolation of u in s along row i. */
+double tillSplineIntU(TILLMATERIAL *material, double s, int i)
 {
-	/*
-	** Do a cubic spline interpolation of u in v.
-	*/
-	int klo,khi,k;
-	double h,b,a;
-	double u;
-	
-    /* Use v=k*material->dv */
-	klo = tillLookupIndexV(material, v);
-	khi = klo+1;
-
-	h = (khi-klo)*material->dv;
-	assert(h != 0.0);
-	assert(h == material->dv);
-
-	a=(khi*material->dv-v)/h;
-	b=(v-klo*material->dv)/h;
-
-	u=a*material->Lookup[TILL_INDEX(ilogrho,klo)].u+b*material->Lookup[TILL_INDEX(ilogrho,khi)].u+((a*a*a-a)*material->Lookup[TILL_INDEX(ilogrho,klo)].udv2+(b*b*b-b)*material->Lookup[TILL_INDEX(ilogrho,khi)].udv2)*(h*h)/6.0;
-
-	return u;
+    return tillSplineIntField(material, s, i, offsetof(TILL_LOOKUP_ENTRY, u), offsetof(TILL_LOOKUP_ENTRY, udv2));
 }
 
-/*
- * Do a cubic spline interpolation of u1 (du/dlogrho) in v.
- */
-double tillSplineIntU1(TILLMATERIAL *material, double v, int ilogrho)
+/* Cubic spline interpolation of u1 = du/dlogrho in s along row i. */
+double tillSplineIntU1(TILLMATERIAL *material, double s, int i)
 {
-	int klo,khi,k;
-	double h,b,a;
-	double u1;
-	
-	/* Use v=k*material->dv */
-	klo = tillLookupIndexV(material, v);
-	khi = klo+1;
+    return tillSplineIntField(material, s, i, offsetof(TILL_LOOKUP_ENTRY, u1), offsetof(TILL_LOOKUP_ENTRY, u1dv2));
+}
 
-	h = (khi-klo)*material->dv;
-	assert(h != 0.0);
-	assert(h == material->dv);
-
-	a=(khi*material->dv-v)/h;
-	b=(v-klo*material->dv)/h;
-	
-	u1=a*material->Lookup[TILL_INDEX(ilogrho,klo)].u1+b*material->Lookup[TILL_INDEX(ilogrho,khi)].u1+((a*a*a-a)*material->Lookup[TILL_INDEX(ilogrho,klo)].u1dv2+(b*b*b-b)*material->Lookup[TILL_INDEX(ilogrho,khi)].u1dv2)*(h*h)/6.0;
-
-	return u1;
+/* Old name of tillSplineIntU. */
+double tillSplineIntv(TILLMATERIAL *material, double s, int i)
+{
+    return tillSplineIntU(material, s, i);
 }
 
 #ifdef TILL_DEBUG_SPLINT
@@ -294,11 +252,9 @@ double tillCubicInt(TILLMATERIAL *material, double rhoint, double vint) {
      * Obtain the index i so that log(rho_i) and log(rho_i+1) bracket rho.
      */
 	i = tillLookupIndexLogRho(material, logrhoint);
-	assert(i < material->nTableRho-1);
 
-	// vint is between v[j] and v[j+1]
+	// vint is between s[j] and s[j+1] (vint is the table variable s)
 	j = tillLookupIndexV(material, vint);
-	assert(j < material->nTableV-1);
 
 	// dv = v[j+1]-v[j]
 	// Uniform steps in v
@@ -351,66 +307,81 @@ double tillCubicInt(TILLMATERIAL *material, double rhoint, double vint) {
 	return uint;
 }
 
-/* Prasenjits root finder */
-double brent(double (*func)(TILLMATERIAL *,double,double,double),TILLMATERIAL *material,double a,double b,double rho,double u,double tol,int iOrder);
-
-double tillFindUonIsentrope(TILLMATERIAL *material,double v,double rho)
+double tillFindUonIsentrope(TILLMATERIAL *material, double s, double rho)
 {
-	double iv,irho,u;
-	
-    return tillCubicInt(material, rho, v);
+    return tillCubicInt(material, rho, s);
 }
 
-double denergy(TILLMATERIAL *material,double v,double rho,double u)
+/* f(s) = u(rho, s) - u for the root finder in tillFindEntropyCurve. */
+struct tillEntropyCurveCtx { double rho; double u; };
+
+static double denergy(TILLMATERIAL *material, double s, const void *ctx)
 {
-	return (tillFindUonIsentrope(material,v,rho)-u);
+    const struct tillEntropyCurveCtx *p = (const struct tillEntropyCurveCtx *) ctx;
+    return tillFindUonIsentrope(material, s, p->rho) - p->u;
 }
 
-/* Find isentrope for a given rho and u */
-double tillFindEntropyCurve(TILLMATERIAL *material,double rho,double u,int iOrder)
+/*
+ * Find the isentrope through (rho, u): returns its table variable s, or TILL_SENTINEL if (rho, u)
+ * is below the cold curve (s < 0) or above the table (s > s_max). iOrder is only used in messages.
+ */
+double tillFindEntropyCurve(TILLMATERIAL *material, double rho, double u, int iOrder)
 {
-	double tol=1e-6;
-    double s_max = tillLookupS(material, material->nTableV-1);
+    struct tillEntropyCurveCtx ctx;
+    const double s_max = tillLookupS(material, material->nTableV-1) - V_EPS;
+    double fa, fb, s;
 
-    /* Returns s, not v. Using s_max rather than s_max-eps can cause an error in the brent root finder. */
-	return brent(denergy,material,0.0,s_max-V_EPS,rho,u,tol,iOrder);
+    ctx.rho = rho;
+    ctx.u = u;
+
+    fa = denergy(material, 0.0, &ctx);
+    fb = denergy(material, s_max, &ctx);
+
+    if (fa > 0.0)
+        TILL_FAIL_RETURN(TILL_SENTINEL, "tillFindEntropyCurve: Particle %i (rho= %g, u= %g, iMat= %i) is below the cold curve.\n",
+                         iOrder, rho, u, material->iMaterial);
+    if (fb < 0.0)
+        TILL_FAIL_RETURN(TILL_SENTINEL, "tillFindEntropyCurve: Particle %i (rho= %g, u= %g, iMat= %i) is above the table.\n",
+                         iOrder, rho, u, material->iMaterial);
+
+    /* s is O(1-10); 1e-10 in s is 1e-10 relative in v for v >> vmin. Brent converges superlinearly, so this costs little. */
+    if (tillBrent(denergy, material, &ctx, 0.0, s_max, fa, fb, 1e-10, 1e-10, 200, &s) != TILL_SUCCESS)
+        TILL_FAIL_RETURN(TILL_SENTINEL, "tillFindEntropyCurve: Particle %i (rho= %g, u= %g, iMat= %i): root finder failed.\n",
+                         iOrder, rho, u, material->iMaterial);
+
+    return s;
 }
 
+/*
+ * Calculate u2 on the isentrope through (rho1, u1) at rho2. Inside the lookup table this is an
+ * interpolation; for rho outside [rhomin, rhomax] or u1 above the table the ODE is integrated
+ * directly. Returns TILL_SENTINEL if (rho1, u1) is below the cold curve.
+ */
 double tillLookupU(TILLMATERIAL *material, double rho1, double u1, double rho2, int iOrder)
 {
-	/* Calculates u2 for a given rho1, u2 and rho2. */
-	double v, u;
+    double s;
     int iRet;
 
     iRet = tillIsInTable(material, rho1, u1);
 
-	/* Check if the starting and end point are inside of the look up table */
-	if ((iRet == TILL_LOOKUP_SUCCESS) && (rho2 > material->rhomin) && (rho2 < material->rhomax))
-	{
-		/* Interpolate using the look up table */
-		v = tillFindEntropyCurve(material, rho1, u1, iOrder);
-		u = tillFindUonIsentrope(material, v, rho2);
-	} else {
-        /* Do direct integration unless the value is below the cold curve. */
-        if (iRet == TILL_LOOKUP_OUTSIDE_VMIN)
-        {
-#ifdef TILL_VERBOSE
-            /// CR: We should remove any particle information here and return an error to gasoline.
-		    fprintf(stderr,"tillLookupU: Particle %i (rho=%g, u=%g, iMat=%i) is below the cold curve.\n",
-                    iOrder, rho1, u1, material->iMaterial);
-#endif
-            assert(iRet != TILL_LOOKUP_OUTSIDE_VMIN);
-        }
+    if (iRet == TILL_LOOKUP_OUTSIDE_VMIN)
+        TILL_FAIL_RETURN(TILL_SENTINEL, "tillLookupU: Particle %i (rho= %g, u= %g, iMat= %i) is below the cold curve.\n",
+                         iOrder, rho1, u1, material->iMaterial);
+
+    /* Check if the starting and end point are inside of the look up table. */
+    if ((iRet == TILL_LOOKUP_SUCCESS) &&
+        (rho2 >= material->rhomin*(1.0 - TILL_EDGE_TOL)) && (rho2 <= material->rhomax*(1.0 + TILL_EDGE_TOL)))
+    {
+        s = tillFindEntropyCurve(material, rho1, u1, iOrder);
+        if (s <= TILL_SENTINEL) return TILL_SENTINEL;
+        return tillFindUonIsentrope(material, s, rho2);
+    }
 
 #ifdef TILL_VERBOSE
-		fprintf(stderr,"tillLookupU: value (%g, %g, %g) outside of look up table, doing direct integration (Error: %i).\n",
-                rho1, u1, rho2, iRet);
+    fprintf(stderr, "tillLookupU: value (%g, %g, %g) outside of look up table, doing direct integration (Error: %i).\n",
+            rho1, u1, rho2, iRet);
 #endif
-        assert(iRet != TILL_LOOKUP_OUTSIDE_VMIN);
-		u = tillCalcU(material, rho1, u1, rho2);
-	}
-
-	return u;
+    return tillCalcU(material, rho1, u1, rho2);
 }
 
 double eosLookupU(TILLMATERIAL *material, double rho1, double u1, double rho2, int iOrder)
@@ -430,7 +401,7 @@ double eosLookupU(TILLMATERIAL *material, double rho1, double u1, double rho2, i
 }
 
 /*
- * Calculate u_cold(rho) from the lookup table.
+ * Calculate u_cold(rho) from the lookup table. Returns TILL_SENTINEL if rho is outside the table.
  *
  * 25.09.2018: Adapted it for the logarithmic lookup table.
  */
@@ -443,11 +414,9 @@ double tillColdULookup(TILLMATERIAL *material, double rho)
     if (rho < material->rho0)
         return 0.0;
 
-    if ((rho < material->rhomin) || (rho >= material->rhomax))
-    {
-        fprintf(stderr, "tillColdULookup: rho= %g outside of the lookup table.\n", rho);
-        assert(0);
-    }
+    if (!(rho >= material->rhomin*(1.0 - TILL_EDGE_TOL)) || (rho > material->rhomax*(1.0 + TILL_EDGE_TOL)))
+        TILL_FAIL_RETURN(TILL_SENTINEL, "tillColdULookup: rho= %g outside of the lookup table (iMat= %i, rhomin= %g, rhomax= %g).\n",
+                         rho, material->iMaterial, material->rhomin, material->rhomax);
 
     return tillCubicInt(material, rho, 0.0);
 }
@@ -474,23 +443,17 @@ int tillLookupIndexRho(TILLMATERIAL *material, double rho)
 
 /*
  * Return the index i, so that log(rho_i) and log(rho_i+1) bracket log(rho) in the lookup table.
- *
- * Note: The index of rho(i) is i-1. Since the value of rho is still bracketed by i-1 and i this
- *       should be fine.
  */
 int tillLookupIndexLogRho(TILLMATERIAL *material, double logrho)
 {
     int i;
 
-    // Assume uniform spacing in log(rho).
+    // Uniform spacing in log(rho). The result is clamped to [0, nTableRho-2] so that (i, i+1) is
+    // always a valid interval; the callers check the range of rho with TILL_EDGE_TOL.
     i = (int) floor((logrho-log(material->rhomin))/material->dlogrho);
 
-    // Check if logrho is outside of the table.
-    if (i < 0)
-        return -1;
-
-    if (i >= material->nTableRho-1)
-        return (material->nTableRho-1);
+    if (i < 0) return 0;
+    if (i > material->nTableRho-2) return material->nTableRho-2;
 
     return i;
 }
@@ -502,15 +465,11 @@ int tillLookupIndexV(TILLMATERIAL *material, double v)
 {
     int j;
 
-    // Uniform spacing in s; the argument is s.
+    // Uniform spacing in s; the argument is s. Clamped to [0, nTableV-2], see tillLookupIndexLogRho.
     j = (int) floor(v/material->dv);
 
-    // Check if v is outside of the table.
-    if (j < 0)
-        return -1;
-
-    if (j >= material->nTableV)
-        return material->nTableV;
+    if (j < 0) return 0;
+    if (j > material->nTableV-2) return material->nTableV-2;
 
     return j;
 }

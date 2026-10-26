@@ -15,11 +15,44 @@
 #define TILL_VERSION_MINOR   4
 #define TILL_VERSION_PATCH   4
 
+#include <stdlib.h>
+#include <assert.h>
+
 /*
  * Error codes.
  */
 #define TILL_SUCCESS 0
 #define TILL_FAIL   -1
+
+/*
+ * Error handling convention (shared with the other EOS libraries of EOSlib).
+ *
+ * A function that cannot deliver a value returns TILL_SENTINEL (for doubles) or TILL_FAIL (for
+ * status codes). By default the library prints a message and aborts at that point; compiled with
+ * -DTILL_NOEXIT it returns the sentinel/status to the caller instead (the message is printed only
+ * with -DTILL_VERBOSE). TILL_FAIL_RETURN implements this; it is used as
+ *
+ *     TILL_FAIL_RETURN(TILL_SENTINEL, "tillFoo: rho= %g outside the table.\n", rho);
+ */
+#define TILL_SENTINEL (-1e50)
+
+#ifdef TILL_NOEXIT
+#  ifdef TILL_VERBOSE
+#    define TILL_FAIL_RETURN(ret, ...) do { fprintf(stderr, __VA_ARGS__); return (ret); } while (0)
+#  else
+#    define TILL_FAIL_RETURN(ret, ...) return (ret)
+#  endif
+#else
+#  define TILL_FAIL_RETURN(ret, ...) do { fprintf(stderr, __VA_ARGS__); assert(0); exit(1); } while (0)
+#endif
+
+/*
+ * Relative tolerance with which the lookup table is treated as a closed interval at its edges,
+ * so that a state on an edge survives unit conversions and log/exp round trips.
+ */
+#ifndef TILL_EDGE_TOL
+#define TILL_EDGE_TOL 1e-10
+#endif
 
 enum till_error_lookup
 {
@@ -171,13 +204,6 @@ typedef struct tillMaterial
 	TILL_LOOKUP_ENTRY *Lookup;	// this is an array of pointers
 } TILLMATERIAL;
 
-/* Data structure needed for the GSL root finder. */
-struct PressureRhoT_GSL_Params {
-    TILLMATERIAL *material;
-    double P;
-    double T;
-};
-
 /*
  * Tillotson.c
  */
@@ -196,15 +222,12 @@ double eosPressureRhoT(TILLMATERIAL *material, double rho, double T);
 double eosdPdrho(TILLMATERIAL *material, double rho, double u);
 double eosdPdu(TILLMATERIAL *material, double rho, double u);
 double eosTempRhoU(TILLMATERIAL *material, double rho, double u);
-double eosRhoPU(TILLMATERIAL *material, double P, double u);
-double eosURhoP(TILLMATERIAL *material, double rho, double P);
 double eosURhoTemp(TILLMATERIAL *material, double rho, double T);
 double eosRhoPTemp(TILLMATERIAL *material, double P, double T);
 int eosSolveBC(TILLMATERIAL *mat1, TILLMATERIAL *mat2, double rho1, double u1, double *prho2, double *pu2);
 double eosPhi(TILLMATERIAL *material, double rho, double u);
 double eosGamma(TILLMATERIAL *material, double rho, double u);
 
-double tilldPdrho(TILLMATERIAL *material, double rho, double u);
 double tillPressureSoundNP(TILLMATERIAL *material, double rho, double u, double *pcSound);
 double tillPressureSound(TILLMATERIAL *material, double rho, double u, double *pcSound);
 double tillPressure(TILLMATERIAL *material, double rho, double u);
@@ -218,13 +241,20 @@ double tillTempRhoU(TILLMATERIAL *material, double rho, double u);
 // Not implemented yet
 double tillTempRhoP(TILLMATERIAL *material, double rho, double P);
 double tillURhoTemp(TILLMATERIAL *material, double rho, double T);
-double PressureRhoT_GSL(double rho, void *params);
 double tillRhoPTemp(TILLMATERIAL *material, double P, double T);
 double tillSoundSpeed(TILLMATERIAL *material, double rho, double u);
-double tillRhoPU(TILLMATERIAL *material, double P, double u);
 double tilldudrho(TILLMATERIAL *material, double rho, double u);
 double tilldudlogrho(TILLMATERIAL *material, double logrho, double u);
 int tillSolveBC(TILLMATERIAL *mat1, TILLMATERIAL *mat2, double rho1, double u1, double *prho2, double *pu2);
+
+/*
+ * Brent root finder for f(material, x, ctx) = 0 on the bracket [a, b] with fa = f(a), fb = f(b)
+ * of opposite sign. Converges to |x - root| <= tol_abs + tol_rel*|x|. Returns TILL_SUCCESS and
+ * the root in *px, or TILL_FAIL (bracket invalid or max_iter exceeded) with *px untouched.
+ */
+int tillBrent(double (*f)(TILLMATERIAL *, double, const void *), TILLMATERIAL *material,
+              const void *ctx, double a, double b, double fa, double fb,
+              double tol_abs, double tol_rel, int max_iter, double *px);
 
 /*
  * tillinitlookup.c
@@ -258,10 +288,10 @@ double tillSplineIntU1(TILLMATERIAL *material, double v, int irho);
 double tillCubicInt(TILLMATERIAL *material, double rho, double v);
 void cubicint(double u[2],double dudrho[2], double dudv[2], double dudvdrho[2], double rho[2], double rhoint, double *intvalues);
 
-double tillFindUonIsentrope(TILLMATERIAL *material,double v,double rho);
-/* Used for the root finder */
-double denergy(TILLMATERIAL *material,double v,double rho,double u);
+double tillFindUonIsentrope(TILLMATERIAL *material,double s,double rho);
+/* Returns the table variable s of the isentrope through (rho, u), or TILL_SENTINEL. */
 double tillFindEntropyCurve(TILLMATERIAL *material,double rho,double u,int iOrder);
+/* Returns u2 on the isentrope through (rho1, u1) at rho2, or TILL_SENTINEL. */
 double tillLookupU(TILLMATERIAL *material,double rho1,double u1,double rho2,int iOrder);
 double tillCubicIntRho(TILLMATERIAL *material, double rhoint, int iv);
 double tillColdULookup(TILLMATERIAL *material,double rho);

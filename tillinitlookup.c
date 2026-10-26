@@ -379,76 +379,49 @@ double tillCalcU(TILLMATERIAL *material, double rho1, double u1, double rho2)
  */
 int tillIsInTable(TILLMATERIAL *material, double rho, double u)
 {
-    double logrho;
-    double s_max = tillLookupS(material, material->nTableV-1);
-    double s_eps = 0.1*material->dv;
-    double u1, u2;
-    double A;
+    const double s_max = tillLookupS(material, material->nTableV-1);
+    const double s_eps = 0.1*material->dv;
+    double u1, u2, A;
     int i;
 
-	/* Check if rho < rhomin or rho >= rhomax */
-	if (rho < material->rhomin)
-	{
-		return TILL_LOOKUP_OUTSIDE_RHOMIN;
-	}
+    /* The table is closed at both ends with the tolerance TILL_EDGE_TOL (a NaN rho fails too). */
+    if (!(rho >= material->rhomin*(1.0 - TILL_EDGE_TOL)))
+        return TILL_LOOKUP_OUTSIDE_RHOMIN;
+    if (rho > material->rhomax*(1.0 + TILL_EDGE_TOL))
+        return TILL_LOOKUP_OUTSIDE_RHOMAX;
 
-	if (rho >= material->rhomax)
-	{
-		return TILL_LOOKUP_OUTSIDE_RHOMAX;
-	}
+    /* rho_i and rho_i+1 bracket rho (the index is clamped to the last interval at the edges). */
+    i = tillLookupIndexLogRho(material, log(rho));
 
     /*
-     * Now find rho_i and rho_i+1 so that rho is bracketed (only works for equal spaced grid).
-     * 
-     * CR: Note that if rho lies on a grid point this can be problematic as, e.g., rho_i can either
-     *     be in the interval [i-1, i] or [i, i+1] which is rare cases affects wether or not a
-     *     point close to vmax is in the table. Tests however show, that even if it fails (is in
-     *     the table when it should not be) the brent rootfinder still works.
-     */
-	i = tillLookupIndexLogRho(material, log(rho));
-	assert(i >= 0 && i < material->nTableRho-1);
-
-    /* 
-     * Check if v(rho, u) < v_max. This requires interpolation. Currently we do a linear
+     * Check if s(rho, u) < s_max. This requires interpolation. Currently we do a linear
      * interpolation between u(i,N-1) and u(i+1,N-1) to obtain umax(rho). There are certainly more
-     * sophisticated methods but this one should be quick and realiable. Note that eps=0.1*dv (in
+     * sophisticated methods but this one should be quick and reliable. Note that eps=0.1*dv (in
      * s) as for s close to s_max rounding errors can be problematic and cause problems with the
-     * brent root finder.
+     * root finder.
      */
     u1 = tillSplineIntU(material, s_max-s_eps, i);
     u2 = tillSplineIntU(material, s_max-s_eps, i+1);
 
     A = (tillLookupRho(material, i+1)-rho)/(tillLookupRho(material, i+1)-tillLookupRho(material, i));
-    assert(A >= 0.0);
+    A = MIN(MAX(A, 0.0), 1.0);
 
-    if (u < (A*u1 + (1.0-A)*u2))
+    if (!(u < (A*u1 + (1.0-A)*u2)))
     {
-        /* Check if v(rho, u) > v_0 (so if u > u(rho, 0)). */
-        if ((u >= tillCubicInt(material, rho, 0.0)))
-        {
-            /* u(rho, v) is definitely inside of the lookup table. */
-            /// CR: debug
-#if 0
-            fprintf(stderr, "\n");
-            fprintf(stderr, "rho= %15.7E u=%15.7E  A= %15.7E umax= %15.7E (i= %i rho(i)= %15.7E\n",
-                    rho, u, A, A*u1+(1.0-A)*u2, i, tillLookupRho(material, i));
-            fprintf(stderr, "rho-rho_i= %15.7E u-umax=%15.7E  u1= %15.7E u2= %15.7E\n", rho-
-                    tillLookupRho(material, i), u-(A*u1+(1.0-A)*u2), u1, u2);
-            fprintf(stderr, "u-u1= %15.7E u-u2=%15.7E\n", u-u1, u-u2);
-            fprintf(stderr, "\n");
-#endif
-            return TILL_LOOKUP_SUCCESS;
-        } else {
-            /* u(rho, v) is below the cold curve. */
-#ifdef TILL_VERBOSE
-            fprintf(stderr, "tillIsInTable: Value (rho=%15.7E, u=%15.7E, iMat= %i) below the cold curve!\n", rho, u, material->iMaterial);
-#endif
-            return TILL_LOOKUP_OUTSIDE_VMIN;
-        }
-    } else {
-        /* u(rho, v) is larger than u(rho, v_max) so the lookup table has to be extended. */
+        /* u(rho, s) is larger than u(rho, s_max) so the lookup table has to be extended (or u is NaN). */
         return TILL_LOOKUP_OUTSIDE_VMAX;
     }
+
+    /* Check if s(rho, u) >= 0 (so if u >= u(rho, 0)). */
+    if (u < tillCubicInt(material, rho, 0.0))
+    {
+#ifdef TILL_VERBOSE
+        fprintf(stderr, "tillIsInTable: Value (rho=%15.7E, u=%15.7E, iMat= %i) below the cold curve!\n", rho, u, material->iMaterial);
+#endif
+        return TILL_LOOKUP_OUTSIDE_VMIN;
+    }
+
+    return TILL_LOOKUP_SUCCESS;
 }
 
 /*
@@ -468,24 +441,20 @@ int eosIsBelowColdCurve(TILLMATERIAL *material, double rho, double u)
 /*
  * This function checks if a given (rho,u) is in an unphysical state below the cold curve.
  *
- * Returns 1 (true) if (rho,u) is below the cold curve and 0 (false) if not.
+ * Returns 1 (true) if (rho,u) is below the cold curve, 0 (false) if not, and TILL_FAIL (-1) if
+ * rho is outside the table.
  */
 int tillIsBelowColdCurve(TILLMATERIAL *material, double rho, double u)
 {
-	int iRet = 1;
+    int iRet = 1;
 
-    if ((rho < material->rhomin) || (rho >= material->rhomax))
-    {
-        fprintf(stderr, "tillIsBelowColdCurve: rho= %g outside of the lookup table (iMat= %i, rhomin= %g, rhomax= %g).\n",
-                rho, material->iMaterial, material->rhomin, material->rhomax);
-        assert(0);
+    if (!(rho >= material->rhomin*(1.0 - TILL_EDGE_TOL)) || (rho > material->rhomax*(1.0 + TILL_EDGE_TOL)))
+        TILL_FAIL_RETURN(TILL_FAIL, "tillIsBelowColdCurve: rho= %g outside of the lookup table (iMat= %i, rhomin= %g, rhomax= %g).\n",
+                         rho, material->iMaterial, material->rhomin, material->rhomax);
+
+    if (u >= tillCubicInt(material, rho, 0.0)) {
+        iRet = 0;
     }
 
-	if (u >= tillCubicInt(material, rho, 0.0))
-	{
-//		printf("tillIsBelowColdCurve: value (%g,%g) below the cold curve (iMat=%i)!\n",rho,u,material->iMaterial);
-		iRet = 0;
-	}
-
-	return iRet;
+    return iRet;
 }

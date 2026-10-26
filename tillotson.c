@@ -24,8 +24,6 @@
 #include <math.h>
 #include <assert.h>
 #include <stdio.h>
-#include <gsl/gsl_errno.h>
-#include <gsl/gsl_roots.h>
 #include "tillotson.h"
 
 /* This will cut the pressure in the cold expanded states for rho/rho0 < 0.8 as suggested in Melosh1989. */
@@ -236,6 +234,23 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit)
 			material->beta = 5.0;
 			material->cv = 0.84e7;		/* ergs/g K */ 
 			break;
+		case FORSTERITE:
+			/*
+			 * Material parameters for Forsterite from S. Raducan.
+			 */
+			material->a = 0.1;
+			material->b = 1.0;
+			material->u0 = 4.87e12;		/* in ergs/g */
+            // Key difference is the reference density
+			material->rho0 = 3.3;		/* g/cc */
+			material->A = 9.5e11;		/* ergs/cc */
+			material->B = 9.5e11;		/* ergs/cc */
+			material->us = 4.72e10;		/* ergs/g */
+			material->us2 = 1.82e11;	/* ergs/g */
+			material->alpha = 5.0;
+			material->beta = 5.0;
+			material->cv = 1e7;		/* ergs/g K */ 
+			break;
 		default:
 			/* Unknown material */
 			assert(0);
@@ -306,6 +321,9 @@ void tilliMatString(TILLMATERIAL *material, char *MatName)
             break;
         case DUNITE:
             sprintf(MatName, "DUNITE");
+            break;
+        case FORSTERITE:
+            sprintf(MatName, "FORSTERITE");
             break;
         default:
             /* Unknown material */
@@ -497,102 +515,6 @@ double eosTempRhoU(TILLMATERIAL *material, double rho, double u)
     } else {
         return(tillTempRhoU(material, rho, u));
     }
-}
-
-/*
- * Calculate rho(P, u) for a given EOS and material using bisection.
- */
-double eosRhoPU(TILLMATERIAL *material, double P, double u)
-{
-    double a, b, c, Pa, Pb, Pc;
-
-    a = 0.0;
-    Pa = eosPressure(material, a, u);
-
-    b = material->rhomax;
-    Pb = eosPressure(material, b, u);
-
-    /*
-     * Make sure the root is bracketed.
-     */
-    while (Pb < P)
-    {
-        b = 2.0*b;
-        Pb = eosPressure(material, b, u);
-    }
-
-    fprintf(stderr, "a= %g, Pa= %g, b= %g, Pb= %g\n", a, Pa, b, Pb);
-
-    assert(Pa < P && Pb > P);
-
-    while ((Pb-Pa) > 1e-10*Pc)
-    {
-        c = 0.5*(a + b);
-        Pc = eosPressure(material, c, u);
-
-        if (Pc < P)
-        {
-            a = c;
-            Pa = Pc;
-        } else {
-            b = c;
-            Pb = Pc;
-        }
-    }
-
-    return(c);
-}
-
-/*
- * Calculate u(rho, P) for a given EOS and material using bisection.
- */
-double eosURhoP(TILLMATERIAL *material, double rho, double P)
-{
-    double a, b, c, Pa, Pb, Pc;
-
-    // Use the analytic solution for the ideal gas
-    if (material->iMaterial == IDEALGAS)
-    {
-
-    }
-
-    // umin = 0.0
-    a = 0.0;
-    Pa = eosPressure(material, rho, a);
-
-    b = 100.0;
-    Pb = eosPressure(material, rho, b);
-
-    /*
-     * Make sure the root is bracketed.
-     */
-    while (Pb <= P)
-    {
-        b = 2.0*b;
-        Pb = eosPressure(material, rho, b);
-        fprintf(stderr, "rho= %g P= %g: a= %g, Pa= %g, b= %g, Pb= %g\n", rho, P, a, Pa, b, Pb);
-    }
-
-    fprintf(stderr, "rho= %g P= %g: a= %g, Pa= %g, b= %g, Pb= %g\n", rho, P, a, Pa, b, Pb);
-
-    assert(Pa<P && Pb>P);
-
-    while ((Pb-Pa) > 1e-10*Pc)
-    {
-        c = 0.5*(a + b);
-        Pc = eosPressure(material, rho, c);
-
-        if (Pc < P)
-        {
-            a = c;
-            Pa = Pc;
-        } else {
-            b = c;
-            Pb = Pc;
-        }
-    }
-
-    return(c);
 }
 
 /*
@@ -1044,301 +966,108 @@ double tillURhoTemp(TILLMATERIAL *material, double rho, double T)
     return(tillColdULookup(material, rho) + material->cv*T);
 }
 
-#if 0
-/* 
- * Calculate rho(P,T) for a material. Because thermodynamical consistency requires
- * (dP/drho)_T > 0 this should always work except where we do the pressure cutoff.
+/*
+ * Brent's method (inverse quadratic interpolation with bisection fallback), own implementation.
  */
-double tillRhoPTemp(TILLMATERIAL *material, double P, double T)
+int tillBrent(double (*f)(TILLMATERIAL *, double, const void *), TILLMATERIAL *material,
+              const void *ctx, double a, double b, double fa, double fb,
+              double tol_abs, double tol_rel, int max_iter, double *px)
 {
-    double a, ua, Pa, b, ub, Pb, c, uc, Pc;
+    double c, fc, d, e, m, tol, p, q, r, s;
+    int iter;
 
-    Pc = 0.0;
+    if (!(fa*fb <= 0.0)) return TILL_FAIL;      /* not bracketed, or NaN */
+    if (fa == 0.0) { *px = a; return TILL_SUCCESS; }
+    if (fb == 0.0) { *px = b; return TILL_SUCCESS; }
 
-    /*
-     * Check, if P <= 0.0. In this case the algorithm will not work and the
-     * function returns a negative value for the density to indicate that it
-     * failed.
-     */
-    if (P <= 0.0)
-    {
-#if TILL_VERBOSE
-        fprintf(stderr, "tillRhoPTemp: Called for negative pressure (P= %g). No correction is done.\n", P);
-#endif
-        return -1.0;
-    }
+    c = a; fc = fa;
+    d = e = b - a;
 
-    /*
-     * We use rhoa=0 and rhob=rhomax as limits.
-     */
-    a = material->rhomin;
-
-    // For rho=0.0 the pressure diverges so set a minimum density.
-    if (a < 1e-5)
-        a = 1e-5;
-
-    // We should find a way to more precisely bracket P and avoid Pa <= 0.
-    ua = tillURhoTemp(material, a, T);
-    Pa = tillPressure(material, a, ua);
-
-    b = material->rhomax*0.99;
-//    b = 2*a;
-    ub = tillURhoTemp(material, b, T);
-    Pb = tillPressure(material, b, ub);
-
-    // Make sure that Pb > P. If nescessary the lookup table has to be expanded.
-    while (Pb < P)
-    {
-        /*
-         * Careful, here a new lookup table has to be generated. Currently the new parameters are
-         * set by hand but it would make more sense to move the initialization of all lookup table
-         * related values in tillInitLookup().
-         */
-        material->rhomax *= 2.0;
-         
-        /// CR: This code is still not wporking properly. Currently rhomax and vmax have to be set properly.
-        tillInitLookup(material, material->nTableRho, material->nTableV, material->rhomin, material->rhomax, material->vmax);
-
-#ifdef TILL_VERBOSE
-        fprintf(stderr, "tillRhoPTemp: P > Pb, expanding lookup table (P= %g, Pb= %g, b= %g).\n", P, Pb, b);
-#endif
-        b = material->rhomax*0.99;
-
-        ub = tillURhoTemp(material, b, T);
-        Pb = tillPressure(material, b, ub);
-    }
-
-    /* What do we do for P=0 in the expanded cold states?*/
-    //	fprintf(stderr,"tillRhoPTemp: starting with a= %g ua= %g Pa= %g b=%g ub= %g Pb= %g\n", a, ua, Pa, b, ub, Pb);
-    /* Check if the root is bracketed. */
-    if ((Pa >= P) || (Pb <=P))
-    {
-#ifdef TILL_VERBOSE
-        fprintf(stderr, "tillRhoPTemp: Root can not be bracketed (P= %g, Pa= %g, Pb= %g).\n", P, Pa, Pb);
-#endif
-        return -1.0;
-    }
-
-    assert (Pa < P && P < Pb);	
-
-    /*
-     * Root bracketed by (a,b).
-     */
-    while (Pb-Pa > 1e-10) {
-        c = 0.5*(a + b);
-        uc = tillURhoTemp(material,c,T);
-        Pc = tillPressure(material,c, uc);
-
-        if (Pc < P) {
-            a = c;
-            Pa = Pc;
+    for (iter = 0; iter < max_iter; iter++) {
+        /* Keep b the best estimate, c on the other side of the root. */
+        if (fb*fc > 0.0) { c = a; fc = fa; d = e = b - a; }
+        if (fabs(fc) < fabs(fb)) {
+            a = b; b = c; c = a;
+            fa = fb; fb = fc; fc = fa;
         }
-        else {
-            b = c;
-            Pb = Pc;
+        tol = tol_abs + tol_rel*fabs(b);
+        m = 0.5*(c - b);
+        if (fabs(m) <= tol || fb == 0.0) { *px = b; return TILL_SUCCESS; }
+
+        if (fabs(e) >= tol && fabs(fa) > fabs(fb)) {
+            /* Try interpolation: secant if a == c, inverse quadratic otherwise. */
+            s = fb/fa;
+            if (a == c) {
+                p = 2.0*m*s;
+                q = 1.0 - s;
+            } else {
+                q = fa/fc;
+                r = fb/fc;
+                p = s*(2.0*m*q*(q - r) - (b - a)*(r - 1.0));
+                q = (q - 1.0)*(r - 1.0)*(s - 1.0);
+            }
+            if (p > 0.0) q = -q; else p = -p;
+            if (2.0*p < fmin(3.0*m*q - fabs(tol*q), fabs(e*q))) {
+                e = d; d = p/q;         /* accept interpolation */
+            } else {
+                d = m; e = m;           /* bisect */
+            }
+        } else {
+            d = m; e = m;
         }
+        a = b; fa = fb;
+        b += (fabs(d) > tol) ? d : (m > 0.0 ? tol : -tol);
+        fb = f(material, b, ctx);
     }
-
-    //fprintf(stderr,"tillRhoPTemp: rhoc= %g uc= %g Pc= %g P= %g T= %g\n", c, uc, Pc, P, T);
-    /*
-     * Return values.
-     */
-    return c;
-}
-#endif
-
-double PressureRhoT_GSL(double rho, void *params)
-{
-    TILLMATERIAL *material;
-    double P;
-    double T;
-    double u;
-
-    struct PressureRhoT_GSL_Params *p;
-
-    p = (struct PressureRhoT_GSL_Params *) params;
-
-    material = p->material;
-    P = p->P;
-    T = p->T;
-
-    u = eosURhoTemp(material, rho, T);
-
-    if (material->iMaterial == IDEALGAS) {
-        // Ideal gas has no negative pressure region
-        return (eosPressureSound(material, rho, u, NULL)-P);
-    } else {
-        // Note that this only works for the Tillotson EOS so far!!!
-        return (tillPressureSoundNP(material, rho, u, NULL)-P);
-    }
+    return TILL_FAIL;
 }
 
-/* 
- * Calculate rho(P,T) for a material using the GSL root finder.
+/* f(rho) = P(rho, T) - P for the root finder in tillRhoPTemp (no pressure cutoff). */
+struct tillRhoPTempCtx { double P; double T; };
+
+static double tillRhoPTempFunc(TILLMATERIAL *material, double rho, const void *ctx)
+{
+    const struct tillRhoPTempCtx *p = (const struct tillRhoPTempCtx *) ctx;
+    double u = tillURhoTemp(material, rho, p->T);
+    if (u <= TILL_SENTINEL) return NAN;     /* propagates as a bracket failure */
+    return tillPressureSoundNP(material, rho, u, NULL) - p->P;
+}
+
+/*
+ * Calculate rho(P,T) for a material by root finding on the uncut pressure (tillPressureSoundNP),
+ * which is monotonic in rho at fixed T where (dP/drho)_T > 0.
  *
- * Because thermodynamical consistency requires (dP/drho)_T > 0 this should always work except 
- * where we do the pressure cutoff.
+ * Returns TILL_SENTINEL if P <= 0 or the root is not bracketed by [rho_min, 0.999*rhomax].
  */
 double tillRhoPTemp(TILLMATERIAL *material, double P, double T)
 {
-    // GSL root finder
-    gsl_root_fsolver *Solver;
-    const gsl_root_fsolver_type *SolverType;
-    gsl_function F;
-    struct PressureRhoT_GSL_Params Params;
-    const double err_abs = 0.0;
-    const double err_rel = 1e-10;
-    int status;
-    int max_iter = 1000;
-    double rho;
-    double rho_min;
-    double rho_max;
+    struct tillRhoPTempCtx ctx;
+    const double rho_min = 1e-10;               /* P diverges for rho = 0 and u = 0 */
+    const double rho_max = 0.999*material->rhomax;
+    double fa, fb, rho;
 
-    int i;
-
-    /*
-     * Check, if P <= 0.0. In this case the algorithm will not work and the
-     * function returns a negative value for the density to indicate that it
-     * failed.
-     */
+    /* For P <= 0 the inversion is not defined (pressure cutoff). */
     if (P <= 0.0)
-    {
-#if TILL_VERBOSE
-        fprintf(stderr, "tillRhoPTemp: Called for negative pressure (P= %g)\n", P);
-#endif
-        return -1.0;
-    }
+        TILL_FAIL_RETURN(TILL_SENTINEL, "tillRhoPTemp: Called for negative pressure (P= %g).\n", P);
 
-    // Initialize the parameters
-    Params.material = material;
-    Params.P = P;
-    Params.T = T;
+    ctx.P = P;
+    ctx.T = T;
 
-    // Initialize the function
-    F.function = &PressureRhoT_GSL;
-    F.params = &Params;
+    fa = tillRhoPTempFunc(material, rho_min, &ctx);
+    fb = tillRhoPTempFunc(material, rho_max, &ctx);
 
-    // Set minimum density because the pressure diverges if rho=0 and u=0.
-    rho_min = 1e-10;
-    rho_max = 0.999*material->rhomax;
+    if (!(fa < 0.0))
+        TILL_FAIL_RETURN(TILL_SENTINEL, "tillRhoPTemp: P <= P(rho_min, T) (P= %g, rho_min= %g, P_min= %g, T= %g).\n",
+                         P, rho_min, fa + P, T);
+    if (!(fb > 0.0))
+        TILL_FAIL_RETURN(TILL_SENTINEL, "tillRhoPTemp: P >= P(rho_max, T) (P= %g, rho_max= %g, P_max= %g, T= %g).\n",
+                         P, rho_max, fb + P, T);
 
-#if 0
-    // Check if P(rho_min, T) < P otherwise the root can not be bracketed.
-    if (eosPressureRhoT(material, rho_min, T) > P) {
-#if TILL_VERBOSE
-        fprintf(stderr, "tillRhoPTemp: P= %g smaller than P_min (rho_min= %g P_min= %g T=%g).\n",
-                P, rho_min, eosPressureRhoT(material, rho_min, T), T);
-#endif
-        return -1.0;
-    }
-#endif
+    if (tillBrent(tillRhoPTempFunc, material, &ctx, rho_min, rho_max, fa, fb, 0.0, 1e-10, 1000, &rho) != TILL_SUCCESS)
+        TILL_FAIL_RETURN(TILL_SENTINEL, "tillRhoPTemp: root finder did not converge (P= %g, T= %g).\n", P, T);
 
-    /*
-     * Check if P_min < P < P_max so the root finder does not crash.
-     *
-     * Note: In the future we might want to expand the lookup table if P>=P_max.
-     */
-    if (P <= eosPressureRhoT(material, rho_min, T)) {       
-#ifdef TILL_VERBOSE
-        fprintf(stderr, "tillRhoPTemp: P <= P(rho_min, T) (P= %g, rho_min= %g, P_min= %g T=%g).\n",
-                P, rho_min, eosPressureRhoT(material, rho_min, T), T);
-#endif
-        return -1.0;
-    }
-    
-    if (P >= eosPressureRhoT(material, rho_max, T)) {       
-#ifdef TILL_VERBOSE
-        fprintf(stderr, "tillRhoPTemp: P >= P(rho_max, T) (P= %g, rho_max= %g, P_max= %g T=%g).\n",
-                P, rho_max, eosPressureRhoT(material, rho_max, T), T);
-#endif
-        return -1.0;
-    }
-
-    // Initialize the root finder
-    SolverType = gsl_root_fsolver_brent;
-    Solver = gsl_root_fsolver_alloc(SolverType);
-    assert(Solver != NULL);
-
-    gsl_root_fsolver_set(Solver, &F, rho_min, rho_max);
-
-#if 0
-    // Make sure that Pb > P. If nescessary the lookup table has to be expanded.
-    while (Pmax < P)
-    {
-        /*
-         * Careful, here a new lookup table has to be generated. Currently the new parameters are
-         * set by hand but it would make more sense to move the initialization of all lookup table
-         * related values in tillInitLookup().
-         */
-        material->rhomax *= 2.0;
-         
-        /// CR: This code is still not wporking properly. Currently rhomax and vmax have to be set properly.
-        tillInitLookup(material, material->nTableRho, material->nTableV, material->rhomin, material->rhomax, material->vmax);
-
-#ifdef TILL_VERBOSE
-        fprintf(stderr, "tillRhoPTemp: P > Pb, expanding lookup table (P= %g, Pb= %g, b= %g).\n", P, Pb, b);
-#endif
-        b = material->rhomax*0.99;
-
-        ub = tillURhoTemp(material, b, T);
-        Pb = tillPressure(material, b, ub);
-    }
-
-
-    /* What do we do for P=0 in the expanded cold states?*/
-    //	fprintf(stderr,"tillRhoPTemp: starting with a= %g ua= %g Pa= %g b=%g ub= %g Pb= %g\n", a, ua, Pa, b, ub, Pb);
-    /* Check if the root is bracketed. */
-    if ((P_min >= P) || (P_max <=P))
-    {
-#ifdef TILL_VERBOSE
-        fprintf(stderr, "tillRhoPTemp: Root can not be bracketed (P= %g, Pa= %g, Pb= %g).\n", P, Pa, Pb);
-#endif
-        return -1.0;
-    }
-
-    assert (Pa < P && P < Pb);	
-#endif
-    
-    for (i=0; i<max_iter; i++)
-    {
-        // Do one iteration of the root solver
-        status = gsl_root_fsolver_iterate(Solver);
-
-        // Estimate of the root
-        rho = gsl_root_fsolver_root(Solver);
-
-        // Current interval that brackets the root
-        rho_min = gsl_root_fsolver_x_lower(Solver);
-        rho_max = gsl_root_fsolver_x_upper(Solver);
-
-        // Test for convergence
-        status = gsl_root_test_interval(rho_min, rho_max, err_abs, err_rel);
-
-#if 0
-        if (status == GSL_SUCCESS)
-            fprintf(stderr, "Converged: x= %g\n", x);
-#endif
-        if (status != GSL_CONTINUE)
-            break;
-
-#if 0
-        ///CR: Debug
-        fprintf(stderr, "iteration %i: rho= %g rho_min= %g rho_max= %g err_abs= %g err_rel= %g\n",
-                i, rho, rho_min, rho_max, err_abs, err_rel);
-#endif
-    }
-
-    if (status != GSL_SUCCESS)
-        rho = -1.0;
-
-    gsl_root_fsolver_free(Solver);
-    
-    /*
-     * Return values.
-     */
     return rho;
 }
-
 
 /*
  * Calculate sound speed for a material.
@@ -1348,59 +1077,6 @@ double tillSoundSpeed(TILLMATERIAL *material, double rho, double u)
     double c;
 
     tillPressureSound(material, rho, u, &c);
-    return (c);
-}
-
-/* 
- * Calculate rho(P,u) by doing a root finding using bisection.
- */
-double tillRhoPU(TILLMATERIAL *material, double P, double u)
-{
-    double a, b, c, Pa, Pb, Pc;
-
-    /*
-     * Try to bracket the root with (a, b).
-     */
-    if (u == 0.0)
-    {
-        // For rho=0 AND u=0 Pc diverges!
-        a = 1e-30;
-    } else {
-        // If u > 0 there is no problem
-        a = 0.0;
-    }
-
-    Pa = tillPressure(material, a, u);
-    b = 10.0*material->rho0;
-    Pb = tillPressure(material, b, u);
-
-    while (Pb < P)
-    {
-        b *= 2.0;
-        Pb = tillPressure(material, b, u);
-    }
-
-    //    fprintf(stderr, "tillRhoPU: Root bracketed by: a=%15.7E Pa=%15.7E b=%15.7E Pb=%15.7E\n", a, Pa, b, Pb);
-    //    assert(Pa < P && Pb > P);
-
-    if (Pa >= P) return(a);
-    if (Pb <= P) return(b);
-
-    while (Pb-Pa > 1e-10*Pc)
-    {
-        c = 0.5*(a+b);
-        Pc = tillPressure(material, c, u);
-        //        fprintf(stderr, "a= %15.7E ua= %15.7E b= %15.7E ub= %15.7E c= %15.7E uc= %15.7E\n",a,ua,b,ub,c,uc);
-        if (Pc < P)
-        {
-            a = c;
-            Pa = Pc;
-        } else {
-            b = c;
-            Pb = Pc;
-        }
-    }
-
     return (c);
 }
 
