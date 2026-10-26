@@ -84,11 +84,10 @@ enum till_error_lookup
 
 #define TILL_N_MATERIAL_MAX 10
 
-/* Compile the code with a pressure cutoff at negative pressures in the expanded cold states. */
-#ifndef TILL_PRESS_NP
-#define TILL_PRESS_NP
-#endif
-
+/*
+ * Negative pressures are cut to zero in tillPressure, tillPressureSound and the derivatives (see
+ * tillPressureCore in tillotson.c). The *NP functions return the raw EOS.
+ */
 /* The look up table is a 1D array with Lookup(i, j) = Lookup[i*nTableV + j], i in rho, j in s. */
 #define TILL_INDEX(m, i, j) (((i)*(m)->nTableV) + (j))
 
@@ -190,13 +189,15 @@ void tilliMatString(TILLMATERIAL *material, char *MatName);
 void tillErrorString(int iError, char *ErrorString);
 void tillPrintMat(TILLMATERIAL *material, FILE *fp);
 
-/* Pressure and sound speed. tillPressureSoundNP applies no pressure cutoff (used for inversions). */
-double tillPressureSoundNP(TILLMATERIAL *material, double rho, double u, double *pcSound);
+/* Pressure, sound speed and derivatives of the cut EOS (negative pressures set to zero). */
 double tillPressureSound(TILLMATERIAL *material, double rho, double u, double *pcSound);
 double tillPressure(TILLMATERIAL *material, double rho, double u);
 double tillSoundSpeed(TILLMATERIAL *material, double rho, double u);
 double tilldPdrho(TILLMATERIAL *material, double rho, double u);
 double tilldPdu(TILLMATERIAL *material, double rho, double u);
+/* The raw EOS without cutoff (used for inversions). */
+double tillPressureSoundNP(TILLMATERIAL *material, double rho, double u, double *pcSound);
+double tillPressureNP(TILLMATERIAL *material, double rho, double u);
 double tilldudrho(TILLMATERIAL *material, double rho, double u);
 double tilldudlogrho(TILLMATERIAL *material, double logrho, double u);
 

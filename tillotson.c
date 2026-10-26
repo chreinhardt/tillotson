@@ -24,8 +24,7 @@
 #include <stdio.h>
 #include "tillotson.h"
 
-/* This will cut the pressure in the cold expanded states for rho/rho0 < 0.8 as suggested in Melosh1989. */
-//#define TILL_PRESS_MELOSH
+/* Compile with -DTILL_PRESS_MELOSH to cut the cold term for rho/rho0 < 0.8 (Melosh 1989) instead of where it is negative. */
 
 /*
  * Initialize a material from the Tillotson library
@@ -339,296 +338,172 @@ void tillPrintMat(TILLMATERIAL *material, FILE *fp)
 }
 
 /*
- * Calculate the pressure and sound speed from the Tillotson EOS for a material. Set pcSound = NULL
- * to only calculate the pressure forces.
+ * The Tillotson EOS: pressure, sound speed and the derivatives dP/drho (u = const) and dP/du
+ * (rho = const), evaluated consistently in one place.
  *
- * Note: tillPressureSoundNP does not pressure or sound speed correction. In most cases we suggest
- *       using tillPressureSound (e.g., in a hydro code).
+ * Regions (Benz & Asphaug 1999):
+ *   condensed (rho >= rho0) and expanded cold (rho < rho0, u < us):   P = Pc
+ *   expanded hot (rho < rho0, u > us2):                                P = Pe
+ *   intermediate (rho < rho0, us <= u <= us2):                         P = (1-y) Pc + y Pe
+ *
+ * Pressure cutoff (bClip != 0, the library default): the cold term Pc is set to zero where it is
+ * negative (expanded cold states in tension), and the final pressure is cut at zero as well. The
+ * derivatives are those of the cut pressure, i.e. zero where the cutoff is active, and the sound
+ * speed c^2 = (dP/drho)_u + P/rho^2 (dP/du)_rho is floored at the bulk sound speed sqrt(A/rho0).
+ * With TILL_PRESS_MELOSH the cold term is cut for rho/rho0 < 0.8 as suggested by Melosh (1989)
+ * instead.
+ *
+ * bClip == 0 (tillPressureNP, tillPressureSoundNP) leaves the cold region raw, including negative
+ * pressures, and applies no final cut; this is what the inversion tillRhoPTemp needs because the
+ * raw P(rho) at fixed T is monotonic where the cut one is flat. The cut of Pc inside the
+ * intermediate blend is kept in both modes (see below).
+ *
+ * Any of pcSound, pdPdrho and pdPdu may be NULL.
  */
-double tillPressureSoundNP(TILLMATERIAL *material, double rho, double u, double *pcSound)
+static double tillPressureCore(TILLMATERIAL *material, double rho, double u, int bClip,
+                               double *pcSound, double *pdPdrho, double *pdPdu)
 {
+    const double rho0 = material->rho0, A = material->A, B = material->B;
+    const double a = material->a, b = material->b, u0 = material->u0;
+    const double alpha = material->alpha, beta = material->beta;
+    double eta, mu, z, w0, ex;
+    double Pc = 0.0, Pe = 0.0, dPcdrho = 0.0, dPedrho = 0.0, dPcdu = 0.0, dPedu = 0.0;
+    double P, c2, dPdrho, dPdu, y;
+    int bCold, bHot;
 
-    double eta, mu;
-    double Pc, Pe;
-    double c2c, c2e;
-    double Gammac, Gammae, w0, y, z;
-
-    eta = rho/material->rho0;
+    eta = rho/rho0;
     mu = eta - 1.0;
     z = (1.0 - eta)/eta;
-    w0 = u/(material->u0*eta*eta)+1.0;
+    w0 = u/(u0*eta*eta) + 1.0;
 
-    /*
-     *  Here we evaluate, which part of the equation of state we need.
-     */
-    if (rho >= material->rho0 || u < material->us) {
-        /*
-         *  Condensed states (rho > rho0) or expanded cold states.
-         */
-        Gammac = material->a + material->b/w0;
-        Pc = Gammac*u*rho + material->A*mu + material->B*mu*mu;
+    bCold = (rho >= rho0 || u < material->us);  /* Pc only */
+    bHot = (!bCold && u > material->us2);        /* Pe only */
 
-        if (pcSound != NULL)
-        {
-            /* Calculate the sound speed. */
-            c2c =material->a*u+material->b*u/(w0*w0)*(3.0*w0-2.0)+(material->A+2.0*material->B*mu)/material->rho0 + Pc/(rho*rho)*(material->a*rho+material->b*rho/(w0*w0));
-            *pcSound = sqrt(c2c);
-        }
-        return (Pc);
-    } else if (u > material->us2) {
-        /*
-         * Expanded hot states (rho < rho0 and u > us2).
-         */
-        Gammae = material->a + material->b/w0*exp(-material->beta*z*z);
-        Pe = Gammae*u*rho + material->A*mu*exp(-(material->alpha*z+material->beta*z*z));
+    /* Cold term Pc: needed in the cold and the intermediate region. */
+    if (!bHot) {
+        double Gammac = a + b/w0;
+        int bCut = 0;
 
-        if (pcSound != NULL)
-        {
-            /* calculate the sound speed */
-            c2e = (Gammae+1.0)*Pe/rho + material->A/material->rho0*exp(-(material->alpha*z+material->beta*z*z))*(1.0+mu/(eta*eta)*(material->alpha+2.0*material->beta*z-eta)) + material->b*rho*u/(w0*w0*eta*eta)*exp(-material->beta*z*z)*(2.0*material->beta*z*w0/material->rho0+1.0/(material->u0*rho)*(2.0*u-Pe/rho));
-
-            *pcSound = sqrt(c2e);
-        }
-
-        return (Pe);
-    } else {
-        /*
-         *  intermediate states (rho < rho0 and us < u < us2)
-         */
-        y = (u - material->us)/(material->us2 - material->us);
-
-        Gammac = material->a + material->b/w0;
-        Pc = Gammac*u*rho + material->A*mu + material->B*mu*mu;
-        Gammae = material->a + material->b/w0*exp(-material->beta*z*z);
-        Pe = Gammae*u*rho + material->A*mu*exp(-(material->alpha*z+material->beta*z*z));
+        Pc = Gammac*u*rho + A*mu + B*mu*mu;
 
         /*
-         * Set Pc to zero if it is negative so it does not contribute to the pressure in the
-         * expanded, intermediate states.
+         * The cut of the cold term is applied in the intermediate region in both modes: there Pc
+         * only serves as the lower end of the blend and a negative value has no meaning. Only the
+         * pure cold region is left raw for the inversions.
          */
+        if (bClip || !bCold) {
 #ifdef TILL_PRESS_MELOSH
-        if (eta < 0.8)
-        {
+            bCut = (eta < 0.8);
+#else
+            bCut = (Pc < 0.0);
+#endif
+        }
+        if (bCut) {
             Pc = 0.0;
+            dPcdrho = 0.0;
+            dPcdu = 0.0;
+        } else {
+            dPcdrho = a*u + b*u/(w0*w0)*(3.0*w0 - 2.0) + (A + 2.0*B*mu)/rho0;
+            dPcdu = a*rho + b*rho/(w0*w0);
         }
-#endif
-#ifdef TILL_PRESS_NP
-        if (Pc < 0.0) Pc = 0.0;
-#endif
-        if (pcSound != NULL)
-        {
-            /* calculate the sound speed */
-            c2c =material->a*u+material->b*u/(w0*w0)*(3.0*w0-2.0)+(material->A+2.0*material->B*mu)/material->rho0 + Pc/(rho*rho)*(material->a*rho+material->b*rho/(w0*w0));
-            c2e = (Gammae+1.0)*Pe/rho + material->A/material->rho0*exp(-(material->alpha*z+material->beta*z*z))*(1.0+mu/(eta*eta)*(material->alpha+2.0*material->beta*z-eta)) + material->b*rho*u/(w0*w0*eta*eta)*exp(-material->beta*z*z)*(2.0*material->beta*z*w0/material->rho0+1.0/(material->u0*rho)*(2.0*u-Pe/rho));
-
-            *pcSound = sqrt(c2c*(1.0-y)+c2e*y);
-        }
-
-        return (Pc*(1.0-y)+Pe*y);
     }
-}
 
-/*
- * Calculate the pressure and sound speed from the Tillotson EOS for a material. Set pcSound = NULL
- * to only calculate the pressure forces.
- */
-double tillPressureSound(TILLMATERIAL *material, double rho, double u, double *pcSound)
-{
+    /* Expanded term Pe: needed in the hot and the intermediate region. */
+    if (!bCold) {
+        double Gammae;
 
-    double eta, mu;
-    double Pc, Pe;
-    double c2c, c2e;
-    double Gammac, Gammae, w0, y, z;
-
-    eta = rho/material->rho0;
-    mu = eta - 1.0;
-    z = (1.0 - eta)/eta;
-    w0 = u/(material->u0*eta*eta)+1.0;
-
-    /*
-     *  Here we evaluate, which part of the equation of state we need.
-     */
-    if (rho >= material->rho0 || u < material->us) {
+        ex = exp(-(alpha*z + beta*z*z));
+        Gammae = a + b/w0*exp(-beta*z*z);
+        Pe = Gammae*u*rho + A*mu*ex;
         /*
-         *  Condensed states (rho > rho0) or expanded cold states.
+         * With z = 1/eta - 1: dz/deta = -1/eta^2, dw0/deta = -2(w0-1)/eta, so
+         * d/deta [mu exp(-(alpha z + beta z^2))] = exp(...) (1 + mu (alpha + 2 beta z)/eta^2).
+         * (The previous expression had a spurious "- eta" inside the bracket.)
          */
-        Gammac = material->a + material->b/w0;
-        Pc = Gammac*u*rho + material->A*mu + material->B*mu*mu;
-
-#ifdef TILL_PRESS_MELOSH
-        /* Melosh 1989 suggests to cut the pressure in the expanded cold states for rho/rho < 0.8 */
-        if (eta < 0.8)
-        {
-            Pc = 0.0;
-        }
-#endif
-#ifdef TILL_PRESS_NP
-        /* The pressure is set to zero if it becomes negative. */
-        if (Pc < 0.0) Pc = 0.0;
-#endif
-        if (pcSound != NULL)
-        {
-            /* Calculate the sound speed. */
-            //			c2c = (Gammac+1.0)*Pc/rho + (material->A+material->B*(eta*eta-1.0))/rho + material->b/(w0*w0)*(w0-1.0)*(2*u-Pc/rho);
-            // Altough for P > 0 the two expressions are the same, for P=0 this gives a bigger sound speed.
-            c2c =material->a*u+material->b*u/(w0*w0)*(3.0*w0-2.0)+(material->A+2.0*material->B*mu)/material->rho0 + Pc/(rho*rho)*(material->a*rho+material->b*rho/(w0*w0));
-            /*
-             * Set the minimum sound speed to the uncompressed bulk sound speed to avoid issues when P<0.
-             */
-            c2c = MAX(c2c, material->A/material->rho0);
-            *pcSound = sqrt(c2c);
-        }
-        return (Pc);
-    } else if (u > material->us2) {
-        /*
-         * Expanded hot states (rho < rho0 and u > us2).
-         */
-        Gammae = material->a + material->b/w0*exp(-material->beta*z*z);
-        Pe = Gammae*u*rho + material->A*mu*exp(-(material->alpha*z+material->beta*z*z));
-
-        if (pcSound != NULL)
-        {
-            /* calculate the sound speed */
-            c2e = (Gammae+1.0)*Pe/rho + material->A/material->rho0*exp(-(material->alpha*z+material->beta*z*z))*(1.0+mu/(eta*eta)*(material->alpha+2.0*material->beta*z-eta)) + material->b*rho*u/(w0*w0*eta*eta)*exp(-material->beta*z*z)*(2.0*material->beta*z*w0/material->rho0+1.0/(material->u0*rho)*(2.0*u-Pe/rho));
-            c2e = MAX(c2e, material->A/material->rho0);
-            *pcSound = sqrt(c2e);
-        }
-
-        return (Pe);
-    } else {
-        /*
-         *  intermediate states (rho < rho0 and us < u < us2)
-         */
-        y = (u - material->us)/(material->us2 - material->us);
-
-        Gammac = material->a + material->b/w0;
-        Pc = Gammac*u*rho + material->A*mu + material->B*mu*mu;
-        Gammae = material->a + material->b/w0*exp(-material->beta*z*z);
-        Pe = Gammae*u*rho + material->A*mu*exp(-(material->alpha*z+material->beta*z*z));
-
-#ifdef TILL_PRESS_MELOSH
-        /* Melosh 1989 suggests to cut the pressure in the expanded cold states for rho/rho < 0.8 */
-        if (eta < 0.8)
-        {
-            Pc = 0.0;
-        }
-#endif
-#ifdef TILL_PRESS_NP
-        /* The pressure is set to zero if it becomes negative. */
-        if (Pc < 0.0) Pc = 0.0;
-#endif
-
-        if (pcSound != NULL)
-        {
-            /* calculate the sound speed */
-            c2c =material->a*u+material->b*u/(w0*w0)*(3.0*w0-2.0)+(material->A+2.0*material->B*mu)/material->rho0 + Pc/(rho*rho)*(material->a*rho+material->b*rho/(w0*w0));
-            c2e = (Gammae+1.0)*Pe/rho + material->A/material->rho0*exp(-(material->alpha*z+material->beta*z*z))*(1.0+mu/(eta*eta)*(material->alpha+2.0*material->beta*z-eta)) + material->b*rho*u/(w0*w0*eta*eta)*exp(-material->beta*z*z)*(2.0*material->beta*z*w0/material->rho0+1.0/(material->u0*rho)*(2.0*u-Pe/rho));
-
-            *pcSound = c2c*(1.0-y)+c2e*y;
-            *pcSound = sqrt(MAX(*pcSound, material->A/material->rho0));
-        }
-
-        return (Pc*(1.0-y)+Pe*y);
+        dPedrho = (a + b/w0*exp(-beta*z*z)*(2.0*beta*z/eta + 3.0 - 2.0/w0))*u
+                + A/rho0*ex*(1.0 + mu/(eta*eta)*(alpha + 2.0*beta*z));
+        dPedu = (a + b/(w0*w0)*exp(-beta*z*z))*rho;
     }
-}
 
-/* 
- * Calculate the pressure from the Tillotson EOS for a material.
- */
-double tillPressure(TILLMATERIAL *material, double rho, double u)
-{
-    double P = tillPressureSound(material, rho, u, NULL);
+    /* Combine. */
+    if (bCold) {
+        P = Pc; dPdrho = dPcdrho; dPdu = dPcdu;
+    } else if (bHot) {
+        P = Pe; dPdrho = dPedrho; dPdu = dPedu;
+    } else {
+        /* y depends on u, which contributes (Pe - Pc) dy/du to dP/du. */
+        y = (u - material->us)/(material->us2 - material->us);
+        P = (1.0 - y)*Pc + y*Pe;
+        dPdrho = (1.0 - y)*dPcdrho + y*dPedrho;
+        dPdu = (1.0 - y)*dPcdu + y*dPedu + (Pe - Pc)/(material->us2 - material->us);
+    }
 
-#ifdef TILL_PRESS_NP
-    /* Make a pressure cut off, if P < 0. */
-    if (P < 0.0 ) P = 0.0;
-#endif
+    /* Final cutoff of the total pressure (can act in the hot and intermediate region). */
+    if (bClip && P < 0.0) {
+        P = 0.0;
+        dPdrho = 0.0;
+        dPdu = 0.0;
+    }
+
+    if (pcSound != NULL) {
+        /* c^2 = (dP/drho)_s = (dP/drho)_u + P/rho^2 (dP/du)_rho, from the derivatives above. */
+        c2 = dPdrho + P/(rho*rho)*dPdu;
+        /* Floor at the bulk sound speed of the uncompressed material (always with the cutoff). */
+        c2 = bClip ? MAX(c2, A/rho0) : MAX(c2, 0.0);
+        *pcSound = sqrt(c2);
+    }
+    if (pdPdrho != NULL) *pdPdrho = dPdrho;
+    if (pdPdu != NULL) *pdPdu = dPdu;
 
     return P;
 }
 
-/*
- * Calculate dP/drho at u=const.
- */
-double tilldPdrho(TILLMATERIAL *material, double rho, double u)
+/* Pressure and sound speed with the pressure cutoff. Set pcSound = NULL for the pressure only. */
+double tillPressureSound(TILLMATERIAL *material, double rho, double u, double *pcSound)
 {
-    double eta, mu;
-    double dPcdrho, dPedrho;
-    double w0, y, z;
-
-    eta = rho/material->rho0;
-    mu = eta - 1.0;
-    z = (1.0 - eta)/eta;
-    w0 = u/(material->u0*eta*eta)+1.0;
-
-    /*
-     * Here we evaluate, which part of the equation of state we need.
-     */
-    if (rho >= material->rho0 || u < material->us) {
-        /*
-         * Condensed (rho > rho0) or cold expanded states (rho < rho0 and u < us).
-         */
-        dPcdrho = material->a*u + material->b*u/(w0*w0)*(3.0*w0-2.0) + (material->A+2.0*material->B*mu)/material->rho0;
-
-        return (dPcdrho);
-    } else if (u > material->us2) {
-        /*
-         * Expanded hot states (rho < rho0 and u > us2).
-         */
-        dPedrho = (material->a + material->b/w0*exp(-material->beta*z*z)*(2.0*material->beta*z/eta+3.0-2.0/w0))*u+material->A/material->rho0*exp(-(material->alpha*z+material->beta*z*z))*(1.0+mu/(eta*eta)*(material->alpha+2.0*material->beta*z-eta));		
-        return (dPedrho);
-    } else {
-        /*
-         *  Intermediate states (rho < rho0 and us < u < us2).
-         */
-        y = (u - material->us)/(material->us2 - material->us);
-
-        dPcdrho = material->a*u + material->b*u/(w0*w0)*(3.0*w0-2.0) + (material->A+2.0*material->B*mu)/material->rho0;
-        dPedrho = (material->a + material->b/w0*exp(-material->beta*z*z)*(2.0*material->beta*z/eta+3.0-2.0/w0))*u+material->A/material->rho0*exp(-(material->alpha*z+material->beta*z*z))*(1.0+mu/(eta*eta)*(material->alpha+2.0*material->beta*z-eta));		
-        return (dPcdrho*(1.0-y)+dPedrho*y);
-    }
+    return tillPressureCore(material, rho, u, 1, pcSound, NULL, NULL);
 }
 
-/*
- * Calculate dP/du at rho=const.
- */
+/* Pressure and sound speed of the raw EOS (no cutoff, no sound speed floor). */
+double tillPressureSoundNP(TILLMATERIAL *material, double rho, double u, double *pcSound)
+{
+    return tillPressureCore(material, rho, u, 0, pcSound, NULL, NULL);
+}
+
+double tillPressure(TILLMATERIAL *material, double rho, double u)
+{
+    return tillPressureCore(material, rho, u, 1, NULL, NULL, NULL);
+}
+
+double tillPressureNP(TILLMATERIAL *material, double rho, double u)
+{
+    return tillPressureCore(material, rho, u, 0, NULL, NULL, NULL);
+}
+
+double tillSoundSpeed(TILLMATERIAL *material, double rho, double u)
+{
+    double c;
+
+    tillPressureCore(material, rho, u, 1, &c, NULL, NULL);
+    return c;
+}
+
+/* dP/drho at u = const, of the cut pressure. */
+double tilldPdrho(TILLMATERIAL *material, double rho, double u)
+{
+    double dPdrho;
+
+    tillPressureCore(material, rho, u, 1, NULL, &dPdrho, NULL);
+    return dPdrho;
+}
+
+/* dP/du at rho = const, of the cut pressure. */
 double tilldPdu(TILLMATERIAL *material, double rho, double u)
 {
-    double eta;
-    double dPcdu, dPedu;
-    double w0, y, z;
+    double dPdu;
 
-    eta = rho/material->rho0;
-    z = (1.0 - eta)/eta;
-    w0 = u/(material->u0*eta*eta)+1.0;
-
-    /*
-     *  Here we evaluate, which part of the equation of state we need.
-     */
-    if (rho >= material->rho0 || u < material->us) {
-        /*
-         * Condensed (rho > rho0) or cold expanded states (rho < rho0 and u < us).
-         */
-        dPcdu = material->a*rho + material->b*rho/(w0*w0);
-
-        return (dPcdu);
-    } else if (u > material->us2) {
-        /*
-         * Expanded hot states (rho < rho0 and u > us2).
-         */
-        dPedu = (material->a + material->b/(w0*w0)*exp(-material->beta*z*z))*rho;		
-        return (dPedu);
-    } else {
-        /*
-         * Intermediate states (rho < rho0 and us < u < us2).
-         */
-        y = (u - material->us)/(material->us2 - material->us);
-
-        dPcdu = material->a*rho + material->b*rho/(w0*w0);
-        dPedu = (material->a + material->b/(w0*w0)*exp(-material->beta*z*z))*rho;		
-
-        return (dPcdu*(1.0-y)+dPedu*y);
-    }
+    tillPressureCore(material, rho, u, 1, NULL, NULL, &dPdu);
+    return dPdu;
 }
 
 /*
@@ -755,17 +630,6 @@ double tillRhoPTemp(TILLMATERIAL *material, double P, double T)
         TILL_FAIL_RETURN(TILL_SENTINEL, "tillRhoPTemp: root finder did not converge (P= %g, T= %g).\n", P, T);
 
     return rho;
-}
-
-/*
- * Calculate sound speed for a material.
- */
-double tillSoundSpeed(TILLMATERIAL *material, double rho, double u)
-{
-    double c;
-
-    tillPressureSound(material, rho, u, &c);
-    return (c);
 }
 
 /*
