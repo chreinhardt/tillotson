@@ -138,172 +138,170 @@ double tillSplineIntU1(TILLMATERIAL *material, double s, int i)
 }
 
 /*
- * Do a bicubic spline interpolation in logrho and v.
- *
- * The variables are:
- *
- * u[0] = u(v,0)
- * u[1] = u(v,1)
- * dudlogrho[0] = dudlogrho(v,0)
- * dudlogrho[1] = dudlogrho(v,1)
- * dudv[0] = dudv(v,0)
- * dudv[1] = dudv(v,1)
- * dudvdlogrho[0] = dudvdlogrho(v,0)
- * dudvdlogrho[1] = dudvdlogrho(v,1)
- *
- * where v is interpolated between vj and vj+1 using a cubic spline.
+ * Cubic Hermite interpolation between (y0, d0) at e = 0 and (y1, d1) at e = 1, where the
+ * derivatives d are with respect to the full interval dx. Returns the value; if pdy is not NULL
+ * the derivative with respect to e/dx is stored there.
  */
-void cubicint(double u[2],double dudlogrho[2], double dudv[2], double dudvdlogrho[2],
-              double logrho[2], double logrhoint, double *intvalues) {
-	double dx, e, e1;
-	double ce[4];
+static inline double tillHermite(double y0, double y1, double d0, double d1, double dx, double e, double *pdy)
+{
+    const double e1 = e - 1.0;
+    const double h00 = (2.0*e + 1.0)*e1*e1;     /* 1 - 3e^2 + 2e^3 */
+    const double h10 = e*e1*e1;                 /* e - 2e^2 + e^3 */
+    const double h01 = e*e*(3.0 - 2.0*e);
+    const double h11 = e*e*e1;
 
-	assert(intvalues != NULL);
+    if (pdy != NULL) {
+        *pdy = (6.0*e*e1*(y0 - y1)/dx) + (3.0*e*e - 4.0*e + 1.0)*d0 + (3.0*e*e - 2.0*e)*d1;
+    }
+    return h00*y0 + h10*d0*dx + h01*y1 + h11*d1*dx;
+}
 
-	dx = logrho[1] - logrho[0];
-	e = (logrhoint - logrho[0])/dx;
-	e1 = e - 1;
-
-	// these are the 4 Hermite functions
-	ce[0] = (2*e + 1)*e1*e1;
-	ce[1] = e*e1*e1;
-	ce[2] = e*e*(3 - 2*e);
-	ce[3] = e*e*e1;
-
-	/*
-	**    = ce[0]*u(v,0) + ce[1]*dudlogrho(v,0)*dx + ce[2]*u(v,1) + ce[3]*dudlogrho(v,1);
-	** the above is written as 4 independent spline lookups in the table v lies between some j and j+1
-	*/
-	intvalues[0] = (ce[0]*u[0] + ce[1]*dudlogrho[0]*dx + ce[2]*u[1] + ce[3]*dudlogrho[1]*dx);
-	intvalues[1] = (ce[0]*dudv[0] + ce[1]*dudvdlogrho[0]*dx + ce[2]*dudv[1] + ce[3]*dudvdlogrho[1]*dx);
+/* Position of logrho in the rho grid: interval i and fraction e in [0, 1] (clamped at the edges). */
+void tillLocateRho(TILLMATERIAL *material, double rho, int *pi, double *pe)
+{
+    const double logrho = log(rho);
+    int i = tillLookupIndexLogRho(material, logrho);
+    *pi = i;
+    *pe = (logrho - tillLookupLogRho(material, i))/material->dlogrho;
 }
 
 /*
- * Use cubicint to interpolate u for a given rho and v.
- *
- * Note: We do a transformation of variables. The actual interpolation is done in logrho.
+ * u(rho, s_j) on a grid line of the table: Hermite interpolation in logrho between the rows i
+ * and i+1 with the tabulated u1 = du/dlogrho. No spline in s is needed on a grid line. Used for
+ * the cold curve (j = 0), the upper edge of the table and for bracketing in s.
  */
-double tillCubicInt(TILLMATERIAL *material, double rhoint, double vint) {
-	double dv, A, B;
-	int i, j;
-	double *u, *dudlogrho, *dudv, *dudvdlogrho, *logrho, *intvalues;
-    double logrhoint;
-	double uint;
+double tillCubicIntGrid(TILLMATERIAL *material, int i, double e, int j)
+{
+    const TILL_LOOKUP_ENTRY *p0 = &material->Lookup[TILL_INDEX(material, i, j)];
+    const TILL_LOOKUP_ENTRY *p1 = &material->Lookup[TILL_INDEX(material, i+1, j)];
 
-    /* Transform from rho to logrho. */
-    logrhoint = log(rhoint);
+    return tillHermite(p0->u, p1->u, p0->u1, p1->u1, material->dlogrho, e, NULL);
+}
 
-	/* Allocate memory */
-	u = malloc(2*sizeof(double));
-	dudlogrho = malloc(2*sizeof(double));
-	dudv = malloc(2*sizeof(double));
-	dudvdlogrho = malloc(2*sizeof(double));
-	logrho = malloc(2*sizeof(double));
+/*
+ * Cubic spline interpolation in s along row i of the field at offY (second derivatives at offY2),
+ * with the derivative d/ds if pdy is not NULL. s must be inside the table (the interval index is
+ * clamped).
+ */
+static inline double tillSplineIntFieldD(TILLMATERIAL *material, double s, int i, size_t offY, size_t offY2, double *pdy)
+{
+    const double h = material->dv;
+    const TILL_LOOKUP_ENTRY *row = &material->Lookup[TILL_INDEX(material, i, 0)];
+    const int klo = tillLookupIndexV(material, s);
+    const double a = ((klo+1)*h - s)/h, b = 1.0 - a;
+#define TILL_FIELD(entry, off) (*(const double *)((const char *)&(entry) + (off)))
+    const double ylo = TILL_FIELD(row[klo], offY), yhi = TILL_FIELD(row[klo+1], offY);
+    const double y2lo = TILL_FIELD(row[klo], offY2), y2hi = TILL_FIELD(row[klo+1], offY2);
+#undef TILL_FIELD
 
-	intvalues = malloc(4*sizeof(double));
+    if (pdy != NULL) {
+        *pdy = (yhi - ylo)/h - (3.0*a*a - 1.0)/6.0*h*y2lo + (3.0*b*b - 1.0)/6.0*h*y2hi;
+    }
+    return a*ylo + b*yhi + ((a*a*a - a)*y2lo + (b*b*b - b)*y2hi)*(h*h)/6.0;
+}
 
-    /*
-     * Obtain the index i so that log(rho_i) and log(rho_i+1) bracket rho.
-     */
-	i = tillLookupIndexLogRho(material, logrhoint);
+/*
+ * Interpolate u(rho, s) in the table: cubic splines in s along the two bracketing rows for u and
+ * u1 = du/dlogrho, then cubic Hermite interpolation in logrho between the rows. If pduds is not
+ * NULL, du/ds is returned as well (needed by the root finder).
+ *
+ * rho and s must be inside the table; the callers check this.
+ */
+double tillCubicIntD(TILLMATERIAL *material, double rho, double s, double *pduds)
+{
+    const size_t offU = offsetof(TILL_LOOKUP_ENTRY, u), offU2 = offsetof(TILL_LOOKUP_ENTRY, udv2);
+    const size_t offU1 = offsetof(TILL_LOOKUP_ENTRY, u1), offU12 = offsetof(TILL_LOOKUP_ENTRY, u1dv2);
+    double u0, u1, d0, d1, e;
+    int i;
 
-	// vint is between s[j] and s[j+1] (vint is the table variable s)
-	j = tillLookupIndexV(material, vint);
+    tillLocateRho(material, rho, &i, &e);
 
-	// dv = v[j+1]-v[j]
-	// Uniform steps in v
-	dv = material->dv;
+    if (pduds == NULL) {
+        u0 = tillSplineIntFieldD(material, s, i, offU, offU2, NULL);
+        u1 = tillSplineIntFieldD(material, s, i+1, offU, offU2, NULL);
+        d0 = tillSplineIntFieldD(material, s, i, offU1, offU12, NULL);
+        d1 = tillSplineIntFieldD(material, s, i+1, offU1, offU12, NULL);
+        return tillHermite(u0, u1, d0, d1, material->dlogrho, e, NULL);
+    } else {
+        /* d/ds of the Hermite is the Hermite of the d/ds of its inputs (the weights depend on e only). */
+        double u0s, u1s, d0s, d1s;
+        u0 = tillSplineIntFieldD(material, s, i, offU, offU2, &u0s);
+        u1 = tillSplineIntFieldD(material, s, i+1, offU, offU2, &u1s);
+        d0 = tillSplineIntFieldD(material, s, i, offU1, offU12, &d0s);
+        d1 = tillSplineIntFieldD(material, s, i+1, offU1, offU12, &d1s);
+        *pduds = tillHermite(u0s, u1s, d0s, d1s, material->dlogrho, e, NULL);
+        return tillHermite(u0, u1, d0, d1, material->dlogrho, e, NULL);
+    }
+}
 
-	logrho[0] = tillLookupLogRho(material, i);
-	logrho[1] = tillLookupLogRho(material, i+1);
-
-	/* Do the spline look up in v. */
-	u[0] = tillSplineIntU(material, vint, i);
-	u[1] = tillSplineIntU(material, vint, i+1);
-
-	dudlogrho[0] = tillSplineIntU1(material, vint, i);
-	dudlogrho[1] = tillSplineIntU1(material, vint, i+1);
-
-	/*
-	** Calculate dudv from udv2
-	** dudv = (u[j+1]-u[j])/dv - (3.0*A*A-1.0)/6.0*dv*udv2[j] + (3.0*B*B-1.0)/6.0*dv*udv2[j+1]
-	**
-	** Calculate dudvdrho from u1dv2
-	** dudvdrho = (u1[j+1]-u1[j])/dv - (3.0*A*A-1.0)/6.0*dv*u1dv2[j] + (3.0*B*B-1.0)/6.0*dv*u1dv2[j+1]
-	*/
-
-	/* Calculate dudv from udv2 */
-	A = ((j+1)*material->dv-vint)/material->dv;
-	B = (vint-j*material->dv)/material->dv;
-	
-	dudv[0] = (material->Lookup[TILL_INDEX(material, i, j+1)].u-material->Lookup[TILL_INDEX(material, i, j)].u)/dv-(3.0*A*A-1.0)/6.0*dv*material->Lookup[TILL_INDEX(material, i, j)].udv2+(3.0*B*B-1.0)/6.0*dv*material->Lookup[TILL_INDEX(material, i, j+1)].udv2;
-	dudv[1] = (material->Lookup[TILL_INDEX(material, i+1, j+1)].u-material->Lookup[TILL_INDEX(material, i+1, j)].u)/dv-(3.0*A*A-1.0)/6.0*dv*material->Lookup[TILL_INDEX(material, i+1, j)].udv2+(3.0*B*B-1.0)/6.0*dv*material->Lookup[TILL_INDEX(material, i+1, j+1)].udv2;
-
-	/* Calculate dudvdlogrho from u1dv2 */
-	dudvdlogrho[0] = (material->Lookup[TILL_INDEX(material, i, j+1)].u1-material->Lookup[TILL_INDEX(material, i, j)].u1)/dv-(3.0*A*A-1.0)/6.0*dv*material->Lookup[TILL_INDEX(material, i, j)].u1dv2+(3.0*B*B-1.0)/6.0*dv*material->Lookup[TILL_INDEX(material, i, j+1)].u1dv2;
-	dudvdlogrho[1] = (material->Lookup[TILL_INDEX(material, i+1, j+1)].u1-material->Lookup[TILL_INDEX(material, i+1, j)].u1)/dv-(3.0*A*A-1.0)/6.0*dv*material->Lookup[TILL_INDEX(material, i+1, j)].u1dv2+(3.0*B*B-1.0)/6.0*dv*material->Lookup[TILL_INDEX(material, i+1, j+1)].u1dv2;
-
-	/*
-	 * Do the interpolation for u(i,v), u(i+1,v), udlogrho(i,v), udlogrho(i+1,v)
-	 */
-	cubicint(u, dudlogrho, dudv, dudvdlogrho, logrho, logrhoint, intvalues);
-	
-	uint = intvalues[0];
-
-	/* Free memory */
-	free(u);
-	free(dudlogrho);
-	free(dudv);
-	free(dudvdlogrho);
-	free(logrho);
-	free(intvalues);
-
-	return uint;
+double tillCubicInt(TILLMATERIAL *material, double rho, double s)
+{
+    return tillCubicIntD(material, rho, s, NULL);
 }
 
 double tillFindUonIsentrope(TILLMATERIAL *material, double s, double rho)
 {
-    return tillCubicInt(material, rho, s);
-}
-
-/* f(s) = u(rho, s) - u for the root finder in tillFindEntropyCurve. */
-struct tillEntropyCurveCtx { double rho; double u; };
-
-static double denergy(TILLMATERIAL *material, double s, const void *ctx)
-{
-    const struct tillEntropyCurveCtx *p = (const struct tillEntropyCurveCtx *) ctx;
-    return tillFindUonIsentrope(material, s, p->rho) - p->u;
+    return tillCubicIntD(material, rho, s, NULL);
 }
 
 /*
  * Find the isentrope through (rho, u): returns its table variable s, or TILL_SENTINEL if (rho, u)
  * is below the cold curve (s < 0) or above the table (s > s_max). iOrder is only used in messages.
+ *
+ * u(rho, s) is monotonically increasing in s, so the cell [s_j, s_j+1] containing the root is
+ * found by bisection on the grid lines (cheap Hermite evaluations), and the root inside the cell
+ * by a bisection-safeguarded Newton iteration on the full interpolant.
  */
 double tillFindEntropyCurve(TILLMATERIAL *material, double rho, double u, int iOrder)
 {
-    struct tillEntropyCurveCtx ctx;
-    const double s_max = tillLookupS(material, material->nTableV-1) - V_EPS;
-    double fa, fb, s;
+    const double h = material->dv;
+    const double utol = TILL_EDGE_TOL*(fabs(u) + 1.0);
+    double e, ulo, uhi, slo, shi, s, f, dfds;
+    int i, jlo, jhi, iter;
 
-    ctx.rho = rho;
-    ctx.u = u;
+    tillLocateRho(material, rho, &i, &e);
 
-    fa = denergy(material, 0.0, &ctx);
-    fb = denergy(material, s_max, &ctx);
+    jlo = 0;
+    jhi = material->nTableV - 1;
+    ulo = tillCubicIntGrid(material, i, e, jlo);
+    uhi = tillCubicIntGrid(material, i, e, jhi);
 
-    if (fa > 0.0)
+    if (u < ulo - utol)
         TILL_FAIL_RETURN(TILL_SENTINEL, "tillFindEntropyCurve: Particle %i (rho= %g, u= %g, iMat= %i) is below the cold curve.\n",
                          iOrder, rho, u, material->iMaterial);
-    if (fb < 0.0)
+    if (u > uhi + utol)
         TILL_FAIL_RETURN(TILL_SENTINEL, "tillFindEntropyCurve: Particle %i (rho= %g, u= %g, iMat= %i) is above the table.\n",
                          iOrder, rho, u, material->iMaterial);
 
-    /* s is O(1-10); 1e-10 in s is 1e-10 relative in v for v >> vmin. Brent converges superlinearly, so this costs little. */
-    if (tillBrent(denergy, material, &ctx, 0.0, s_max, fa, fb, 1e-10, 1e-10, 200, &s) != TILL_SUCCESS)
-        TILL_FAIL_RETURN(TILL_SENTINEL, "tillFindEntropyCurve: Particle %i (rho= %g, u= %g, iMat= %i): root finder failed.\n",
-                         iOrder, rho, u, material->iMaterial);
+    /* Bisection on the grid lines: u(s_jlo) <= u < u(s_jhi). */
+    while (jhi - jlo > 1) {
+        int jm = (jlo + jhi)/2;
+        double um = tillCubicIntGrid(material, i, e, jm);
+        if (u < um) { jhi = jm; uhi = um; } else { jlo = jm; ulo = um; }
+    }
 
-    return s;
+    slo = jlo*h;
+    shi = jhi*h;
+    /* Start from the linear estimate inside the cell. */
+    s = (uhi > ulo) ? slo + h*(u - ulo)/(uhi - ulo) : 0.5*(slo + shi);
+    s = fmin(fmax(s, slo), shi);
+
+    for (iter = 0; iter < 50; iter++) {
+        f = tillCubicIntD(material, rho, s, &dfds) - u;
+        if (fabs(f) <= utol) return s;
+        /* Shrink the bracket (u is increasing in s). */
+        if (f > 0.0) shi = s; else slo = s;
+        if (shi - slo <= 1e-12*(1.0 + s)) return 0.5*(slo + shi);
+        /* Newton step, bisection if it leaves the bracket or the slope is not positive. */
+        if (dfds > 0.0) {
+            double sn = s - f/dfds;
+            s = (sn > slo && sn < shi) ? sn : 0.5*(slo + shi);
+        } else {
+            s = 0.5*(slo + shi);
+        }
+    }
+    TILL_FAIL_RETURN(TILL_SENTINEL, "tillFindEntropyCurve: Particle %i (rho= %g, u= %g, iMat= %i): root finder did not converge.\n",
+                     iOrder, rho, u, material->iMaterial);
 }
 
 /*
@@ -356,7 +354,12 @@ double tillColdULookup(TILLMATERIAL *material, double rho)
         TILL_FAIL_RETURN(TILL_SENTINEL, "tillColdULookup: rho= %g outside of the lookup table (iMat= %i, rhomin= %g, rhomax= %g).\n",
                          rho, material->iMaterial, material->rhomin, material->rhomax);
 
-    return tillCubicInt(material, rho, 0.0);
+    {
+        double e;
+        int i;
+        tillLocateRho(material, rho, &i, &e);
+        return tillCubicIntGrid(material, i, e, 0);
+    }
 }
 
 /*

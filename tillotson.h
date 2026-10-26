@@ -118,8 +118,7 @@ enum till_error_lookup
 
 /*
  * One entry of the lookup table: the isentrope with label s_j = j*dv (v = u(rho0) = v(s_j)) at
- * rho_i = rhomin*exp(i*dlogrho). logrho and v are stored for diagnostics only; the interpolators
- * recompute them from the indices.
+ * rho_i = rhomin*exp(i*dlogrho); see tillLookupRho, tillLookupS, tillLookupV.
  */
 typedef struct till_lookup_entry
 {
@@ -131,8 +130,6 @@ typedef struct till_lookup_entry
      */
     double udv2;    // d2u/ds2
     double u1dv2;   // d2u1/ds2
-    double logrho;
-    double v;
 } TILL_LOOKUP_ENTRY;
 
 typedef struct tillMaterial
@@ -237,8 +234,12 @@ void tillInitSplineU1(TILLMATERIAL *material);
 double tillSplineIntU(TILLMATERIAL *material, double s, int i);
 double tillSplineIntU1(TILLMATERIAL *material, double s, int i);
 
+/* u(rho, s) from the table; tillCubicIntD also returns du/ds. rho and s must be inside the table. */
 double tillCubicInt(TILLMATERIAL *material, double rho, double s);
-void cubicint(double u[2],double dudlogrho[2], double dudv[2], double dudvdlogrho[2], double logrho[2], double logrhoint, double *intvalues);
+double tillCubicIntD(TILLMATERIAL *material, double rho, double s, double *pduds);
+/* u(rho, s_j) on grid line j for rho in interval i at fraction e (see tillLocateRho). */
+double tillCubicIntGrid(TILLMATERIAL *material, int i, double e, int j);
+void tillLocateRho(TILLMATERIAL *material, double rho, int *pi, double *pe);
 
 double tillFindUonIsentrope(TILLMATERIAL *material,double s,double rho);
 /* Returns the table variable s of the isentrope through (rho, u), or TILL_SENTINEL. */

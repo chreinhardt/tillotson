@@ -137,8 +137,6 @@ TILL_LOOKUP_ENTRY *tillSolveIsentropeLogRho(TILLMATERIAL *material, double v)
     assert(isentrope != NULL);
 
     i = material->n;
-    isentrope[i].logrho = logrho0;
-    isentrope[i].v = v;
     isentrope[i].u = v;
     isentrope[i].u1 = tilldudlogrho(material, logrho0, v);
 
@@ -156,8 +154,6 @@ TILL_LOOKUP_ENTRY *tillSolveIsentropeLogRho(TILLMATERIAL *material, double v)
         logrho = logrho0 + (i - material->n)*material->dlogrho;
 
         isentrope[i].u = u;
-        isentrope[i].logrho = logrho;
-        isentrope[i].v = v;
         isentrope[i].u1 = tilldudlogrho(material, logrho, u);
     }
 
@@ -174,8 +170,6 @@ TILL_LOOKUP_ENTRY *tillSolveIsentropeLogRho(TILLMATERIAL *material, double v)
         logrho = logrho0 - (material->n - i)*material->dlogrho;
 
         isentrope[i].u = u;
-        isentrope[i].logrho = logrho;
-        isentrope[i].v = v;
         isentrope[i].u1 = tilldudlogrho(material, logrho, u);
     }
 
@@ -236,9 +230,7 @@ double tillCalcU(TILLMATERIAL *material, double rho1, double u1, double rho2)
  */
 int tillIsInTable(TILLMATERIAL *material, double rho, double u)
 {
-    const double s_max = tillLookupS(material, material->nTableV-1);
-    const double s_eps = 0.1*material->dv;
-    double u1, u2, A;
+    double e, ulo, uhi, utol;
     int i;
 
     /* The table is closed at both ends with the tolerance TILL_EDGE_TOL (a NaN rho fails too). */
@@ -247,30 +239,15 @@ int tillIsInTable(TILLMATERIAL *material, double rho, double u)
     if (rho > material->rhomax*(1.0 + TILL_EDGE_TOL))
         return TILL_LOOKUP_OUTSIDE_RHOMAX;
 
-    /* rho_i and rho_i+1 bracket rho (the index is clamped to the last interval at the edges). */
-    i = tillLookupIndexLogRho(material, log(rho));
+    /* u on the cold curve (j = 0) and on the top row of the table at this rho. */
+    tillLocateRho(material, rho, &i, &e);
+    ulo = tillCubicIntGrid(material, i, e, 0);
+    uhi = tillCubicIntGrid(material, i, e, material->nTableV-1);
+    utol = TILL_EDGE_TOL*(fabs(u) + 1.0);
 
-    /*
-     * Check if s(rho, u) < s_max. This requires interpolation. Currently we do a linear
-     * interpolation between u(i,N-1) and u(i+1,N-1) to obtain umax(rho). There are certainly more
-     * sophisticated methods but this one should be quick and reliable. Note that eps=0.1*dv (in
-     * s) as for s close to s_max rounding errors can be problematic and cause problems with the
-     * root finder.
-     */
-    u1 = tillSplineIntU(material, s_max-s_eps, i);
-    u2 = tillSplineIntU(material, s_max-s_eps, i+1);
-
-    A = (tillLookupRho(material, i+1)-rho)/(tillLookupRho(material, i+1)-tillLookupRho(material, i));
-    A = MIN(MAX(A, 0.0), 1.0);
-
-    if (!(u < (A*u1 + (1.0-A)*u2)))
-    {
-        /* u(rho, s) is larger than u(rho, s_max) so the lookup table has to be extended (or u is NaN). */
+    if (!(u <= uhi + utol))        /* also NaN */
         return TILL_LOOKUP_OUTSIDE_VMAX;
-    }
-
-    /* Check if s(rho, u) >= 0 (so if u >= u(rho, 0)). */
-    if (u < tillCubicInt(material, rho, 0.0))
+    if (u < ulo - utol)
     {
 #ifdef TILL_VERBOSE
         fprintf(stderr, "tillIsInTable: Value (rho=%15.7E, u=%15.7E, iMat= %i) below the cold curve!\n", rho, u, material->iMaterial);
@@ -295,7 +272,7 @@ int tillIsBelowColdCurve(TILLMATERIAL *material, double rho, double u)
         TILL_FAIL_RETURN(TILL_FAIL, "tillIsBelowColdCurve: rho= %g outside of the lookup table (iMat= %i, rhomin= %g, rhomax= %g).\n",
                          rho, material->iMaterial, material->rhomin, material->rhomax);
 
-    if (u >= tillCubicInt(material, rho, 0.0)) {
+    if (u >= tillColdULookup(material, rho)) {
         iRet = 0;
     }
 
