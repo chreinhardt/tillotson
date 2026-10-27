@@ -30,6 +30,11 @@
  *          tillFindEntropyCurve and tillIsBelowColdCurve reject a non-finite u as well.
  *          tillLookupU clamps a state below the cold curve to u_cold(rho2) (counted in
  *          nLookupFail) instead of returning TILL_FAIL_VALUE, like ANEOSisentropicU.
+ *          No tolerance depends on the unit system: the energy tolerance of tillIsInTable and
+ *          tillFindEntropyCurve is TILL_EDGE_TOL*(|u| + vmin) (was |u| + 1 in code units), the
+ *          lower bracket of tillRhoPTemp is TILL_RHOPT_RHOMIN_FAC*rho0 (was 1e-10 code units), and
+ *          the index of rho0 in the rho grid no longer depends on roundoff in the unit conversion
+ *          (it was 799 instead of 800 in some unit systems, which changed the whole grid).
  */
 #define TILL_VERSION_TEXT    "4.0.0"
 #define TILL_VERSION_MAJOR   4
@@ -38,6 +43,7 @@
 
 #include <stdlib.h>
 #include <assert.h>
+#include <math.h>
 
 /*
  * Status codes (EOSlib convention: 0 is success, -99 a generic failure; the values -1..-4 are
@@ -89,6 +95,15 @@ static inline int tillFailed(double x) {
  */
 #ifndef TILL_EDGE_TOL
 #define TILL_EDGE_TOL 1e-10
+#endif
+
+/*
+ * Lower end of the density bracket of tillRhoPTemp in units of rho0 (the raw pressure diverges
+ * for rho -> 0 at u = 0). In units of rho0, so the inversion covers the same physical range in
+ * every unit system.
+ */
+#ifndef TILL_RHOPT_RHOMIN_FAC
+#define TILL_RHOPT_RHOMIN_FAC 1e-10
 #endif
 
 /*
@@ -243,6 +258,17 @@ typedef struct tillMaterial
 	/* Diagnostics: number of failed evaluations since init (see TILL_FAIL_RETURN). */
 	long nLookupFail;
 } TILLMATERIAL;
+
+/*
+ * Roundoff tolerance on an internal energy u (code units) at the table edges and in the isentrope
+ * root finder: relative to |u|, with the floor vmin = cv*TILL_TABLE_TMIN (the energy scale of the
+ * table, 1 K at rho0 for the standard table) instead of an absolute constant, so that the
+ * tolerance is the same physical energy in every unit system. Needs the table (vmin > 0).
+ */
+static inline double tillUTol(const TILLMATERIAL *material, double u)
+{
+    return TILL_EDGE_TOL*(fabs(u) + material->vmin);
+}
 
 /*
  * tillotson.c

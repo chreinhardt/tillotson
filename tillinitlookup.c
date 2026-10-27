@@ -55,8 +55,17 @@ void tillInitLookup(TILLMATERIAL *material, int nTableRho, int nTableV, double r
     assert(material->nTableRho > 0);
     assert(material->nTableV > 0);
 
-    /* Set dlogrho so that log(rho0) lies on the grid. */
-    material->n = floor((log(material->rho0)-log(material->rhomin))/(log(material->rhomax)-log(material->rhomin))*material->nTableRho);
+    /*
+     * Set dlogrho so that log(rho0) lies on the grid. The index of rho0 is the integer part of
+     * x = log(rho0/rhomin)/log(rhomax/rhomin)*nTableRho. For the standard table x is an integer
+     * (2/3*1200 = 800) and the logarithms of the code-unit densities make it 800 - 1e-13 in some
+     * unit systems: a plain floor then gives 799, a different grid (dlogrho, rhomax) and a
+     * different table. The roundoff slack makes the grid the same in every unit system.
+     */
+    {
+        const double x = (log(material->rho0)-log(material->rhomin))/(log(material->rhomax)-log(material->rhomin))*material->nTableRho;
+        material->n = (int) floor(x + 1e-9*(1.0 + x));
+    }
     assert(material->n >= 1 && material->n <= material->nTableRho-2);
     material->dlogrho = (log(material->rho0)-log(material->rhomin))/material->n;
 
@@ -274,7 +283,7 @@ int tillIsInTable(TILLMATERIAL *material, double rho, double u)
     tillLocateRho(material, rho, &i, &e);
     ulo = tillCubicIntGrid(material, i, e, 0);
     uhi = tillCubicIntGrid(material, i, e, material->nTableV-1);
-    utol = TILL_EDGE_TOL*(fabs(u) + 1.0);
+    utol = tillUTol(material, u);
 
     if (u > uhi + utol)
         return TILL_LOOKUP_OUTSIDE_VMAX;

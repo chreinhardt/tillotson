@@ -74,6 +74,81 @@ static void testUnits(int iMat)
     tillFinalizeMaterial(code);
 }
 
+/*
+ * The same physical states in three unit systems must give the same physical answers: cgs, Earth
+ * units (u ~ 1e-2..1e2 in code units) and a "heavy" system with GM/L ~ 1e18 erg/g, where code
+ * energies are ~1e-8 and code densities ~1e9 g/cc. No tolerance may be an absolute constant in
+ * code units. A reduced table with the physical parameters of the standard table keeps it fast.
+ */
+static void testUnitInvariance(int iMat)
+{
+    const double units[3][2] = {
+        {0.0, 0.0},                                         /* cgs */
+        {6.371e8/3.085678e21, 5.972e27/1.99e33},            /* Earth radius and mass */
+        {1.3e8/3.085678e21, 1.0},                           /* one solar mass in 1300 km: GM/L ~ 1e18 erg/g */
+    };
+    TILLMATERIAL *m[3];
+    int k, iu, nRhoPT = 0;
+    /* Own random stream, so that the samples of the other tests do not depend on this one. */
+    const unsigned long long rngSaved = rngState;
+    rngState = 0x9E3779B97F4A7C15ULL;
+
+    for (iu = 0; iu < 3; iu++) {
+        m[iu] = tillInitMaterial(iMat, units[iu][0], units[iu][1]);
+        tillInitLookup(m[iu], 300, 300, TILL_TABLE_RHOMIN_FAC*m[iu]->rho0, TILL_TABLE_RHOMAX_FAC*m[iu]->rho0,
+                       m[iu]->cv*TILL_TABLE_TMIN, m[iu]->cv*TILL_TABLE_TMAX);
+    }
+    CHECK(m[2]->dErgPerGmUnit > 1e17, "heavy unit system: dErgPerGmUnit= %g", m[2]->dErgPerGmUnit);
+    /* The same grid in every unit system: rho0 at the same index, the same spacing in log(rho) and s. */
+    for (iu = 1; iu < 3; iu++) {
+        CHECK(m[iu]->n == m[0]->n, "index of rho0 in unit system %d: %d vs %d", iu, m[iu]->n, m[0]->n);
+        CHECK_REL(m[iu]->dlogrho, m[0]->dlogrho, 1e-12, "dlogrho in unit system %d", iu);
+        CHECK_REL(m[iu]->rhomax*m[iu]->dGmPerCcUnit, m[0]->rhomax, 1e-12, "rhomax in unit system %d", iu);
+        CHECK_REL(m[iu]->dv, m[0]->dv, 1e-12, "dv in unit system %d", iu);
+    }
+
+    for (k = 0; k < 300; k++) {
+        /* A physical state (cgs) on the condensed or expanded side, and a target density. */
+        double rho_cgs = m[0]->rho0*lograndom(0.3, 3.0), T = lograndom(10.0, 3e4);
+        double u_cgs = tillURhoTemp(m[0], rho_cgs, T), rho2_cgs = rho_cgs*lograndom(0.5, 2.0);
+        double s[3], u2[3];
+        int st[3];
+
+        for (iu = 0; iu < 3; iu++) {
+            double rho = rho_cgs/m[iu]->dGmPerCcUnit, u = u_cgs/m[iu]->dErgPerGmUnit, rho2 = rho2_cgs/m[iu]->dGmPerCcUnit;
+            st[iu] = tillIsInTable(m[iu], rho, u);
+            s[iu] = (st[iu] == TILL_LOOKUP_SUCCESS) ? tillFindEntropyCurve(m[iu], rho, u, k) : 0.0;
+            u2[iu] = tillLookupU(m[iu], rho, u, rho2, k)*m[iu]->dErgPerGmUnit;
+        }
+        for (iu = 1; iu < 3; iu++) {
+            CHECK(st[iu] == st[0], "table status in unit system %d: %d vs %d (rho= %g u= %g)", iu, st[iu], st[0], rho_cgs, u_cgs);
+            /* s is dimensionless; the root finder converges to TILL_EDGE_TOL in u. */
+            CHECK(fabs(s[iu] - s[0]) <= 1e-8*(1.0 + s[0]), "isentrope label in unit system %d: %.12g vs %.12g (rho= %g T= %g)", iu, s[iu], s[0], rho_cgs, T);
+            CHECK_REL(u2[iu] + m[0]->vmin, u2[0] + m[0]->vmin, 1e-8, "isentrope lookup in unit system %d (rho= %g T= %g)", iu, rho_cgs, T);
+        }
+
+        /* rho(P, T) on the same physical bracket, also for strongly expanded states (down to 1e-3 rho0). */
+        {
+            double r_cgs = m[0]->rho0*lograndom(1e-3, 3.0);
+            double P_cgs = tillPressure(m[0], r_cgs, tillURhoTemp(m[0], r_cgs, T));
+            double r[3];
+            if (!(P_cgs > 0.0)) continue;
+            for (iu = 0; iu < 3; iu++) {
+                double rr = tillRhoPTemp(m[iu], P_cgs/(m[iu]->dGmPerCcUnit*m[iu]->dErgPerGmUnit), T);
+                r[iu] = tillFailed(rr) ? rr : rr*m[iu]->dGmPerCcUnit;
+            }
+            for (iu = 1; iu < 3; iu++) {
+                CHECK(tillFailed(r[iu]) == tillFailed(r[0]), "rho(P, T) fails in one unit system only (%d): rho= %g T= %g", iu, r_cgs, T);
+                if (!tillFailed(r[iu]) && !tillFailed(r[0])) CHECK_REL(r[iu], r[0], 1e-8, "rho(P, T) in unit system %d (rho= %g T= %g)", iu, r_cgs, T);
+            }
+            if (!tillFailed(r[0])) nRhoPT++;
+        }
+    }
+    CHECK(nRhoPT > 50, "enough rho(P, T) samples (%d)", nRhoPT);
+    for (iu = 0; iu < 3; iu++) tillFinalizeMaterial(m[iu]);
+    rngState = rngSaved;
+}
+
 static void testPressure(TILLMATERIAL *material)
 {
     const double cmin = sqrt(material->A/material->rho0);
@@ -272,8 +347,8 @@ static void testIsentropes(TILLMATERIAL *material)
         {
             double u = tillCubicInt(material, rho, s1);
             if (tillIsInTable(material, rho, u) == TILL_LOOKUP_SUCCESS)
-                /* The entropy solver converges to TILL_EDGE_TOL*(|u| + 1): relative 1e-8 plus absolute 1e-10. */
-                CHECK_REL(tillLookupU(material, rho, u, rho, k) + 1e-2, u + 1e-2, 1e-8, "lookup identity rho= %g", rho);
+                /* The entropy solver converges to tillUTol = TILL_EDGE_TOL*(|u| + vmin): relative, with the floor vmin. */
+                CHECK_REL(tillLookupU(material, rho, u, rho, k) + material->vmin, u + material->vmin, 1e-8, "lookup identity rho= %g", rho);
         }
     }
 }
@@ -383,6 +458,7 @@ int main(int argc, char **argv)
         fprintf(stdout, "Material %d (%s)\n", iMat, name);
 
         testUnits(iMat);
+        testUnitInvariance(iMat);
         testPressure(material);
 
         /* The standard table, as EOSlib initializes it. */

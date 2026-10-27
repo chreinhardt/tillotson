@@ -599,12 +599,13 @@ static double tillRhoPTempFunc(TILLMATERIAL *material, double rho, const void *c
  * Calculate rho(P,T) for a material by root finding on the uncut pressure (tillPressureSoundNP),
  * which is monotonic in rho at fixed T where (dP/drho)_T > 0.
  *
- * Returns TILL_FAIL_VALUE if P <= 0 or the root is not bracketed by [rho_min, 0.999*rhomax].
+ * Returns TILL_FAIL_VALUE if P <= 0 or the root is not bracketed by [rho_min, 0.999*rhomax], with
+ * rho_min = TILL_RHOPT_RHOMIN_FAC*rho0 (the same physical bracket in every unit system).
  */
 double tillRhoPTemp(TILLMATERIAL *material, double P, double T)
 {
     struct tillRhoPTempCtx ctx;
-    const double rho_min = 1e-10;               /* P diverges for rho = 0 and u = 0 */
+    const double rho_min = TILL_RHOPT_RHOMIN_FAC*material->rho0;   /* P diverges for rho = 0 and u = 0 */
     const double rho_max = 0.999*material->rhomax;
     double fa, fb, rho;
 

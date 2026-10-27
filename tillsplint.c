@@ -256,7 +256,7 @@ double tillFindUonIsentrope(TILLMATERIAL *material, double s, double rho)
 double tillFindEntropyCurve(TILLMATERIAL *material, double rho, double u, int iOrder)
 {
     const double h = material->dv;
-    const double utol = TILL_EDGE_TOL*(fabs(u) + 1.0);
+    const double utol = tillUTol(material, u);
     double e, ulo, uhi, slo, shi, s, f, dfds;
     int i, jlo, jhi, iter;
 
