@@ -444,6 +444,50 @@ static void testTable(TILLMATERIAL *material)
 #define TILL_TEST_LOOKUP_TOL 1e-3
 #endif
 
+/*
+ * The table nodes are integrated adaptively (TILL_ODE_RTOL). Against a fixed-step RK4 reference
+ * from rho0 with 2e5 steps and the same clamp u >= 0 (the reference converges to ~1e-7 relative
+ * across the kinks of P/rho; with 10 fixed substeps per interval the nodes were off by ~1e-4).
+ * With TILL_PRESS_MELOSH P/rho jumps at 0.8 rho0, where a fixed-step reference is only first
+ * order (it converges like 1/nsteps to the table value, 1e-6 at 2e5 steps for basalt), hence the
+ * wider tolerance there.
+ */
+#ifdef TILL_PRESS_MELOSH
+#define TILL_TEST_NODE_TOL 1e-5
+#else
+#define TILL_TEST_NODE_TOL 1e-6
+#endif
+static void testTableNodes(TILLMATERIAL *material)
+{
+    double maxerr = 0.0;
+    int k;
+
+    for (k = 0; k < 8; k++) {
+        int i = (int) (urand()*material->nTableRho), j = (int) (urand()*material->nTableV), n;
+        double v, rho, x, h, u, err;
+        if (i >= material->nTableRho) i = material->nTableRho - 1;
+        if (j >= material->nTableV) j = material->nTableV - 1;
+        v = tillLookupV(material, j);
+        rho = tillLookupRho(material, i);
+        x = log(material->rho0);
+        h = (log(rho) - x)/200000;
+        u = v;
+        for (n = 0; n < 200000; n++) {
+            double k1 = h*tilldudlogrho(material, x, u);
+            double k2 = h*tilldudlogrho(material, x + 0.5*h, u + 0.5*k1);
+            double k3 = h*tilldudlogrho(material, x + 0.5*h, u + 0.5*k2);
+            double k4 = h*tilldudlogrho(material, x + h, u + k3);
+            u += (k1 + 2.0*k2 + 2.0*k3 + k4)/6.0;
+            if (u < 0.0) u = 0.0;
+            x += h;
+        }
+        err = fabs(material->Lookup[TILL_INDEX(material, i, j)].u - u)/(fabs(u) + material->vmin);
+        if (err > maxerr) maxerr = err;
+        CHECK(err <= TILL_TEST_NODE_TOL, "table node i= %d (rho/rho0= %g) j= %d: %.12e vs %.12e", i, rho/material->rho0, j, material->Lookup[TILL_INDEX(material, i, j)].u, u);
+    }
+    fprintf(stdout, "  %s: table nodes vs ODE max rel err %.2e\n", MatName, maxerr);
+}
+
 static void testIsentropes(TILLMATERIAL *material)
 {
     double maxerr = 0.0;
@@ -501,7 +545,7 @@ static void testIsentropes(TILLMATERIAL *material)
 }
 
 /*
- * tillCalcU is adaptive (step doubling, TILL_CALCU_RTOL): long paths outside the table, where it is
+ * tillCalcU is adaptive (step doubling, TILL_ODE_RTOL): long paths outside the table, where it is
  * the fallback of tillLookupU, against a fixed-step RK4 reference with 10^6 steps. The paths cross
  * the kinks of P/rho (pressure cut, us, us2) where the fixed-step reference itself converges only
  * like h^2, so the tolerance is 1e-6 (the reference is good to ~1e-8). Round trips there and back.
@@ -744,6 +788,7 @@ int main(int argc, char **argv)
         CHECK(material->vmin == material->cv*TILL_TABLE_TMIN && material->vmax == material->cv*TILL_TABLE_TMAX, "standard table v range");
         CHECK(material->rhomin == TILL_TABLE_RHOMIN_FAC*material->rho0, "standard table rhomin");
         testTable(material);
+        testTableNodes(material);
         testIsentropes(material);
         testTemperature(material);
         testSentinels(material);

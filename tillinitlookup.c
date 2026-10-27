@@ -140,32 +140,99 @@ void tillInitLookupDefault(TILLMATERIAL *material)
 }
 
 /*
- * Number of RK4 substeps per table interval dlogrho when integrating an isentrope. The lookup
- * error against a reference integration decreases only about linearly with the number of
- * substeps (the negative-pressure cut is a kink in du/dlogrho, where RK4 loses its order):
- * for granite on the standard table the mean error is 8e-5 / 1e-5 / 2e-6 and the maximum
- * (cold expanded states, T < 100 K at rho0) 3e-3 / 7e-4 / 2e-4 for 1 / 4 / 10 substeps;
- * above 100 K the maximum is 3e-4 / 2e-5 / 1e-5. 10 substeps cost 2.3 s per material.
+ * Local error tolerance of the adaptive isentrope integration (tillIntegrateIsentrope), relative
+ * to |u| with the floor vmin (the energy scale of the table, as in tillUTol). It is used for the
+ * table (tillSolveIsentropeLogRho) and for the direct integration outside it (tillCalcU). The
+ * global error is about the number of steps times this.
  */
-#ifndef TILL_ISENTROPE_NSUB
-#define TILL_ISENTROPE_NSUB 10
+#ifndef TILL_ODE_RTOL
+#define TILL_ODE_RTOL 1e-11
 #endif
+
+/* Upper bound on the number of attempted steps of one integration (a guard, not reached in practice). */
+#define TILL_ODE_MAXSTEPS 10000000L
+
+/*
+ * Integrate du/dlogrho = P/rho from (x1, u1) to x2 (x = log(rho), either direction) with adaptive
+ * RK4: each step of size h is compared with two steps of h/2, the difference estimates the local
+ * error, the step is accepted if that is below TILL_ODE_RTOL*(|u| + vmin), and the next step is
+ * scaled with the usual (tol/err)^(1/5), at most by 4. The steps are small only near the kinks of
+ * P/rho (the negative-pressure cut, the region boundaries us and us2, the Melosh cut at 0.8 rho0),
+ * where RK4 loses its order, and large where P/rho is smooth. The last step lands exactly on x2.
+ * u is clamped at zero after every (half) step, so an expanding state ends on the cold curve
+ * (u = 0 below rho0) instead of at a negative u.
+ *
+ * *ph is the trial step on input (its sign is ignored) and the last accepted step size before the
+ * clamp to x2 on output, so a caller that integrates interval by interval keeps the step size.
+ * Returns 0 on success, -1 if the integration gave a non-finite error estimate or did not reach
+ * x2 within TILL_ODE_MAXSTEPS attempts.
+ */
+static int tillIntegrateIsentrope(TILLMATERIAL *material, double x1, double u1, double x2, double *ph, double *pu)
+{
+    const double dir = (x2 > x1) ? 1.0 : -1.0;
+    double x = x1, u = u1, h = dir*fabs(*ph), hnext = h;
+    long nattempt;
+
+    if (x2 == x1) { *pu = u1; return 0; }
+
+    for (nattempt = 0; nattempt < TILL_ODE_MAXSTEPS; nattempt++) {
+        double uf, uh, err, tol, fac;
+        int bLast = 0;
+
+        /* Do not step past x2; the last step lands on it exactly. */
+        if (fabs(h) >= fabs(x2 - x)) {
+            h = x2 - x;
+            bLast = 1;
+        }
+
+        uf = tillRK4Step(material, x, u, h);
+        if (uf < 0.0) uf = 0.0;
+        uh = tillRK4Step(material, x, u, 0.5*h);
+        if (uh < 0.0) uh = 0.0;
+        uh = tillRK4Step(material, x + 0.5*h, uh, 0.5*h);
+        if (uh < 0.0) uh = 0.0;
+
+        err = fabs(uh - uf)/15.0;
+        tol = TILL_ODE_RTOL*(fabs(uh) + material->vmin);
+        if (!isfinite(err) || !isfinite(uh)) return -1;
+
+        if (err <= tol || fabs(h) <= 1e-12*(1.0 + fabs(x))) {
+            /* Accepted (or refined to the roundoff limit of x). */
+            u = uh;
+            fac = (err > 0.0) ? fmin(0.9*pow(tol/err, 0.2), 4.0) : 4.0;
+            if (bLast) {
+                /* A clamped last step says little about the step size: keep the previous one if larger. */
+                *ph = fmax(fabs(hnext), fabs(h)*fac);
+                *pu = u;
+                return 0;
+            }
+            x += h;
+            h *= fac;
+            hnext = h;
+        } else {
+            h *= fmax(0.9*pow(tol/err, 0.2), 0.1);
+        }
+    }
+    return -1;
+}
 
 /*
  * Integrate one isentrope for the look up table using log(rho) as the variable. The parameter v
  * corresponds to u(log(rho)=log(rho0)) so v=0 gives the cold curve.
  *
  * The condensed (logrho > log rho0) and expanded (logrho < log rho0) branches are integrated
- * separately, starting from the grid point i = n where rho = rho0, with TILL_ISENTROPE_NSUB RK4
- * substeps per table interval. The step is +dlogrho/NSUB upward and -dlogrho/NSUB downward.
+ * separately, starting from the grid point i = n where rho = rho0, interval by interval with the
+ * adaptive integrator (tillIntegrateIsentrope), which ends every interval exactly on the grid
+ * point and carries its step size over to the next interval. Up to tillotson 4.0.0 every interval
+ * took TILL_ISENTROPE_NSUB = 10 fixed RK4 steps: the node values were good to ~1e-4 relative
+ * (cold states in tension) and the build took 2.3 s per material.
  */
 TILL_LOOKUP_ENTRY *tillSolveIsentropeLogRho(TILLMATERIAL *material, double v)
 {
     const double logrho0 = log(material->rho0);
-    const double hs = material->dlogrho/TILL_ISENTROPE_NSUB;
     TILL_LOOKUP_ENTRY *isentrope;
-    double logrho, u;
-    int i, s;
+    double logrho, u, h;
+    int i;
 
     isentrope = malloc(material->nTableRho*sizeof(TILL_LOOKUP_ENTRY));
     assert(isentrope != NULL);
@@ -175,33 +242,33 @@ TILL_LOOKUP_ENTRY *tillSolveIsentropeLogRho(TILLMATERIAL *material, double v)
     isentrope[i].u1 = tilldudlogrho(material, logrho0, v);
 
     /* Condensed states: integrate upward from rho0. */
-    logrho = logrho0;
     u = v;
+    h = material->dlogrho;
     for (i = material->n+1; i < material->nTableRho; i++) {
-        for (s = 0; s < TILL_ISENTROPE_NSUB; s++) {
-            u = tillRK4Step(material, logrho, u, hs);
-            logrho += hs;
-            /* Assure that u >= 0.0. */
-            if (u < 0.0) u = 0.0;
-        }
-        /* Use the exact grid value, not the accumulated sum. */
+        /* The exact grid values, not an accumulated sum. */
+        const double xa = logrho0 + (i - 1 - material->n)*material->dlogrho;
         logrho = logrho0 + (i - material->n)*material->dlogrho;
+        if (tillIntegrateIsentrope(material, xa, u, logrho, &h, &u) != 0) {
+            fprintf(stderr, "tillSolveIsentropeLogRho: integration failed (iMat= %i, v= %g, i= %d).\n", material->iMaterial, v, i);
+            assert(0);
+            exit(1);
+        }
 
         isentrope[i].u = u;
         isentrope[i].u1 = tilldudlogrho(material, logrho, u);
     }
 
-    /* Expanded states: integrate downward from rho0 (negative step). */
-    logrho = logrho0;
+    /* Expanded states: integrate downward from rho0. */
     u = v;
+    h = material->dlogrho;
     for (i = material->n-1; i >= 0; i--) {
-        for (s = 0; s < TILL_ISENTROPE_NSUB; s++) {
-            u = tillRK4Step(material, logrho, u, -hs);
-            logrho -= hs;
-            /* Assure that u >= 0.0. */
-            if (u < 0.0) u = 0.0;
-        }
+        const double xa = logrho0 - (material->n - i - 1)*material->dlogrho;
         logrho = logrho0 - (material->n - i)*material->dlogrho;
+        if (tillIntegrateIsentrope(material, xa, u, logrho, &h, &u) != 0) {
+            fprintf(stderr, "tillSolveIsentropeLogRho: integration failed (iMat= %i, v= %g, i= %d).\n", material->iMaterial, v, i);
+            assert(0);
+            exit(1);
+        }
 
         isentrope[i].u = u;
         /*
@@ -226,36 +293,15 @@ TILL_LOOKUP_ENTRY *tillSolveIsentropeLogRho(TILLMATERIAL *material, double v)
 }
 
 /*
- * Local error tolerance of the adaptive integration in tillCalcU, relative to |u| with the floor
- * vmin (the energy scale of the table, as in tillUTol). The global error is about the number of
- * steps times this; for the built-in materials it stays below 1e-8 relative.
- */
-#ifndef TILL_CALCU_RTOL
-#define TILL_CALCU_RTOL 1e-11
-#endif
-
-/* Upper bound on the number of attempted steps (a guard, not reached in practice). */
-#define TILL_CALCU_MAXSTEPS 10000000L
-
-/*
  * Calculate u2(rho2) by solving the ODE
  *
  * du/dlogrho = P/rho
  *
- * with initial conditions (rho1, u1). The integration is done in log(rho) because the ODE is
- * very stiff for small rho otherwise.
- *
- * Adaptive RK4 with step doubling: each step of size h is compared with two steps of h/2, the
- * difference estimates the local error, the step is accepted if that is below
- * TILL_CALCU_RTOL*(|u| + vmin), and the next step is scaled with the usual (tol/err)^(1/5).
- * The step is small only near the kinks of P/rho (the negative-pressure cut and the region
- * boundaries us, us2), where RK4 loses its order, and large where P/rho is smooth. (Up to
- * tillotson 4.0.0 the steps were fixed at dlogrho/100, i.e. ~1e4 steps per factor 3 in rho,
- * 1.4e5 for an expansion from rho0 to 1e-7 rho0.) The last step lands exactly on log(rho2) in
- * either direction. As in tillSolveIsentropeLogRho, u is clamped at zero after every (half) step,
- * so an expanding state ends on the cold curve (u = 0 below rho0) instead of at a negative u.
- * The result depends only on the input, not on the table (the table grid only sets the first
- * trial step), so a fallback outside the table is reproducible.
+ * with initial conditions (rho1, u1), with the same adaptive integrator as the table
+ * (tillIntegrateIsentrope; up to tillotson 4.0.0 fixed steps of dlogrho/100, ~1e5 steps for an
+ * expansion from rho0 to 1e-7 rho0). The integration is done in log(rho) because the ODE is very
+ * stiff for small rho otherwise. The first trial step is the table step if a table exists, else
+ * 1/100 of the interval.
  *
  * Returns TILL_FAIL_VALUE (counted in nLookupFail) if rho1 or rho2 is not positive and finite, if
  * u1 is not finite, or if the integration does not give a finite u. A successful integration is
@@ -264,9 +310,7 @@ TILL_LOOKUP_ENTRY *tillSolveIsentropeLogRho(TILLMATERIAL *material, double v)
  */
 double tillCalcU(TILLMATERIAL *material, double rho1, double u1, double rho2)
 {
-    double logrho1, logrho2, dlogrho, x, h, u;
-    long nsteps = 0, nattempt;
-    int bLast = 0, bDone = 0;
+    double logrho1, logrho2, h, u = 0.0;
 
     if (!(rho1 > 0.0) || !isfinite(rho1) || !(rho2 > 0.0) || !isfinite(rho2) || !isfinite(u1))
         TILL_FAIL_RETURN(material, TILL_FAIL_VALUE, "tillCalcU: invalid input (rho1= %g u1= %g rho2= %g, iMat= %i).\n",
@@ -274,56 +318,16 @@ double tillCalcU(TILLMATERIAL *material, double rho1, double u1, double rho2)
 
     logrho1 = log(rho1);
     logrho2 = log(rho2);
-    dlogrho = logrho2 - logrho1;
 
-    if (dlogrho == 0.0) return u1;
+    if (logrho2 == logrho1) return u1;
 
-    /* First trial step: the table step if a table exists, else the whole interval / 100. */
-    h = (material->dlogrho > 0.0) ? material->dlogrho : fabs(dlogrho)/100.0;
-    h = copysign(fmin(h, fabs(dlogrho)), dlogrho);
+    h = (material->dlogrho > 0.0) ? material->dlogrho : fabs(logrho2 - logrho1)/100.0;
 
-    x = logrho1;
-    u = u1;
-    for (nattempt = 0; nattempt < TILL_CALCU_MAXSTEPS; nattempt++) {
-        double uf, uh, err, tol, fac;
+    TILL_WARN("tillCalcU: Solving ODE (rho1= %g u1= %g rho2= %g).\n", rho1, u1, rho2);
 
-        /* Do not step past log(rho2); the last step lands on it exactly. */
-        if (fabs(h) >= fabs(logrho2 - x)) {
-            h = logrho2 - x;
-            bLast = 1;
-        }
-
-        uf = tillRK4Step(material, x, u, h);
-        if (uf < 0.0) uf = 0.0;
-        uh = tillRK4Step(material, x, u, 0.5*h);
-        if (uh < 0.0) uh = 0.0;
-        uh = tillRK4Step(material, x + 0.5*h, uh, 0.5*h);
-        if (uh < 0.0) uh = 0.0;
-
-        err = fabs(uh - uf)/15.0;
-        tol = TILL_CALCU_RTOL*(fabs(uh) + material->vmin);
-        if (!isfinite(err)) break;
-
-        /* Accept, or give up refining at the roundoff limit of x. */
-        if (err <= tol || fabs(h) <= 1e-12*(1.0 + fabs(x))) {
-            u = uh;
-            nsteps++;
-            if (bLast) { bDone = 1; break; }
-            x += h;
-            fac = (err > 0.0) ? 0.9*pow(tol/err, 0.2) : 4.0;
-            h *= fmin(fac, 4.0);
-        } else {
-            bLast = 0;
-            fac = 0.9*pow(tol/err, 0.2);
-            h *= fmax(fac, 0.1);
-        }
-    }
-
-    TILL_WARN("tillCalcU: Solved ODE (rho1= %g u1= %g rho2= %g, %ld steps, %ld attempts).\n", rho1, u1, rho2, nsteps, nattempt + 1);
-
-    if (!bDone || !isfinite(u))
-        TILL_FAIL_RETURN(material, TILL_FAIL_VALUE, "tillCalcU: integration gave u= %g (rho1= %g u1= %g rho2= %g, iMat= %i).\n",
-                         u, rho1, u1, rho2, material->iMaterial);
+    if (tillIntegrateIsentrope(material, logrho1, u1, logrho2, &h, &u) != 0 || !isfinite(u))
+        TILL_FAIL_RETURN(material, TILL_FAIL_VALUE, "tillCalcU: integration failed (rho1= %g u1= %g rho2= %g, iMat= %i).\n",
+                         rho1, u1, rho2, material->iMaterial);
 
     return u;
 }

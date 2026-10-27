@@ -61,9 +61,14 @@
  *          spline routines need no log(rhomin) and no division per lookup; the Newton iteration of
  *          tillFindEntropyCurve reuses the location of rho (one log() per call, not one per
  *          iteration); tillPressureCore skips the derivatives when only P is wanted (P is
- *          bit-identical) and evaluates exp(-beta z^2) once. tillCalcU is adaptive (RK4 with
- *          step doubling, local tolerance TILL_CALCU_RTOL relative to |u| + vmin) instead of
- *          fixed steps of dlogrho/100, which took ~1e5 steps for a long expansion.
+ *          bit-identical) and evaluates exp(-beta z^2) once.
+ *          Isentrope integration: one adaptive RK4 integrator (step doubling, local tolerance
+ *          TILL_ODE_RTOL = 1e-11 relative to |u| + vmin) for the table and for tillCalcU, instead
+ *          of TILL_ISENTROPE_NSUB = 10 fixed substeps per table interval (table) and fixed steps of
+ *          dlogrho/100 (tillCalcU, ~1e5 steps for a long expansion). The table nodes are ~1e4x
+ *          more accurate (1e-8 instead of 1e-4 relative) and the table builds in 0.6 s instead
+ *          of 2 s per material; TILL_ISENTROPE_NSUB is gone. The remaining lookup error is the
+ *          interpolation across the kinks of P/rho (see the standard table below).
  */
 #define TILL_VERSION_TEXT    "4.0.0"
 #define TILL_VERSION_MAJOR   4
@@ -196,6 +201,15 @@ enum till_error_lookup
  * and the density range in units of rho0. The table is then the same physical table for every
  * material and unit system: 1200/ln(1e7) = 74 rows per decade in T and 1200/ln(1e6) = 87 per
  * decade in rho; 1200 x 1200 entries of 32 bytes = 46 MB per material. Override with -D.
+ *
+ * Accuracy: the nodes are integrated adaptively (TILL_ODE_RTOL in tillinitlookup.c) and agree with
+ * a converged ODE solution to ~1e-8 relative. The lookup error (tillLookupU against the ODE) is set
+ * by the interpolation, not by the integration: u(logrho) has a kink where P/rho has one inside an
+ * interval, i.e. where the cold term is cut at P = 0 (expanded states in tension, e.g. just below
+ * rho0 at low T) and, with TILL_PRESS_MELOSH, where P jumps at 0.8 rho0. There the cubic Hermite
+ * interpolation in logrho is only first/second order: the maximum lookup error is ~1e-4 (forsterite,
+ * granite 3e-5) in the default mode and ~1e-3 at the Melosh jump; the mean error is ~1e-7. Twice as
+ * many rho rows (TILL_TABLE_NRHO 2400, 92 MB) only reduce the maximum by ~1.6x.
  */
 #ifndef TILL_TABLE_NRHO
 #define TILL_TABLE_NRHO 1200
