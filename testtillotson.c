@@ -8,6 +8,9 @@
  * (non-monotonic P(rho, T) of some materials) are reported and skipped, not counted.
  *
  *   make testtillotson && ./testtillotson [iMat ...]
+ *
+ * Build it with -DTILL_PRESS_MELOSH as well to test that pressure mode (same invariants; the
+ * isentrope accuracy is lower there, see TILL_TEST_LABEL_TOL).
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -149,6 +152,32 @@ static void testUnitInvariance(int iMat)
     rngState = rngSaved;
 }
 
+/*
+ * tillColdULookup returns 0 below rho0 without reading the table. That holds for any material in
+ * both pressure modes (P >= 0 can only lower u when expanding from u(rho0) = 0, and u is clamped
+ * at 0), also where the cold term A mu + B mu^2 is positive: test it with B = 3A.
+ */
+static void testColdCurveExpanded(int iMat)
+{
+    const double dKpcUnit = 6.371e8/3.085678e21, dMsolUnit = 5.972e27/1.99e33;
+    TILLMATERIAL *m = tillInitMaterial(iMat, dKpcUnit, dMsolUnit);
+    int i, k;
+
+    m->B = 3.0*m->A;   /* cold term positive at u = 0 for rho < 2/3 rho0 */
+#ifndef TILL_PRESS_MELOSH
+    CHECK(tillPressure(m, 0.5*m->rho0, 0.0) > 0.0, "B = 3A: positive cold pressure at 0.5 rho0");   /* cut below 0.8 rho0 with the flag */
+#endif
+    tillInitLookup(m, 300, 300, TILL_TABLE_RHOMIN_FAC*m->rho0, TILL_TABLE_RHOMAX_FAC*m->rho0,
+                   m->cv*TILL_TABLE_TMIN, m->cv*TILL_TABLE_TMAX);
+    for (i = 0; i <= m->n; i++) CHECK(m->Lookup[TILL_INDEX(m, i, 0)].u == 0.0, "B = 3A: cold curve zero at i= %d", i);
+    for (k = 0; k < 100; k++) {
+        double rho = m->rho0*lograndom(1e-4, 0.999);
+        CHECK(tillColdULookup(m, rho) == 0.0, "B = 3A: u_cold(rho= %g) = 0", rho);
+        CHECK(fabs(tillCubicInt(m, rho, 0.0)) <= 1e-14*m->vmin, "B = 3A: table row 0 at rho= %g is %g", rho, tillCubicInt(m, rho, 0.0));
+    }
+    tillFinalizeMaterial(m);
+}
+
 static void testPressure(TILLMATERIAL *material)
 {
     const double cmin = sqrt(material->A/material->rho0);
@@ -172,9 +201,13 @@ static void testPressure(TILLMATERIAL *material)
         CHECK(c == tillSoundSpeed(material, rho, u), "tillSoundSpeed == tillPressureSound rho= %g u= %g", rho, u);
         CHECK(P >= 0.0 && isfinite(P), "P >= 0 rho= %g u= %g P= %g", rho, u, P);
         CHECK(c >= cmin*(1.0 - 1e-14) && isfinite(c), "c >= sqrt(A/rho0) rho= %g u= %g c= %g", rho, u, c);
-        CHECK(Pnp <= P*(1.0 + 1e-14) + 1e-300, "P_NP <= P rho= %g u= %g", rho, u);
+        /* The cut pressure is the raw one cut at zero; with TILL_PRESS_MELOSH expanded cold states below 0.8 rho0 have P = 0. */
+#ifdef TILL_PRESS_MELOSH
+        if (phase == TILL_PHASE_EXP_COLD && rho < 0.8*material->rho0) CHECK(P == 0.0, "Melosh cut: P = 0 rho= %g u= %g", rho, u);
+        else
+#endif
+        CHECK(P == fmax(Pnp, 0.0), "P == max(P_NP, 0) rho= %g u= %g: %g vs %g", rho, u, P, Pnp);
         if (phase == TILL_PHASE_CONDENSED) CHECK_REL(Pnp, P, 1e-14, "condensed: P_NP == P rho= %g u= %g", rho, u);
-        if (P > 0.0 && phase != TILL_PHASE_EXP_COLD) CHECK_REL(Pnp, P, 1e-14, "P > 0: P_NP == P rho= %g u= %g", rho, u);
         if (P == 0.0) CHECK(dPdrho == 0.0 && dPdu == 0.0, "cut: derivatives zero rho= %g u= %g", rho, u);
 
         /* Derivatives against central differences, away from the region boundaries and the cut. */
@@ -196,8 +229,9 @@ static void testPressure(TILLMATERIAL *material)
         double rho = material->rho0*lograndom(0.1, 0.999), eps = 1e-9;
         double Pa = tillPressure(material, rho, material->us*(1-eps)), Pb = tillPressure(material, rho, material->us*(1+eps));
         double Pc = tillPressure(material, rho, material->us2*(1-eps)), Pd = tillPressure(material, rho, material->us2*(1+eps));
-        CHECK(fabs(Pa - Pb) <= 1e-6*(Pa + Pb) + 1e-10*material->A, "P continuous at us, rho= %g: %g vs %g", rho, Pa, Pb);
-        CHECK(fabs(Pc - Pd) <= 1e-6*(Pc + Pd) + 1e-10*material->A, "P continuous at us2, rho= %g: %g vs %g", rho, Pc, Pd);
+        /* The blend weight changes by ~eps*us/(us2-us) across us, so the jump is of that order times P_e (<~ A). */
+        CHECK(fabs(Pa - Pb) <= 1e-6*(Pa + Pb) + 1e-8*material->A, "P continuous at us, rho= %g: %g vs %g", rho, Pa, Pb);
+        CHECK(fabs(Pc - Pd) <= 1e-6*(Pc + Pd) + 1e-8*material->A, "P continuous at us2, rho= %g: %g vs %g", rho, Pc, Pd);
     }
 }
 
@@ -297,6 +331,20 @@ static void testTable(TILLMATERIAL *material)
     }
 }
 
+/*
+ * With TILL_PRESS_MELOSH the pressure jumps at 0.8 rho0 for expanded cold and intermediate states
+ * (the positive cold term is cut there), so the RK4 integration of the table and of the reference
+ * is only first order across the jump: the isentrope label and the lookup are then accurate to
+ * ~1e-4 and ~1e-3 instead of ~1e-5 and ~1e-4.
+ */
+#ifdef TILL_PRESS_MELOSH
+#define TILL_TEST_LABEL_TOL  3e-4
+#define TILL_TEST_LOOKUP_TOL 3e-3
+#else
+#define TILL_TEST_LABEL_TOL  1e-5
+#define TILL_TEST_LOOKUP_TOL 1e-3
+#endif
+
 static void testIsentropes(TILLMATERIAL *material)
 {
     double maxerr = 0.0;
@@ -314,14 +362,14 @@ static void testIsentropes(TILLMATERIAL *material)
         /* The isentrope label is recovered. */
         s = tillFindEntropyCurve(material, rho1, u1, k);
         CHECK(!tillFailed(s), "entropy curve found rho= %g u= %g", rho1, u1);
-        CHECK_REL(tillVofS(material, s) + 1e-3*material->vmax, v + 1e-3*material->vmax, 1e-5, "isentrope label rho1= %g v= %g", rho1, v);
+        CHECK_REL(tillVofS(material, s) + 1e-3*material->vmax, v + 1e-3*material->vmax, TILL_TEST_LABEL_TOL, "isentrope label rho1= %g v= %g", rho1, v);
 
         /* Lookup against the ODE, compression and expansion. */
         rho2 = (k % 4 < 2) ? 2.0*rho1 : 0.5*rho1;
         ref = refU(material, rho1, u1, rho2, 2000);
         lk = tillLookupU(material, rho1, u1, rho2, k);
         CHECK(!tillFailed(lk), "lookup rho1= %g u1= %g rho2= %g", rho1, u1, rho2);
-        CHECK(fabs(lk - ref) <= 1e-3*fabs(ref) + 1e-6*v, "lookup vs ODE rho1= %g v= %g rho2= %g: %g vs %g", rho1, v, rho2, lk, ref);
+        CHECK(fabs(lk - ref) <= TILL_TEST_LOOKUP_TOL*fabs(ref) + 1e-6*v, "lookup vs ODE rho1= %g v= %g rho2= %g: %g vs %g", rho1, v, rho2, lk, ref);
         if (fabs(lk - ref)/(fabs(ref) + 1e-300) > maxerr) maxerr = fabs(lk - ref)/(fabs(ref) + 1e-300);
 
         /* Round trip rho1 -> rho2 -> rho1. */
@@ -459,6 +507,7 @@ int main(int argc, char **argv)
 
         testUnits(iMat);
         testUnitInvariance(iMat);
+        testColdCurveExpanded(iMat);
         testPressure(material);
 
         /* The standard table, as EOSlib initializes it. */

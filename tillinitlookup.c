@@ -199,7 +199,12 @@ TILL_LOOKUP_ENTRY *tillSolveIsentropeLogRho(TILLMATERIAL *material, double v)
         logrho = logrho0 - (material->n - i)*material->dlogrho;
 
         isentrope[i].u = u;
-        isentrope[i].u1 = tilldudlogrho(material, logrho, u);
+        /*
+         * Where u is clamped at 0 the tabulated curve is flat, so its slope is 0, not P(rho, 0)/rho
+         * (which is positive if the cold term is positive at u = 0, e.g. for B > A). For the
+         * built-in materials P(rho < rho0, 0) = 0 and both are the same.
+         */
+        isentrope[i].u1 = (u == 0.0) ? 0.0 : tilldudlogrho(material, logrho, u);
     }
 
     /* Avoid issues because P/rho is diverging for rho -> 0: set u1(0) = u1(dlogrho). */

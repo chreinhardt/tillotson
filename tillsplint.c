@@ -372,16 +372,23 @@ double tillLookupU(TILLMATERIAL *material, double rho1, double u1, double rho2, 
 }
 
 /*
- * Calculate u_cold(rho) = u(rho, s=0) from the lookup table. The cold curve is zero for all
- * rho < rho0 (the pressure cutoff keeps u constant on the cold isentrope in tension), including
- * densities below rhomin. Returns TILL_FAIL_VALUE for rho > rhomax.
+ * Calculate u_cold(rho) = u(rho, s=0) from the lookup table.
+ *
+ * Below rho0 the cold curve is zero, for any material and in both pressure modes, so no table
+ * lookup is needed there (the hot path of T(rho, u)), also below rhomin: the cold isentrope starts
+ * at u(rho0) = 0, and expanding along it du = P/rho dlogrho with P >= 0 (the total pressure is
+ * always cut at zero, also with TILL_PRESS_MELOSH) can only lower u, which tillSolveIsentropeLogRho
+ * clamps at 0. Row 0 of the table is therefore exactly zero for rho <= rho0 (testtillotson checks
+ * this, also for a material with B > A, where the cold term itself is positive).
+ *
+ * Returns TILL_FAIL_VALUE for rho > rhomax (and NaN).
  */
 double tillColdULookup(TILLMATERIAL *material, double rho)
 {
 	// Make sure that the look up table is initialized.
 	assert(material->Lookup != NULL);
 
-    // In case of a liquid there is not cold term in the expanded states.
+    /* Expanded states: the cold curve is zero (see above). */
     if (rho < material->rho0)
         return 0.0;
 

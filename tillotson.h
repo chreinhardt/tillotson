@@ -35,6 +35,8 @@
  *          lower bracket of tillRhoPTemp is TILL_RHOPT_RHOMIN_FAC*rho0 (was 1e-10 code units), and
  *          the index of rho0 in the rho grid no longer depends on roundoff in the unit conversion
  *          (it was 799 instead of 800 in some unit systems, which changed the whole grid).
+ *          Documented why the cold curve is zero below rho0 in both pressure modes
+ *          (TILL_PRESS_MELOSH included), and that the total pressure is cut at zero in both.
  */
 #define TILL_VERSION_TEXT    "4.0.0"
 #define TILL_VERSION_MAJOR   4
