@@ -520,15 +520,24 @@ double tilldPdu(TILLMATERIAL *material, double rho, double u)
 /*
  * Calculate T(rho,u) for a material. As an approximation
  * we use u(rho,T) = uc(rho) + cv*T.
+ *
+ * Never fails and never negative (EOSlib contract for T(rho, u), same as ANEOSTofRhoU): where
+ * u(rho, T) cannot be inverted it returns T = 0, the cold curve, which is the lowest temperature
+ * of this EOS. That is the case outside the table in rho (counted by tillColdULookup) and for a
+ * state below the cold curve, u < u_cold(rho), or a non-finite u (counted here). A state within
+ * the roundoff tolerance tillUTol below the cold curve is on it: T = 0, not counted.
  */
 double tillTempRhoU(TILLMATERIAL *material, double rho, double u)
 {
     double ucold = tillColdULookup(material, rho);
 
-    /* Never fails (EOSlib contract for T(rho, u)): outside the table, T = 0, the cold curve.
-     * The failure is counted and reported by tillColdULookup. */
     if (tillFailed(ucold)) return 0.0;
-    return ((u-ucold)/material->cv);
+
+    if (!(u >= ucold - tillUTol(material, u)) || !isfinite(u))
+        TILL_FAIL_RETURN(material, 0.0, "tillTempRhoU: (rho= %g, u= %g, iMat= %i) below the cold curve u_cold= %g (or u not finite), T = 0.\n",
+                         rho, u, material->iMaterial, ucold);
+
+    return fmax((u-ucold)/material->cv, 0.0);
 }
 
 /*

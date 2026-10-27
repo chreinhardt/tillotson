@@ -48,6 +48,9 @@
  *          the cold curve, uses Gamma = a + b instead of a growing b/w0). dGasConst is k_B/m_H in
  *          cgs as well (was k_B). tillColdULookup fails for rho <= 0 (returned 0, the expanded
  *          cold curve), so u(rho, T) fails and T(rho, u) falls back to 0 there.
+ *          tillTempRhoU returns T = 0 (counted) below the cold curve and for a non-finite u
+ *          instead of the negative (u - u_cold)/cv; within tillUTol of the cold curve T = 0,
+ *          not counted.
  */
 #define TILL_VERSION_TEXT    "4.0.0"
 #define TILL_VERSION_MAJOR   4
@@ -72,9 +75,9 @@
  * TILL_FAIL_VALUE (-1e50), in any unit system, when it cannot deliver a value (rho outside the
  * lookup table for the cold curve and u(rho, T); (rho, u) below the cold curve or above the table
  * for tillFindEntropyCurve; rho(P, T) not bracketed); status functions return TILL_FAIL. Two
- * functions fall back instead: tillTempRhoU never fails, outside the table it returns T = 0, the
- * cold curve, which is the "lowest tabulated temperature" of this EOS (same contract as
- * ANEOSTofRhoU); tillLookupU clamps a state below the cold curve to u_cold(rho2), the end point of
+ * functions fall back instead: tillTempRhoU never fails, outside the table in rho, below the cold
+ * curve and for a non-finite u it returns T = 0, the cold curve, which is the "lowest tabulated
+ * temperature" of this EOS (same contract as ANEOSTofRhoU), and it is never negative; tillLookupU clamps a state below the cold curve to u_cold(rho2), the end point of
  * the coldest isentrope (same convention as ANEOSisentropicU), and integrates the ODE directly
  * (tillCalcU) where the start or end point is outside the table. All of these count the fallback.
  * tillCalcU itself counts only its failures (invalid rho1, rho2 or u1, non-finite result).
@@ -308,7 +311,7 @@ double tillPressureNP(TILLMATERIAL *material, double rho, double u);
 double tilldudrho(TILLMATERIAL *material, double rho, double u);
 double tilldudlogrho(TILLMATERIAL *material, double logrho, double u);
 
-/* Temperature: u(rho, T) = u_cold(rho) + cv*T. These need the lookup table (cold curve). */
+/* Temperature: u(rho, T) = u_cold(rho) + cv*T. These need the lookup table (cold curve). tillTempRhoU never fails and is >= 0. */
 double tillTempRhoU(TILLMATERIAL *material, double rho, double u);
 double tillURhoTemp(TILLMATERIAL *material, double rho, double T);
 /* rho(P, T) by root finding; TILL_FAIL_VALUE if P <= 0 or not bracketed. */

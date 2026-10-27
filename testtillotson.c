@@ -593,6 +593,19 @@ static void testSentinels(TILLMATERIAL *material)
     CHECK(tillTempRhoU(material, 0.0, 1.0) == 0.0, "T(rho = 0, u) falls back to T = 0");
     CHECK(tillColdULookup(material, 1e-3*material->rhomin) == 0.0, "cold curve below rhomin (rho > 0) is still zero");
     CHECK(material->nLookupFail == nfail0 + 38, "rho <= 0 counted (%ld)", material->nLookupFail - nfail0);
+    /* T(rho, u) below the cold curve is T = 0 (the lowest temperature), counted, never negative. */
+    CHECK(tillTempRhoU(material, 2.0*material->rho0, 0.5*ucold) == 0.0, "T below the cold curve (compressed) is 0");
+    CHECK(tillTempRhoU(material, 0.5*material->rho0, -material->vmin) == 0.0, "T for u < 0 (expanded) is 0");
+    CHECK(tillTempRhoU(material, 2.0*material->rho0, -1e3*ucold) == 0.0, "T far below the cold curve is 0");
+    CHECK(tillTempRhoU(material, 2.0*material->rho0, NAN) == 0.0, "T for a NaN u is 0");
+    CHECK(tillTempRhoU(material, 2.0*material->rho0, INFINITY) == 0.0, "T for an infinite u is 0");
+    CHECK(material->nLookupFail == nfail0 + 43, "T below the cold curve counted (%ld)", material->nLookupFail - nfail0);
+    /* On the cold curve and within roundoff below it: T = 0 exactly, not counted; just above it: T > 0. */
+    CHECK(tillTempRhoU(material, 2.0*material->rho0, ucold) == 0.0, "T on the cold curve is 0");
+    CHECK(tillTempRhoU(material, 2.0*material->rho0, ucold - 0.1*tillUTol(material, ucold)) == 0.0, "T within roundoff below the cold curve is 0");
+    CHECK(tillTempRhoU(material, 0.5*material->rho0, 0.0) == 0.0, "T on the expanded cold curve is 0");
+    CHECK(tillTempRhoU(material, 2.0*material->rho0, ucold + material->cv) > 0.0, "T just above the cold curve");
+    CHECK(material->nLookupFail == nfail0 + 43, "T on the cold curve not counted (%ld)", material->nLookupFail - nfail0);
     /* Just below the cold curve (roundoff in the hydro code): clamped, close to the in-table result. */
     {
         double rho1 = 2.0*material->rho0, rho2 = 1.5*material->rho0;
