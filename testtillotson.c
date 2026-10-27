@@ -311,7 +311,17 @@ static void testSentinels(TILLMATERIAL *material)
     double ucold = tillColdULookup(material, 2.0*material->rho0);
     long nfail0 = material->nLookupFail;
 
-    CHECK(tillLookupU(material, 2.0*material->rho0, 0.5*ucold, material->rho0, 0) == TILL_FAIL_VALUE, "lookup below cold curve");
+    /* Below the cold curve the lookup follows the coldest isentrope: u2 = u_cold(rho2), counted. */
+    CHECK(tillLookupU(material, 2.0*material->rho0, 0.5*ucold, 3.0*material->rho0, 0) == tillColdULookup(material, 3.0*material->rho0), "lookup below cold curve clamps to u_cold(rho2) (compression)");
+    CHECK(tillLookupU(material, 2.0*material->rho0, 0.5*ucold, 0.5*material->rho0, 0) == 0.0, "lookup below cold curve clamps to u_cold(rho2) = 0 (expansion)");
+    CHECK(tillLookupU(material, 2.0*material->rho0, 0.5*ucold, 0.5*material->rhomin, 0) == 0.0, "lookup below cold curve, rho2 below rhomin");
+    {
+        /* rho2 above the table: the cold curve continued by integration from rhomax. */
+        double rho2 = 2.0*material->rhomax;
+        double ref = tillCalcU(material, material->rhomax, tillColdULookup(material, material->rhomax), rho2);
+        double lk = tillLookupU(material, 2.0*material->rho0, 0.5*ucold, rho2, 0);
+        CHECK(isfinite(lk) && lk == ref && lk > tillColdULookup(material, material->rhomax), "lookup below cold curve, rho2 above rhomax: %g vs %g", lk, ref);
+    }
     CHECK(tillFindEntropyCurve(material, 2.0*material->rho0, 0.5*ucold, 0) == TILL_FAIL_VALUE, "entropy curve below cold curve");
     CHECK(tillFindEntropyCurve(material, material->rho0, 2.0*material->vmax, 0) == TILL_FAIL_VALUE, "entropy curve above table");
     CHECK(tillColdULookup(material, 2.0*material->rhomax) == TILL_FAIL_VALUE, "cold curve above rhomax");
@@ -328,10 +338,18 @@ static void testSentinels(TILLMATERIAL *material)
     CHECK(tillFindEntropyCurve(material, 2.0*material->rho0, NAN, 0) == TILL_FAIL_VALUE, "entropy curve NaN u");
     CHECK(tillLookupU(material, 2.0*material->rho0, NAN, material->rho0, 0) == TILL_FAIL_VALUE, "lookup NaN u");
     CHECK(tillLookupU(material, 2.0*material->rho0, INFINITY, material->rho0, 0) == TILL_FAIL_VALUE, "lookup +inf u");
-    CHECK(material->nLookupFail == nfail0 + 13, "every failure is counted (%ld)", material->nLookupFail - nfail0);
+    CHECK(material->nLookupFail == nfail0 + 16, "every failure and fallback is counted (%ld)", material->nLookupFail - nfail0);
     /* Outside the table in rho the lookup falls back to direct integration (and is finite, not a failure). */
     CHECK(isfinite(tillLookupU(material, 0.5*material->rhomin, 1.0, material->rhomin, 0)), "lookup below rhomin integrates");
-    CHECK(material->nLookupFail == nfail0 + 13, "direct integration is not a failure");
+    CHECK(material->nLookupFail == nfail0 + 16, "direct integration is not a failure");
+    /* Just below the cold curve (roundoff in the hydro code): clamped, close to the in-table result. */
+    {
+        double rho1 = 2.0*material->rho0, rho2 = 1.5*material->rho0;
+        double ulo = ucold*(1.0 - 1e-6);
+        double lk = tillLookupU(material, rho1, ulo, rho2, 0);
+        CHECK(lk == tillColdULookup(material, rho2), "lookup just below cold curve clamps");
+        CHECK_REL(lk + 1.0, tillLookupU(material, rho1, ucold, rho2, 0) + 1.0, 1e-6, "clamp continuous with the cold isentrope");
+    }
 }
 
 static double fcube(TILLMATERIAL *m, double x, const void *ctx) { (void) m; (void) ctx; return x*x*x - 2.0; }

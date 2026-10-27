@@ -311,9 +311,32 @@ double tillFindEntropyCurve(TILLMATERIAL *material, double rho, double u, int iO
 }
 
 /*
+ * u_cold(rho2), the end point of the cold isentrope (s = 0) at rho2, for the clamp in tillLookupU.
+ * Inside the table (and below rho0, where it is zero) from the table; above rhomax the cold curve
+ * is continued by integrating the ODE from (rhomax, u_cold(rhomax)), like any other isentrope
+ * that leaves the table. Returns TILL_FAIL_VALUE for a NaN rho2 (from tillColdULookup).
+ */
+static double tillColdIsentropeU(TILLMATERIAL *material, double rho2)
+{
+    if (rho2 > material->rhomax*(1.0 + TILL_EDGE_TOL)) {
+        double ucold = tillColdULookup(material, material->rhomax);
+        if (tillFailed(ucold)) return TILL_FAIL_VALUE;
+        return tillCalcU(material, material->rhomax, ucold, rho2);
+    }
+    return tillColdULookup(material, rho2);
+}
+
+/*
  * Calculate u2 on the isentrope through (rho1, u1) at rho2. Inside the lookup table this is an
  * interpolation; for rho outside [rhomin, rhomax] or u1 above the table the ODE is integrated
- * directly. Returns TILL_FAIL_VALUE if (rho1, u1) is below the cold curve or u1 is not finite.
+ * directly.
+ *
+ * If (rho1, u1) is below the cold curve there is no isentrope through it. The state is then
+ * clamped to the cold curve, i.e. u2 = u_cold(rho2), the end point of the coldest isentrope
+ * (s = 0) through (rho1, u_cold(rho1)). This is what ANEOSisentropicU and scvheosIsentropicU do
+ * (T(rho1, u1) falls back to the lowest temperature and the isentrope of that state is followed);
+ * the fallback is counted in nLookupFail and reported under EOSLIB_VERBOSE. Returns
+ * TILL_FAIL_VALUE if u1 is not finite (or rho2 is invalid).
  */
 double tillLookupU(TILLMATERIAL *material, double rho1, double u1, double rho2, int iOrder)
 {
@@ -322,9 +345,12 @@ double tillLookupU(TILLMATERIAL *material, double rho1, double u1, double rho2, 
 
     iRet = tillIsInTable(material, rho1, u1);
 
-    if (iRet == TILL_LOOKUP_OUTSIDE_VMIN)
-        TILL_FAIL_RETURN(material, TILL_FAIL_VALUE, "tillLookupU: Particle %i (rho= %g, u= %g, iMat= %i) is below the cold curve.\n",
-                         iOrder, rho1, u1, material->iMaterial);
+    if (iRet == TILL_LOOKUP_OUTSIDE_VMIN) {
+        material->nLookupFail++;
+        TILL_WARN("tillLookupU: Particle %i (rho= %g, u= %g, iMat= %i) is below the cold curve, clamped to u_cold(rho2= %g).\n",
+                  iOrder, rho1, u1, material->iMaterial, rho2);
+        return tillColdIsentropeU(material, rho2);
+    }
 
     /* Non-finite u1 (TILL_FAIL): there is no isentrope to follow, not even by direct integration. */
     if (iRet == TILL_FAIL)

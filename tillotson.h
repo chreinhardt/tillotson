@@ -28,6 +28,8 @@
  *          tillIsInTable returns TILL_FAIL for a non-finite u (NaN was reported as
  *          OUTSIDE_VMAX, which EOSIsUsable accepts for Tillotson); tillLookupU,
  *          tillFindEntropyCurve and tillIsBelowColdCurve reject a non-finite u as well.
+ *          tillLookupU clamps a state below the cold curve to u_cold(rho2) (counted in
+ *          nLookupFail) instead of returning TILL_FAIL_VALUE, like ANEOSisentropicU.
  */
 #define TILL_VERSION_TEXT    "4.0.0"
 #define TILL_VERSION_MAJOR   4
@@ -50,9 +52,11 @@
  * A failed evaluation never exits. Every function returning a double returns exactly
  * TILL_FAIL_VALUE (-1e50), in any unit system, when it cannot deliver a value (rho outside the
  * lookup table for the cold curve and u(rho, T); (rho, u) below the cold curve or above the table
- * for the isentrope lookups; rho(P, T) not bracketed); status functions return TILL_FAIL. The one
- * exception is tillTempRhoU, which never fails: outside the table it returns T = 0, the cold
- * curve, which is the "lowest tabulated temperature" of this EOS (same contract as ANEOSTofRhoU).
+ * for tillFindEntropyCurve; rho(P, T) not bracketed); status functions return TILL_FAIL. Two
+ * functions fall back instead: tillTempRhoU never fails, outside the table it returns T = 0, the
+ * cold curve, which is the "lowest tabulated temperature" of this EOS (same contract as
+ * ANEOSTofRhoU); tillLookupU clamps a state below the cold curve to u_cold(rho2), the end point of
+ * the coldest isentrope (same convention as ANEOSisentropicU). Both count the fallback.
  * The pressure, sound speed and their derivatives are analytic and never fail.
  *
  * Every failure is counted in material->nLookupFail and reported on stderr only when the library
@@ -317,7 +321,7 @@ void tillLocateRho(TILLMATERIAL *material, double rho, int *pi, double *pe);
 double tillFindUonIsentrope(TILLMATERIAL *material,double s,double rho);
 /* Returns the table variable s of the isentrope through (rho, u), or TILL_FAIL_VALUE (also for a non-finite u). */
 double tillFindEntropyCurve(TILLMATERIAL *material,double rho,double u,int iOrder);
-/* Returns u2 on the isentrope through (rho1, u1) at rho2, or TILL_FAIL_VALUE (below the cold curve, non-finite u1). */
+/* Returns u2 on the isentrope through (rho1, u1) at rho2; u_cold(rho2) if (rho1, u1) is below the cold curve, TILL_FAIL_VALUE for a non-finite u1. */
 double tillLookupU(TILLMATERIAL *material,double rho1,double u1,double rho2,int iOrder);
 /* u_cold(rho) = u(rho, s=0), or TILL_FAIL_VALUE if rho is outside the table. */
 double tillColdULookup(TILLMATERIAL *material,double rho);
