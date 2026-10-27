@@ -25,7 +25,12 @@
 #include <string.h>
 #include "tillotson.h"
 
-/* Compile with -DTILL_PRESS_MELOSH to cut the cold term for rho/rho0 < 0.8 (Melosh 1989) instead of where it is negative. */
+/*
+ * Compile with -DTILL_PRESS_MELOSH to cut the cold term for rho/rho0 < 0.8 (Melosh 1989) instead
+ * of where it is negative. The total pressure is cut at zero in both modes, so the flag does not
+ * allow tension; it removes the (positive) cold term of expanded cold states below 0.8 rho0, which
+ * makes P(rho) jump there.
+ */
 
 /*
  * Initialize a material from the Tillotson library
@@ -66,17 +71,10 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit)
 		/* Both must be zero for cgs; one zero and one positive is a caller error. */
 		assert(dKpcUnit <= 0.0 && dMsolUnit <= 0.0);
 		/* In this case units are not converted, so the code units are cgs. */
-		material->dGasConst = KBOLTZ;   // dGasConst is NOT KBOLZ !!!!!!!
 		material->dErgPerGmUnit = 1.0;
 		material->dGmPerCcUnit = 1.0;
 		material->dSecUnit = 1.0;
 	} else {
-		/*
-		** Convert kboltz/mhydrogen to system units, assuming that
-		** G == 1.
-		*/
-		material->dGasConst = material->dKpcUnit*KPCCM*KBOLTZ
-		/MHYDR/GCGS/material->dMsolUnit/MSOLG;
 		/* code energy per unit mass --> erg per g */
 		material->dErgPerGmUnit = GCGS*material->dMsolUnit*MSOLG/(material->dKpcUnit*KPCCM);
 		/* code density --> g per cc */
@@ -84,6 +82,13 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit)
 		/* code time --> seconds */
 		material->dSecUnit = sqrt(1/(material->dGmPerCcUnit*GCGS));
 	}
+
+	/*
+	 * k_B/m_H in code units (specific energy per K), as in igeos. It was k_B (not divided by m_H)
+	 * in cgs; the code-unit value is unchanged (dKpcUnit*KPCCM/(GCGS*dMsolUnit*MSOLG) is
+	 * 1/dErgPerGmUnit).
+	 */
+	material->dGasConst = (KBOLTZ/MHYDR)/material->dErgPerGmUnit;
 
 	/*
 	 * Set the Tillotson parameters for the material.
@@ -348,7 +353,9 @@ void tillPrintMat(TILLMATERIAL *material, FILE *fp)
  * derivatives are those of the cut pressure, i.e. zero where the cutoff is active, and the sound
  * speed c^2 = (dP/drho)_u + P/rho^2 (dP/du)_rho is floored at the bulk sound speed sqrt(A/rho0).
  * With TILL_PRESS_MELOSH the cold term is cut for rho/rho0 < 0.8 as suggested by Melosh (1989)
- * instead.
+ * instead, also where it is positive (P jumps at 0.8 rho0); negative values above 0.8 rho0 are
+ * still removed by the final cut. In both modes the cut pressure is P = max(P_NP, 0), except that
+ * with TILL_PRESS_MELOSH it is 0 for expanded cold states below 0.8 rho0.
  *
  * bClip == 0 (tillPressureNP, tillPressureSoundNP) leaves the cold region raw, including negative
  * pressures, and applies no final cut; this is what the inversion tillRhoPTemp needs because the
@@ -371,7 +378,14 @@ static double tillPressureCore(TILLMATERIAL *material, double rho, double u, int
     eta = rho/rho0;
     mu = eta - 1.0;
     z = (1.0 - eta)/eta;
-    w0 = u/(u0*eta*eta) + 1.0;
+    /*
+     * w0 = u/(u0 eta^2) + 1 enters as b/w0 and is only defined for u >= 0: for u < 0 it drops below
+     * 1, the Grueneisen term b/w0 grows without bound and divides by zero at u = -u0 eta^2. A
+     * negative u is below the cold curve and has no Tillotson meaning, so w0 is evaluated with
+     * max(u, 0), i.e. w0 >= 1. P stays continuous at u = 0 (u still multiplies Gamma), and the
+     * derivative formulas below remain exact because they reduce to the w0 = const case at w0 = 1.
+     */
+    w0 = fmax(u, 0.0)/(u0*eta*eta) + 1.0;
 
     bCold = (rho >= rho0 || u < material->us);  /* Pc only */
     bHot = (!bCold && u > material->us2);        /* Pe only */

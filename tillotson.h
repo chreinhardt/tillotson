@@ -43,6 +43,11 @@
  *          invalid rho2 and counts its direct-integration fallback in nLookupFail.
  *          The table keeps u1 = P/rho at node 0 (rhomin) instead of copying u1 from node 1, so the
  *          first Hermite interval in log(rho) is consistent with the data.
+ *          tillPressureCore evaluates w0 = u/(u0 eta^2) + 1 with max(u, 0), so a negative u no
+ *          longer divides by zero at u = -u0 eta^2 (the pressure of a state with u < 0, below
+ *          the cold curve, uses Gamma = a + b instead of a growing b/w0). dGasConst is k_B/m_H in
+ *          cgs as well (was k_B). tillColdULookup fails for rho <= 0 (returned 0, the expanded
+ *          cold curve), so u(rho, T) fails and T(rho, u) falls back to 0 there.
  */
 #define TILL_VERSION_TEXT    "4.0.0"
 #define TILL_VERSION_MAJOR   4
@@ -236,7 +241,7 @@ typedef struct tillMaterial
 	double dKpcUnit;
 	double dMsolUnit;
 	
-	double dGasConst;
+	double dGasConst;      /* k_B/m_H in code units (specific energy per K), as in igeos */
 	double dErgPerGmUnit;
 	double dGmPerCcUnit;
 	double dSecUnit;

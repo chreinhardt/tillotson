@@ -397,9 +397,13 @@ double tillColdULookup(TILLMATERIAL *material, double rho)
 	// Make sure that the look up table is initialized.
 	assert(material->Lookup != NULL);
 
-    /* Expanded states: the cold curve is zero (see above). */
-    if (rho < material->rho0)
+    /* Expanded states: the cold curve is zero (see above), for any rho > 0. */
+    if (rho < material->rho0) {
+        if (!(rho > 0.0))
+            TILL_FAIL_RETURN(material, TILL_FAIL_VALUE, "tillColdULookup: rho= %g is not positive (iMat= %i).\n",
+                             rho, material->iMaterial);
         return 0.0;
+    }
 
     if (!(rho >= material->rhomin*(1.0 - TILL_EDGE_TOL)) || (rho > material->rhomax*(1.0 + TILL_EDGE_TOL)))
         TILL_FAIL_RETURN(material, TILL_FAIL_VALUE, "tillColdULookup: rho= %g outside of the lookup table (iMat= %i, rhomin= %g, rhomax= %g).\n",

@@ -63,6 +63,9 @@ static void testUnits(int iMat)
     CHECK(cgs->dErgPerGmUnit == 1.0 && cgs->dGmPerCcUnit == 1.0, "cgs unit factors");
     CHECK(code->rho0 > 0.0 && code->A > 0.0 && code->us2 > code->us && code->cv > 0.0, "material parameters");
     CHECK_REL(cgs->rho0, code->rho0*code->dGmPerCcUnit, 1e-14, "rho0 conversion");
+    /* dGasConst is k_B/m_H in every unit system (it was k_B in cgs). */
+    CHECK_REL(cgs->dGasConst, 1.38e-16/1.67e-24, 1e-14, "dGasConst = k_B/m_H in cgs");
+    CHECK_REL(code->dGasConst*code->dErgPerGmUnit, cgs->dGasConst, 1e-12, "dGasConst conversion");
 
     for (k = 0; k < 200; k++) {
         double rho_cgs = cgs->rho0*lograndom(0.1, 10.0), u_cgs = lograndom(1e8, 1e13);
@@ -199,6 +202,48 @@ static void testColdCurveExpanded(int iMat)
         CHECK(tillCalcU(m, m->rho0, 0.0, rho2) == tillLookupU(m, m->rho0, 0.0, rho2, k), "B = 3A: direct integration == lookup on the cold curve");
     }
     tillFinalizeMaterial(m);
+}
+
+/*
+ * u < 0 is below the cold curve and not a Tillotson state, but a hydro code can produce it. w0 =
+ * u/(u0 eta^2) + 1 is evaluated with max(u, 0), so Gamma = a + b for u <= 0 and the raw pressure is
+ * P_NP = (a + b) u rho + A mu + B mu^2 for every rho (u < 0 < us is always the cold region). Before,
+ * w0 reached 0 at u = -u0 eta^2 (division by zero) and became negative below (Gamma = a + b/w0 < a).
+ */
+static void testNegativeU(TILLMATERIAL *material)
+{
+    const double rho0 = material->rho0, A = material->A, B = material->B, ab = material->a + material->b;
+    int a, b;
+
+    for (a = 0; a < 40; a++) for (b = 0; b < 8; b++) {
+        static const double f[] = {1e-12, 1e-3, 0.5, 1.0 - 1e-12, 1.0, 1.0 + 1e-12, 2.0, 10.0};
+        double rho = rho0*pow(10.0, -2.0 + 2.5*a/39.0), eta = rho/rho0, mu = eta - 1.0;
+        double u = -f[b]*material->u0*eta*eta;   /* f = 1: the former singularity w0 = 0 */
+        double Gu = ab*u*rho, Pnp = tillPressureNP(material, rho, u), c, P = tillPressureSound(material, rho, u, &c);
+        double scale = fabs(Gu) + A*fabs(mu) + B*mu*mu;
+        CHECK(isfinite(Pnp) && fabs(Pnp - (Gu + A*mu + B*mu*mu)) <= 1e-12*scale, "u < 0: P_NP = (a+b) u rho + A mu + B mu^2 at rho= %g u= %g: %g", rho, u, Pnp);
+        CHECK(isfinite(P) && P >= 0.0 && isfinite(c) && c > 0.0, "u < 0: P= %g c= %g finite at rho= %g u= %g", P, c, rho, u);
+        CHECK(isfinite(tilldPdrho(material, rho, u)) && isfinite(tilldPdu(material, rho, u)), "u < 0: derivatives finite at rho= %g u= %g", rho, u);
+#ifdef TILL_PRESS_MELOSH
+        if (rho < 0.8*rho0) CHECK(P == 0.0, "u < 0, Melosh cut: P = 0 at rho= %g", rho); else
+#endif
+        CHECK(P == fmax(Pnp, 0.0), "u < 0: P == max(P_NP, 0) at rho= %g u= %g", rho, u);
+    }
+
+    /* Continuous at u = 0, and the derivatives are exact for u < 0 (compressed, P > 0, no cut). */
+    for (a = 0; a < 20; a++) {
+        double rho = rho0*(1.2 + 0.1*a), mu = rho/rho0 - 1.0;
+        double u = -0.01*(A*mu + B*mu*mu)/(ab*rho), du = 1e-6*fabs(u), dr = 1e-6*rho;
+        double P = tillPressure(material, rho, u);
+        CHECK(P > 0.0, "compressed state with u < 0 has P > 0 (rho= %g)", rho);
+        {
+            /* Continuity: the change over -eps is first order, bounded by eps*dP/du(u = 0) (+ roundoff). */
+            double eps = 1e-8*material->u0, P0 = tillPressure(material, rho, 0.0);
+            CHECK(fabs(tillPressure(material, rho, -eps) - P0) <= 1.01*eps*tilldPdu(material, rho, 0.0) + 1e-14*P0, "P continuous at u = 0, rho= %g", rho);
+        }
+        CHECK_REL((tillPressure(material, rho, u + du) - tillPressure(material, rho, u - du))/(2.0*du), tilldPdu(material, rho, u), 1e-6, "dP/du at u < 0, rho= %g", rho);
+        CHECK_REL((tillPressure(material, rho + dr, u) - tillPressure(material, rho - dr, u))/(2.0*dr), tilldPdrho(material, rho, u), 1e-6, "dP/drho at u < 0, rho= %g", rho);
+    }
 }
 
 static void testPressure(TILLMATERIAL *material)
@@ -541,6 +586,13 @@ static void testSentinels(TILLMATERIAL *material)
     /* A state below the cold curve (u < 0 below rho0) is lifted to it by the clamp. */
     CHECK(tillCalcU(material, 0.5*material->rho0, -material->vmin, 0.25*material->rho0) == 0.0, "tillCalcU clamps u >= 0");
     CHECK(material->nLookupFail == nfail0 + 34, "a valid tillCalcU is not counted (%ld)", material->nLookupFail - nfail0);
+    /* rho <= 0 is invalid input for the cold curve (it returned 0, the expanded cold curve). */
+    CHECK(tillColdULookup(material, 0.0) == TILL_FAIL_VALUE, "cold curve at rho = 0");
+    CHECK(tillColdULookup(material, -1.0) == TILL_FAIL_VALUE, "cold curve at rho < 0");
+    CHECK(tillURhoTemp(material, -1.0, 300.0) == TILL_FAIL_VALUE, "u(rho < 0, T)");
+    CHECK(tillTempRhoU(material, 0.0, 1.0) == 0.0, "T(rho = 0, u) falls back to T = 0");
+    CHECK(tillColdULookup(material, 1e-3*material->rhomin) == 0.0, "cold curve below rhomin (rho > 0) is still zero");
+    CHECK(material->nLookupFail == nfail0 + 38, "rho <= 0 counted (%ld)", material->nLookupFail - nfail0);
     /* Just below the cold curve (roundoff in the hydro code): clamped, close to the in-table result. */
     {
         double rho1 = 2.0*material->rho0, rho2 = 1.5*material->rho0;
@@ -585,6 +637,7 @@ int main(int argc, char **argv)
         testUnitInvariance(iMat);
         testColdCurveExpanded(iMat);
         testPressure(material);
+        testNegativeU(material);
 
         /* The standard table, as EOSlib initializes it. */
         tillInitLookupDefault(material);
