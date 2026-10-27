@@ -6,7 +6,25 @@
 #define TILLOTSON_HINCLUDED
 
 /*
- * Version.
+ * Version history
+ *   3.4.x  GSL splines and NR Brent; isentrope table uniform in v; TILL_VERBOSE/TILL_OUTPUT_ALL_WARNINGS.
+ *   4.0.0  Review release. Fixes: u1 spline was built from u (tillInitSplineU1); the downward
+ *          RK4 stages were evaluated at logrho + h/2; the v grid was uniform in v, which put the
+ *          whole condensed regime (v < u_s2) in its first cells; the cubic interpolation weight
+ *          B used dv instead of j*dv; tilldTdrho/tilldTdu/tilldPdrho_s (wrong, removed); the
+ *          derivatives ignored the negative-pressure cut; a spurious -eta term in dP_e/drho and
+ *          the missing blend term in dP/du; tillPressureSound returned negative P where
+ *          tillPressure returned 0.
+ *          Changes: one analytic core tillPressureCore for P, c, dP/drho, dP/du (cut and uncut
+ *          variants); the isentrope table is uniform in s = log(1 + v/vmin) (see below) with an
+ *          explicit vmin and the standard table defined by TILL_TABLE_* (temperatures at rho0,
+ *          densities in units of rho0; tillInitLookupDefault); natural cubic splines along s and
+ *          cubic Hermite in logrho, no GSL, no NR code (own Brent); no mallocs in the lookups;
+ *          the EOSlib failure contract (TILL_FAIL_VALUE, nLookupFail, TILL_WARN under
+ *          EOSLIB_VERBOSE, no exit in any evaluation, tillTempRhoU falls back to T = 0);
+ *          status codes TILL_SUCCESS 0 / TILL_FAIL -99 / TILL_LOOKUP_OUTSIDE_* -1..-4;
+ *          3-argument TILL_INDEX; ideal gas removed (igeos); tillinitlookup.h, tillsplint.h and
+ *          interpol/brent.c removed; test suite testtillotson.c.
  */
 #define TILL_VERSION_TEXT    "4.0.0"
 #define TILL_VERSION_MAJOR   4
@@ -122,13 +140,35 @@ enum till_error_lookup
  *
  *     v(s) = vmin*(exp(s) - 1),   s(v) = log(1 + v/vmin),   s_j = j*dv,
  *
- * which is linear in v for v << vmin and logarithmic above, so that the first cell is at
- * v ~ vmin*dv and the solid/liquid regime (u < us2) is resolved. vmin is set in tillInitLookup to
- * TILL_VMIN_FRAC*vmax. All routines of tillsplint.c take and return s, not v; only
- * tillInitLookup/tillSolveIsentropeLogRho see the physical v.
+ * which is linear in v for v << vmin and logarithmic above (constant relative resolution
+ * dv in v/v), so that the solid/liquid regime (u < us2) is resolved as well as the vapour.
+ * vmin is the scale of the mapping, not a lower bound: row 0 is the cold curve (v = 0). All
+ * routines of tillsplint.c take and return s, not v; only tillInitLookup and
+ * tillSolveIsentropeLogRho see the physical v.
+ *
+ * Standard table (tillInitLookupDefault, used by EOSlib): since u(rho0, T) = cv*T, the v range
+ * is given as temperatures at rho0, vmin = cv*TILL_TABLE_TMIN and vmax = cv*TILL_TABLE_TMAX,
+ * and the density range in units of rho0. The table is then the same physical table for every
+ * material and unit system: 1200/ln(1e7) = 74 rows per decade in T and 1200/ln(1e6) = 87 per
+ * decade in rho; 1200 x 1200 entries of 32 bytes = 46 MB per material. Override with -D.
  */
-#ifndef TILL_VMIN_FRAC
-#define TILL_VMIN_FRAC 1e-6
+#ifndef TILL_TABLE_NRHO
+#define TILL_TABLE_NRHO 1200
+#endif
+#ifndef TILL_TABLE_NV
+#define TILL_TABLE_NV 1200
+#endif
+#ifndef TILL_TABLE_RHOMIN_FAC
+#define TILL_TABLE_RHOMIN_FAC 1e-4    /* rho_min = 1e-4 rho0 */
+#endif
+#ifndef TILL_TABLE_RHOMAX_FAC
+#define TILL_TABLE_RHOMAX_FAC 100.0   /* rho_max = 100 rho0 */
+#endif
+#ifndef TILL_TABLE_TMIN
+#define TILL_TABLE_TMIN 1.0           /* K: vmin = cv*T_min */
+#endif
+#ifndef TILL_TABLE_TMAX
+#define TILL_TABLE_TMAX 1e7           /* K: vmax = cv*T_max, the top isentrope */
 #endif
 
 /*
@@ -156,7 +196,7 @@ typedef struct tillMaterial
 	double rhomin;	/* Min value for the lookup table */
 	double rhomax;	/* Max value for the lookup table */
 	double vmax;	/* Max value for the lookup table */
-	double vmin;	/* Scale of the v(s) mapping, see TILL_VMIN_FRAC */
+	double vmin;	/* Scale of the v(s) mapping (see above), in code units */
 	/* Unit convertion factors */
 	double dKpcUnit;
 	double dMsolUnit;
@@ -201,7 +241,8 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit)
 void tillFinalizeMaterial(TILLMATERIAL *material);
 
 void tilliMatString(TILLMATERIAL *material, char *MatName);
-void tillErrorString(int iError, char *ErrorString);
+const char *tillLookupStatusString(int iError);
+void tillErrorString(int iError, char *ErrorString);   /* copies tillLookupStatusString into the buffer */
 void tillPrintMat(TILLMATERIAL *material, FILE *fp);
 
 /* Pressure, sound speed and derivatives of the cut EOS (negative pressures set to zero). */
@@ -236,7 +277,14 @@ int tillBrent(double (*f)(TILLMATERIAL *, double, const void *), TILLMATERIAL *m
 /*
  * tillinitlookup.c
  */
-void tillInitLookup(TILLMATERIAL *material, int nTableRho, int nTableV, double rhomin, double rhomax, double vmax);
+/*
+ * Build the isentrope table: nTableRho log-spaced densities in [rhomin, rhomax] (rhomax is moved
+ * onto the grid so that rho0 is a grid point), nTableV isentropes with v = u(rho0) from 0 to
+ * vmax, spaced in s = log(1 + v/vmin). All in code units. Replaces an existing table.
+ */
+void tillInitLookup(TILLMATERIAL *material, int nTableRho, int nTableV, double rhomin, double rhomax, double vmin, double vmax);
+/* The standard table TILL_TABLE_* (see above) for this material. */
+void tillInitLookupDefault(TILLMATERIAL *material);
 TILL_LOOKUP_ENTRY *tillSolveIsentropeLogRho(TILLMATERIAL *material, double v);
 double tillCalcU(TILLMATERIAL *material,double rho1,double u1,double rho2);
 int tillIsInTable(TILLMATERIAL *material,double rho,double u);
@@ -278,4 +326,3 @@ double tillVofS(TILLMATERIAL *material, double s);
 double tillSofV(TILLMATERIAL *material, double v);
 
 #endif
-

@@ -165,7 +165,8 @@ static void testTable(TILLMATERIAL *material)
         if (i == 0) continue;   /* u1(0) is copied from u1(1) by construction */
         {
             double rho = tillLookupRho(material, i), u = material->Lookup[TILL_INDEX(material, i, j)].u;
-            CHECK_REL(material->Lookup[TILL_INDEX(material, i, j)].u1 + 1e-300, tillPressure(material, rho, u)/rho + 1e-300, 1e-12, "u1 = P/rho at i= %d j= %d", i, j);
+            /* P/rho is a difference of large terms at high compression (100 rho0): roundoff ~1e-11. */
+            CHECK_REL(material->Lookup[TILL_INDEX(material, i, j)].u1 + 1e-300, tillPressure(material, rho, u)/rho + 1e-300, 1e-10, "u1 = P/rho at i= %d j= %d", i, j);
         }
     }
 
@@ -205,7 +206,7 @@ static void testTable(TILLMATERIAL *material)
     /* Edges: closed with the tolerance, open beyond it. */
     {
         double u = tillColdULookup(material, material->rhomax);
-        CHECK(tillIsInTable(material, material->rhomin, 1.0) == TILL_LOOKUP_SUCCESS, "rhomin inside");
+        CHECK(tillIsInTable(material, material->rhomin, 0.0) == TILL_LOOKUP_SUCCESS, "rhomin inside (on the cold curve)");
         CHECK(tillIsInTable(material, material->rhomax, u) == TILL_LOOKUP_SUCCESS, "rhomax inside");
         CHECK(tillIsInTable(material, material->rhomin*(1.0 - 3.0*TILL_EDGE_TOL), 1.0) == TILL_LOOKUP_OUTSIDE_RHOMIN, "below rhomin");
         CHECK(tillIsInTable(material, material->rhomax*(1.0 + 3.0*TILL_EDGE_TOL), u) == TILL_LOOKUP_OUTSIDE_RHOMAX, "above rhomax");
@@ -268,7 +269,8 @@ static void testIsentropes(TILLMATERIAL *material)
         {
             double u = tillCubicInt(material, rho, s1);
             if (tillIsInTable(material, rho, u) == TILL_LOOKUP_SUCCESS)
-                CHECK_REL(tillLookupU(material, rho, u, rho, k) + 1e-9, u + 1e-9, 1e-8, "lookup identity rho= %g", rho);
+                /* The entropy solver converges to TILL_EDGE_TOL*(|u| + 1): relative 1e-8 plus absolute 1e-10. */
+                CHECK_REL(tillLookupU(material, rho, u, rho, k) + 1e-2, u + 1e-2, 1e-8, "lookup identity rho= %g", rho);
         }
     }
 }
@@ -357,15 +359,18 @@ int main(int argc, char **argv)
         testUnits(iMat);
         testPressure(material);
 
-        /* The table as EOSlib initializes it. */
-        tillInitLookup(material, 1000, 1000, 1e-4, 200.0, 1200.0);
+        /* The standard table, as EOSlib initializes it. */
+        tillInitLookupDefault(material);
+        CHECK(material->nTableRho == TILL_TABLE_NRHO && material->nTableV == TILL_TABLE_NV, "standard table sizes");
+        CHECK(material->vmin == material->cv*TILL_TABLE_TMIN && material->vmax == material->cv*TILL_TABLE_TMAX, "standard table v range");
+        CHECK(material->rhomin == TILL_TABLE_RHOMIN_FAC*material->rho0, "standard table rhomin");
         testTable(material);
         testIsentropes(material);
         testTemperature(material);
         testSentinels(material);
 
         /* Re-initialization with other parameters works (no leak, no stale state). */
-        tillInitLookup(material, 300, 200, 1e-3, 50.0, 100.0);
+        tillInitLookup(material, 300, 200, 1e-3, 50.0, 1e-4, 100.0);
         CHECK(material->nTableRho == 300 && material->nTableV == 200, "re-init sizes");
         CHECK(material->rhomax >= 50.0*exp(-material->dlogrho) && material->rhomax <= 50.0*exp(material->dlogrho), "re-init rhomax= %g adjusted to the grid", material->rhomax);
         testTable(material);
