@@ -65,6 +65,9 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit)
     material->n = 0;
     material->dlogrho = 0.0;
     material->dv = 0.0;
+    material->logrhomin = 0.0;
+    material->invdlogrho = 0.0;
+    material->invdv = 0.0;
 
 	/*
 	 * Unit system (the same rule in EOSlib and every sublibrary): both units > 0 and finite are code
@@ -371,7 +374,9 @@ void tillPrintMat(TILLMATERIAL *material, FILE *fp)
  * raw P(rho) at fixed T is monotonic where the cut one is flat. The cut of Pc inside the
  * intermediate blend is kept in both modes (see below).
  *
- * Any of pcSound, pdPdrho and pdPdu may be NULL.
+ * Any of pcSound, pdPdrho and pdPdu may be NULL. If all three are NULL (tillPressure, the RK4
+ * stages of the isentrope integration) the derivatives are not computed at all; P is the same
+ * expression either way, so it is bit-identical with and without them.
  */
 static double tillPressureCore(TILLMATERIAL *material, double rho, double u, int bClip,
                                double *pcSound, double *pdPdrho, double *pdPdu)
@@ -381,8 +386,9 @@ static double tillPressureCore(TILLMATERIAL *material, double rho, double u, int
     const double alpha = material->alpha, beta = material->beta;
     double eta, mu, z, w0, ex;
     double Pc = 0.0, Pe = 0.0, dPcdrho = 0.0, dPedrho = 0.0, dPcdu = 0.0, dPedu = 0.0;
-    double P, c2, dPdrho, dPdu, y;
+    double P, c2, dPdrho = 0.0, dPdu = 0.0, y;
     int bCold, bHot;
+    const int bDeriv = (pcSound != NULL || pdPdrho != NULL || pdPdu != NULL);
 
     eta = rho/rho0;
     mu = eta - 1.0;
@@ -419,10 +425,8 @@ static double tillPressureCore(TILLMATERIAL *material, double rho, double u, int
 #endif
         }
         if (bCut) {
-            Pc = 0.0;
-            dPcdrho = 0.0;
-            dPcdu = 0.0;
-        } else {
+            Pc = 0.0;       /* dPcdrho = dPcdu = 0 */
+        } else if (bDeriv) {
             dPcdrho = a*u + b*u/(w0*w0)*(3.0*w0 - 2.0) + (A + 2.0*B*mu)/rho0;
             dPcdu = a*rho + b*rho/(w0*w0);
         }
@@ -430,19 +434,22 @@ static double tillPressureCore(TILLMATERIAL *material, double rho, double u, int
 
     /* Expanded term Pe: needed in the hot and the intermediate region. */
     if (!bCold) {
-        double Gammae;
+        /* exp(-beta z^2) is computed once (it was written out three times, for Pe and both derivatives). */
+        const double eb = exp(-beta*z*z);
+        const double Gammae = a + b/w0*eb;
 
         ex = exp(-(alpha*z + beta*z*z));
-        Gammae = a + b/w0*exp(-beta*z*z);
         Pe = Gammae*u*rho + A*mu*ex;
-        /*
-         * With z = 1/eta - 1: dz/deta = -1/eta^2, dw0/deta = -2(w0-1)/eta, so
-         * d/deta [mu exp(-(alpha z + beta z^2))] = exp(...) (1 + mu (alpha + 2 beta z)/eta^2).
-         * (The previous expression had a spurious "- eta" inside the bracket.)
-         */
-        dPedrho = (a + b/w0*exp(-beta*z*z)*(2.0*beta*z/eta + 3.0 - 2.0/w0))*u
-                + A/rho0*ex*(1.0 + mu/(eta*eta)*(alpha + 2.0*beta*z));
-        dPedu = (a + b/(w0*w0)*exp(-beta*z*z))*rho;
+        if (bDeriv) {
+            /*
+             * With z = 1/eta - 1: dz/deta = -1/eta^2, dw0/deta = -2(w0-1)/eta, so
+             * d/deta [mu exp(-(alpha z + beta z^2))] = exp(...) (1 + mu (alpha + 2 beta z)/eta^2).
+             * (The previous expression had a spurious "- eta" inside the bracket.)
+             */
+            dPedrho = (a + b/w0*eb*(2.0*beta*z/eta + 3.0 - 2.0/w0))*u
+                    + A/rho0*ex*(1.0 + mu/(eta*eta)*(alpha + 2.0*beta*z));
+            dPedu = (a + b/(w0*w0)*eb)*rho;
+        }
     }
 
     /* Combine. */
@@ -454,8 +461,10 @@ static double tillPressureCore(TILLMATERIAL *material, double rho, double u, int
         /* y depends on u, which contributes (Pe - Pc) dy/du to dP/du. */
         y = (u - material->us)/(material->us2 - material->us);
         P = (1.0 - y)*Pc + y*Pe;
-        dPdrho = (1.0 - y)*dPcdrho + y*dPedrho;
-        dPdu = (1.0 - y)*dPcdu + y*dPedu + (Pe - Pc)/(material->us2 - material->us);
+        if (bDeriv) {
+            dPdrho = (1.0 - y)*dPcdrho + y*dPedrho;
+            dPdu = (1.0 - y)*dPcdu + y*dPedu + (Pe - Pc)/(material->us2 - material->us);
+        }
     }
 
     /* Final cutoff of the total pressure (can act in the hot and intermediate region). */
@@ -464,6 +473,8 @@ static double tillPressureCore(TILLMATERIAL *material, double rho, double u, int
         dPdrho = 0.0;
         dPdu = 0.0;
     }
+
+    if (!bDeriv) return P;
 
     if (pcSound != NULL) {
         /* c^2 = (dP/drho)_s = (dP/drho)_u + P/rho^2 (dP/du)_rho, from the derivatives above. */

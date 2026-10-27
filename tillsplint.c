@@ -118,7 +118,7 @@ static double tillSplineIntField(TILLMATERIAL *material, double s, int i, size_t
     double a, b;
 
 #define TILL_FIELD(entry, off) (*(const double *)((const char *)&(entry) + (off)))
-    a = ((klo+1)*h - s)/h;
+    a = (klo+1) - s*material->invdv;     /* ((klo+1) h - s)/h */
     b = 1.0 - a;
 
     return a*TILL_FIELD(row[klo], offY) + b*TILL_FIELD(row[klo+1], offY)
@@ -163,7 +163,7 @@ void tillLocateRho(TILLMATERIAL *material, double rho, int *pi, double *pe)
     const double logrho = log(rho);
     int i = tillLookupIndexLogRho(material, logrho);
     *pi = i;
-    *pe = (logrho - tillLookupLogRho(material, i))/material->dlogrho;
+    *pe = (logrho - tillLookupLogRho(material, i))*material->invdlogrho;
 }
 
 /*
@@ -189,14 +189,14 @@ static inline double tillSplineIntFieldD(TILLMATERIAL *material, double s, int i
     const double h = material->dv;
     const TILL_LOOKUP_ENTRY *row = &material->Lookup[TILL_INDEX(material, i, 0)];
     const int klo = tillLookupIndexV(material, s);
-    const double a = ((klo+1)*h - s)/h, b = 1.0 - a;
+    const double a = (klo+1) - s*material->invdv, b = 1.0 - a;   /* ((klo+1) h - s)/h */
 #define TILL_FIELD(entry, off) (*(const double *)((const char *)&(entry) + (off)))
     const double ylo = TILL_FIELD(row[klo], offY), yhi = TILL_FIELD(row[klo+1], offY);
     const double y2lo = TILL_FIELD(row[klo], offY2), y2hi = TILL_FIELD(row[klo+1], offY2);
 #undef TILL_FIELD
 
     if (pdy != NULL) {
-        *pdy = (yhi - ylo)/h - (3.0*a*a - 1.0)/6.0*h*y2lo + (3.0*b*b - 1.0)/6.0*h*y2hi;
+        *pdy = (yhi - ylo)*material->invdv - (3.0*a*a - 1.0)/6.0*h*y2lo + (3.0*b*b - 1.0)/6.0*h*y2hi;
     }
     return a*ylo + b*yhi + ((a*a*a - a)*y2lo + (b*b*b - b)*y2hi)*(h*h)/6.0;
 }
@@ -208,14 +208,12 @@ static inline double tillSplineIntFieldD(TILLMATERIAL *material, double s, int i
  *
  * rho and s must be inside the table; the callers check this.
  */
-double tillCubicIntD(TILLMATERIAL *material, double rho, double s, double *pduds)
+/* The same at a located density (interval i, fraction e from tillLocateRho), without the log(). */
+static double tillCubicIntDLocated(TILLMATERIAL *material, int i, double e, double s, double *pduds)
 {
     const size_t offU = offsetof(TILL_LOOKUP_ENTRY, u), offU2 = offsetof(TILL_LOOKUP_ENTRY, udv2);
     const size_t offU1 = offsetof(TILL_LOOKUP_ENTRY, u1), offU12 = offsetof(TILL_LOOKUP_ENTRY, u1dv2);
-    double u0, u1, d0, d1, e;
-    int i;
-
-    tillLocateRho(material, rho, &i, &e);
+    double u0, u1, d0, d1;
 
     if (pduds == NULL) {
         u0 = tillSplineIntFieldD(material, s, i, offU, offU2, NULL);
@@ -233,6 +231,15 @@ double tillCubicIntD(TILLMATERIAL *material, double rho, double s, double *pduds
         *pduds = tillHermite(u0s, u1s, d0s, d1s, material->dlogrho, e, NULL);
         return tillHermite(u0, u1, d0, d1, material->dlogrho, e, NULL);
     }
+}
+
+double tillCubicIntD(TILLMATERIAL *material, double rho, double s, double *pduds)
+{
+    double e;
+    int i;
+
+    tillLocateRho(material, rho, &i, &e);
+    return tillCubicIntDLocated(material, i, e, s, pduds);
 }
 
 double tillCubicInt(TILLMATERIAL *material, double rho, double s)
@@ -294,7 +301,8 @@ double tillFindEntropyCurve(TILLMATERIAL *material, double rho, double u, int iO
     s = fmin(fmax(s, slo), shi);
 
     for (iter = 0; iter < 50; iter++) {
-        f = tillCubicIntD(material, rho, s, &dfds) - u;
+        /* rho is fixed: reuse its location (i, e) instead of a log() per iteration. */
+        f = tillCubicIntDLocated(material, i, e, s, &dfds) - u;
         if (fabs(f) <= utol) return s;
         /* Shrink the bracket (u is increasing in s). */
         if (f > 0.0) shi = s; else slo = s;
@@ -427,7 +435,7 @@ int tillLookupIndexLogRho(TILLMATERIAL *material, double logrho)
 
     // Uniform spacing in log(rho). The result is clamped to [0, nTableRho-2] so that (i, i+1) is
     // always a valid interval; the callers check the range of rho with TILL_EDGE_TOL.
-    i = (int) floor((logrho-log(material->rhomin))/material->dlogrho);
+    i = (int) floor((logrho - material->logrhomin)*material->invdlogrho);
 
     if (i < 0) return 0;
     if (i > material->nTableRho-2) return material->nTableRho-2;
@@ -443,7 +451,7 @@ int tillLookupIndexV(TILLMATERIAL *material, double s)
     int j;
 
     // Uniform spacing in s; the argument is s. Clamped to [0, nTableV-2], see tillLookupIndexLogRho.
-    j = (int) floor(s/material->dv);
+    j = (int) floor(s*material->invdv);
 
     if (j < 0) return 0;
     if (j > material->nTableV-2) return material->nTableV-2;
@@ -466,7 +474,7 @@ double tillLookupRho(TILLMATERIAL *material, int i)
 double tillLookupLogRho(TILLMATERIAL *material, int i)
 {
     // Assume uniform spacing in log(rho).
-    return (log(material->rhomin)+i*material->dlogrho);
+    return (material->logrhomin + i*material->dlogrho);
 }
 
 /*

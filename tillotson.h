@@ -51,12 +51,19 @@
  *          cold curve), so u(rho, T) fails and T(rho, u) falls back to 0 there.
  *          Documentation: the unused V_EPS and the MIN/MAX macros are gone from this public
  *          header (MAX was used once, now fmax), <stdio.h> is included inside the include
- *          guard, the spline and index routines say s where they meant s (not v), and
+ *          guard, the spline and index routines say s where they said v, and
  *          tillPrintMat prints nLookupFail.
  *          tillTempRhoU returns T = 0 (counted) below the cold curve and for a non-finite u
  *          instead of the negative (u - u_cold)/cv; within tillUTol of the cold curve T = 0,
  *          not counted. An inconsistent unit pair (exactly one of dKpcUnit, dMsolUnit <= 0, NaN,
  *          inf) is fatal with a message also under -DNDEBUG (it was only an assert).
+ *          Hot path: tillInitLookup stores logrhomin, 1/dlogrho and 1/dv, so the index and
+ *          spline routines need no log(rhomin) and no division per lookup; the Newton iteration of
+ *          tillFindEntropyCurve reuses the location of rho (one log() per call, not one per
+ *          iteration); tillPressureCore skips the derivatives when only P is wanted (P is
+ *          bit-identical) and evaluates exp(-beta z^2) once. tillCalcU is adaptive (RK4 with
+ *          step doubling, local tolerance TILL_CALCU_RTOL relative to |u| + vmin) instead of
+ *          fixed steps of dlogrho/100, which took ~1e5 steps for a long expansion.
  */
 #define TILL_VERSION_TEXT    "4.0.0"
 #define TILL_VERSION_MAJOR   4
@@ -264,6 +271,10 @@ typedef struct tillMaterial
 	/* Grid spacing of the lookup table */
 	double dlogrho;
 	double dv;		/* step in s (not in v!) */
+	/* Derived from the grid by tillInitLookup, so that a lookup needs no log() or division for it */
+	double logrhomin;	/* log(rhomin) */
+	double invdlogrho;	/* 1/dlogrho */
+	double invdv;		/* 1/dv */
 
 	/* The lookup table u(rho, s) along the isentropes, NULL until tillInitLookup */
 	TILL_LOOKUP_ENTRY *Lookup;

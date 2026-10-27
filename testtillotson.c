@@ -500,6 +500,37 @@ static void testIsentropes(TILLMATERIAL *material)
     }
 }
 
+/*
+ * tillCalcU is adaptive (step doubling, TILL_CALCU_RTOL): long paths outside the table, where it is
+ * the fallback of tillLookupU, against a fixed-step RK4 reference with 10^6 steps. The paths cross
+ * the kinks of P/rho (pressure cut, us, us2) where the fixed-step reference itself converges only
+ * like h^2, so the tolerance is 1e-6 (the reference is good to ~1e-8). Round trips there and back.
+ */
+static void testCalcUOutside(TILLMATERIAL *material)
+{
+    const double v[] = {0.0, 1e2*material->vmin, 1e-2*material->vmax, 0.5*material->vmax};
+    int k;
+
+    for (k = 0; k < 4; k++) {
+        /* Expansion from rho0 far below the table, and compression from rhomax far above it. */
+        double rho2 = 1e-3*material->rhomin;
+        double u2 = tillCalcU(material, material->rho0, v[k], rho2);
+        double ref = refU(material, material->rho0, v[k], rho2, 1000000);
+        CHECK(!tillFailed(u2) && fabs(u2 - ref) <= 1e-6*fabs(ref) + 1e-6*material->vmin,
+              "tillCalcU expansion to %g rho0, v= %g: %.10e vs %.10e", rho2/material->rho0, v[k], u2, ref);
+
+        {
+            double u1 = tillColdULookup(material, material->rhomax) + v[k];
+            double rho3 = 10.0*material->rhomax;
+            double u3 = tillCalcU(material, material->rhomax, u1, rho3);
+            double ref3 = refU(material, material->rhomax, u1, rho3, 1000000);
+            double back = tillCalcU(material, rho3, u3, material->rhomax);
+            CHECK(!tillFailed(u3) && fabs(u3 - ref3) <= 1e-6*fabs(ref3), "tillCalcU compression to 10 rhomax, v= %g: %.10e vs %.10e", v[k], u3, ref3);
+            CHECK(fabs(back - u1) <= 1e-7*fabs(u1) + 1e-6*material->vmin, "tillCalcU round trip rhomax -> 10 rhomax -> rhomax, v= %g: %.10e vs %.10e", v[k], back, u1);
+        }
+    }
+}
+
 static void testTemperature(TILLMATERIAL *material)
 {
     int k, nskip = 0, n = 0;
@@ -716,11 +747,16 @@ int main(int argc, char **argv)
         testIsentropes(material);
         testTemperature(material);
         testSentinels(material);
+        testCalcUOutside(material);
+        /* Grid constants derived by tillInitLookup for the lookups. */
+        CHECK(material->logrhomin == log(material->rhomin), "logrhomin");
+        CHECK(material->invdlogrho == 1.0/material->dlogrho && material->invdv == 1.0/material->dv, "invdlogrho, invdv");
 
         /* Re-initialization with other parameters works (no leak, no stale state). */
         tillInitLookup(material, 300, 200, 1e-3, 50.0, 1e-4, 100.0);
         CHECK(material->nTableRho == 300 && material->nTableV == 200, "re-init sizes");
         CHECK(material->rhomax >= 50.0*exp(-material->dlogrho) && material->rhomax <= 50.0*exp(material->dlogrho), "re-init rhomax= %g adjusted to the grid", material->rhomax);
+        CHECK(material->logrhomin == log(material->rhomin) && material->invdlogrho == 1.0/material->dlogrho && material->invdv == 1.0/material->dv, "re-init grid constants");
         testTable(material);
 
         tillFinalizeMaterial(material);
