@@ -246,7 +246,8 @@ double tillFindUonIsentrope(TILLMATERIAL *material, double s, double rho)
 
 /*
  * Find the isentrope through (rho, u): returns its table variable s, or TILL_FAIL_VALUE if (rho, u)
- * is below the cold curve (s < 0) or above the table (s > s_max). iOrder is only used in messages.
+ * is below the cold curve (s < 0) or above the table (s > s_max), or u is not finite. iOrder is
+ * only used in messages.
  *
  * u(rho, s) is monotonically increasing in s, so the cell [s_j, s_j+1] containing the root is
  * found by bisection on the grid lines (cheap Hermite evaluations), and the root inside the cell
@@ -258,6 +259,11 @@ double tillFindEntropyCurve(TILLMATERIAL *material, double rho, double u, int iO
     const double utol = TILL_EDGE_TOL*(fabs(u) + 1.0);
     double e, ulo, uhi, slo, shi, s, f, dfds;
     int i, jlo, jhi, iter;
+
+    /* NaN would pass both range tests below and send the bisection astray. */
+    if (!isfinite(u))
+        TILL_FAIL_RETURN(material, TILL_FAIL_VALUE, "tillFindEntropyCurve: Particle %i (rho= %g, u= %g, iMat= %i) has a non-finite u.\n",
+                         iOrder, rho, u, material->iMaterial);
 
     tillLocateRho(material, rho, &i, &e);
 
@@ -307,7 +313,7 @@ double tillFindEntropyCurve(TILLMATERIAL *material, double rho, double u, int iO
 /*
  * Calculate u2 on the isentrope through (rho1, u1) at rho2. Inside the lookup table this is an
  * interpolation; for rho outside [rhomin, rhomax] or u1 above the table the ODE is integrated
- * directly. Returns TILL_FAIL_VALUE if (rho1, u1) is below the cold curve.
+ * directly. Returns TILL_FAIL_VALUE if (rho1, u1) is below the cold curve or u1 is not finite.
  */
 double tillLookupU(TILLMATERIAL *material, double rho1, double u1, double rho2, int iOrder)
 {
@@ -318,6 +324,11 @@ double tillLookupU(TILLMATERIAL *material, double rho1, double u1, double rho2, 
 
     if (iRet == TILL_LOOKUP_OUTSIDE_VMIN)
         TILL_FAIL_RETURN(material, TILL_FAIL_VALUE, "tillLookupU: Particle %i (rho= %g, u= %g, iMat= %i) is below the cold curve.\n",
+                         iOrder, rho1, u1, material->iMaterial);
+
+    /* Non-finite u1 (TILL_FAIL): there is no isentrope to follow, not even by direct integration. */
+    if (iRet == TILL_FAIL)
+        TILL_FAIL_RETURN(material, TILL_FAIL_VALUE, "tillLookupU: Particle %i (rho= %g, u= %g, iMat= %i) has a non-finite u.\n",
                          iOrder, rho1, u1, material->iMaterial);
 
     /* Check if the starting and end point are inside of the look up table. */

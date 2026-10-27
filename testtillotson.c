@@ -215,7 +215,10 @@ static void testTable(TILLMATERIAL *material)
         CHECK(tillIsInTable(material, material->rho0, material->vmax*(1.0 + 1e-6)) == TILL_LOOKUP_OUTSIDE_VMAX, "(rho0, >vmax) outside");
         CHECK(tillIsInTable(material, 2.0*material->rho0, 0.5*tillColdULookup(material, 2.0*material->rho0)) == TILL_LOOKUP_OUTSIDE_VMIN, "below cold curve");
         CHECK(tillIsInTable(material, NAN, 1.0) == TILL_LOOKUP_OUTSIDE_RHOMIN, "NaN rho");
-        CHECK(tillIsInTable(material, material->rho0, NAN) == TILL_LOOKUP_OUTSIDE_VMAX, "NaN u");
+        /* A non-finite u is no state at all (TILL_FAIL), not "above the table": EOSIsUsable tolerates OUTSIDE_VMAX. */
+        CHECK(tillIsInTable(material, material->rho0, NAN) == TILL_FAIL, "NaN u");
+        CHECK(tillIsInTable(material, material->rho0, INFINITY) == TILL_FAIL, "+inf u");
+        CHECK(tillIsInTable(material, material->rho0, -INFINITY) == TILL_FAIL, "-inf u");
     }
 }
 
@@ -320,10 +323,15 @@ static void testSentinels(TILLMATERIAL *material)
     CHECK(tillIsBelowColdCurve(material, 2.0*material->rhomax, 1.0) == TILL_FAIL, "isbelow above rhomax");
     CHECK(tillIsBelowColdCurve(material, 2.0*material->rho0, 0.5*ucold) == 1, "isbelow true");
     CHECK(tillIsBelowColdCurve(material, 2.0*material->rho0, 2.0*ucold) == 0, "isbelow false");
-    CHECK(material->nLookupFail == nfail0 + 9, "every failure is counted (%ld)", material->nLookupFail - nfail0);
+    /* A non-finite u is rejected by every function that takes one, never passed on as NaN. */
+    CHECK(tillIsBelowColdCurve(material, 2.0*material->rho0, NAN) == TILL_FAIL, "isbelow NaN u");
+    CHECK(tillFindEntropyCurve(material, 2.0*material->rho0, NAN, 0) == TILL_FAIL_VALUE, "entropy curve NaN u");
+    CHECK(tillLookupU(material, 2.0*material->rho0, NAN, material->rho0, 0) == TILL_FAIL_VALUE, "lookup NaN u");
+    CHECK(tillLookupU(material, 2.0*material->rho0, INFINITY, material->rho0, 0) == TILL_FAIL_VALUE, "lookup +inf u");
+    CHECK(material->nLookupFail == nfail0 + 13, "every failure is counted (%ld)", material->nLookupFail - nfail0);
     /* Outside the table in rho the lookup falls back to direct integration (and is finite, not a failure). */
     CHECK(isfinite(tillLookupU(material, 0.5*material->rhomin, 1.0, material->rhomin, 0)), "lookup below rhomin integrates");
-    CHECK(material->nLookupFail == nfail0 + 9, "direct integration is not a failure");
+    CHECK(material->nLookupFail == nfail0 + 13, "direct integration is not a failure");
 }
 
 static double fcube(TILLMATERIAL *m, double x, const void *ctx) { (void) m; (void) ctx; return x*x*x - 2.0; }

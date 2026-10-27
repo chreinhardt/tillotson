@@ -244,7 +244,8 @@ double tillCalcU(TILLMATERIAL *material, double rho1, double u1, double rho2)
 /*
  * This function checks if a given (rho, u) is in the look up table or not.
  * 
- * Returns TILL_LOOKUP_SUCCESS if (rho, u) is in the table and an error code if not.
+ * Returns TILL_LOOKUP_SUCCESS if (rho, u) is in the table, one of the TILL_LOOKUP_OUTSIDE_*
+ * codes if it lies outside a particular bound, and TILL_FAIL if u is not finite.
  */
 int tillIsInTable(TILLMATERIAL *material, double rho, double u)
 {
@@ -257,13 +258,25 @@ int tillIsInTable(TILLMATERIAL *material, double rho, double u)
     if (rho > material->rhomax*(1.0 + TILL_EDGE_TOL))
         return TILL_LOOKUP_OUTSIDE_RHOMAX;
 
+    /*
+     * A non-finite u is not a state outside one particular bound but no state at all. NaN would
+     * otherwise fail the test u <= uhi below and be reported as OUTSIDE_VMAX (and +inf would be
+     * reported the same way), which EOSIsUsable tolerates for Tillotson because the pressure is
+     * analytic. TILL_FAIL is mapped to EOS_FAIL by EOSIsInTable and rejected by EOSIsUsable.
+     */
+    if (!isfinite(u))
+    {
+        TILL_WARN("tillIsInTable: Value (rho=%15.7E, u=%15.7E, iMat= %i) has a non-finite u!\n", rho, u, material->iMaterial);
+        return TILL_FAIL;
+    }
+
     /* u on the cold curve (j = 0) and on the top row of the table at this rho. */
     tillLocateRho(material, rho, &i, &e);
     ulo = tillCubicIntGrid(material, i, e, 0);
     uhi = tillCubicIntGrid(material, i, e, material->nTableV-1);
     utol = TILL_EDGE_TOL*(fabs(u) + 1.0);
 
-    if (!(u <= uhi + utol))        /* also NaN */
+    if (u > uhi + utol)
         return TILL_LOOKUP_OUTSIDE_VMAX;
     if (u < ulo - utol)
     {
@@ -278,7 +291,7 @@ int tillIsInTable(TILLMATERIAL *material, double rho, double u)
  * This function checks if a given (rho,u) is in an unphysical state below the cold curve.
  *
  * Returns 1 (true) if (rho,u) is below the cold curve, 0 (false) if not, and TILL_FAIL if
- * rho is outside the table.
+ * rho is outside the table or u is not finite.
  */
 int tillIsBelowColdCurve(TILLMATERIAL *material, double rho, double u)
 {
@@ -287,6 +300,10 @@ int tillIsBelowColdCurve(TILLMATERIAL *material, double rho, double u)
     if (!(rho >= material->rhomin*(1.0 - TILL_EDGE_TOL)) || (rho > material->rhomax*(1.0 + TILL_EDGE_TOL)))
         TILL_FAIL_RETURN(material, TILL_FAIL, "tillIsBelowColdCurve: rho= %g outside of the lookup table (iMat= %i, rhomin= %g, rhomax= %g).\n",
                          rho, material->iMaterial, material->rhomin, material->rhomax);
+
+    if (!isfinite(u))
+        TILL_FAIL_RETURN(material, TILL_FAIL, "tillIsBelowColdCurve: non-finite u= %g (rho= %g, iMat= %i).\n",
+                         u, rho, material->iMaterial);
 
     if (u >= tillColdULookup(material, rho)) {
         iRet = 0;
