@@ -23,7 +23,7 @@
 /*
  * Generate the look up table for the isentropic evolution of the internal energy.
  */
-void tillInitLookup(TILLMATERIAL *material, int nTableRho, int nTableV, double rhomin, double rhomax, double vmax)
+void tillInitLookup(TILLMATERIAL *material, int nTableRho, int nTableV, double rhomin, double rhomax, double vmin, double vmax)
 {
 	TILL_LOOKUP_ENTRY *isentrope;
 	double v;
@@ -35,7 +35,9 @@ void tillInitLookup(TILLMATERIAL *material, int nTableRho, int nTableV, double r
     /* Min and max values for the lookup table (in code units). */
     material->rhomin = rhomin;
 	material->rhomax = rhomax;
+	material->vmin = vmin;
 	material->vmax = vmax;
+    assert(material->vmin > 0.0 && material->vmin < material->vmax);
 
     /* rhomin has to be larger than zero otherwise the logarithmic spacing does not work. */
     assert(material->rhomin > 0.0 && material->rhomin < material->rhomax);
@@ -65,7 +67,6 @@ void tillInitLookup(TILLMATERIAL *material, int nTableRho, int nTableV, double r
      * The grid is uniform in s = log(1 + v/vmin) (see tillotson.h), so dv is the step in s and
      * the last row is at s = log(1 + vmax/vmin), i.e. v = vmax.
      */
-    material->vmin = TILL_VMIN_FRAC*material->vmax;
     material->dv = log1p(material->vmax/material->vmin)/(material->nTableV-1);
 
 	/* We arrange the look up table as a 1D array with Lookup[i][j] = Lookup[i*Ntable+j] */
@@ -112,7 +113,26 @@ static double tillRK4Step(TILLMATERIAL *material, double logrho, double u, doubl
     return u + (k1u + 2.0*k2u + 2.0*k3u + k4u)/6.0;
 }
 
-/* Number of RK4 substeps per table interval dlogrho when integrating an isentrope. */
+/*
+ * The standard table (TILL_TABLE_* in tillotson.h): temperatures at rho0 and densities in units
+ * of rho0, so the table is the same physical table for every material and unit system.
+ */
+void tillInitLookupDefault(TILLMATERIAL *material)
+{
+    assert(material != NULL);
+    tillInitLookup(material, TILL_TABLE_NRHO, TILL_TABLE_NV,
+                   TILL_TABLE_RHOMIN_FAC*material->rho0, TILL_TABLE_RHOMAX_FAC*material->rho0,
+                   material->cv*TILL_TABLE_TMIN, material->cv*TILL_TABLE_TMAX);
+}
+
+/*
+ * Number of RK4 substeps per table interval dlogrho when integrating an isentrope. The lookup
+ * error against a reference integration decreases only about linearly with the number of
+ * substeps (the negative-pressure cut is a kink in du/dlogrho, where RK4 loses its order):
+ * for granite on the standard table the mean error is 8e-5 / 1e-5 / 2e-6 and the maximum
+ * (cold expanded states, T < 100 K at rho0) 3e-3 / 7e-4 / 2e-4 for 1 / 4 / 10 substeps;
+ * above 100 K the maximum is 3e-4 / 2e-5 / 1e-5. 10 substeps cost 2.3 s per material.
+ */
 #ifndef TILL_ISENTROPE_NSUB
 #define TILL_ISENTROPE_NSUB 10
 #endif

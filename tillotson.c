@@ -22,6 +22,7 @@
 #include <math.h>
 #include <assert.h>
 #include <stdio.h>
+#include <string.h>
 #include "tillotson.h"
 
 /* Compile with -DTILL_PRESS_MELOSH to cut the cold term for rho/rho0 < 0.8 (Melosh 1989) instead of where it is negative. */
@@ -278,32 +279,28 @@ void tilliMatString(TILLMATERIAL *material, char *MatName)
 }
 
 /*
- * This function returns an error message for each error code.
+ * Name of a tillIsInTable status code (static string).
+ */
+const char *tillLookupStatusString(int iError)
+{
+    switch(iError)
+    {
+        case TILL_LOOKUP_SUCCESS:        return "TILL_LOOKUP_SUCCESS";
+        case TILL_LOOKUP_OUTSIDE_RHOMIN: return "TILL_LOOKUP_OUTSIDE_RHOMIN";
+        case TILL_LOOKUP_OUTSIDE_RHOMAX: return "TILL_LOOKUP_OUTSIDE_RHOMAX";
+        case TILL_LOOKUP_OUTSIDE_VMIN:   return "TILL_LOOKUP_OUTSIDE_VMIN";
+        case TILL_LOOKUP_OUTSIDE_VMAX:   return "TILL_LOOKUP_OUTSIDE_VMAX";
+        default:                         return "UNKNOWN ERROR";
+    }
+}
+
+/*
+ * Same, copied into the caller's buffer (at least 32 characters).
  */
 void tillErrorString(int iError, char *ErrorString)
 {
     assert(ErrorString != NULL);
-
-    switch(iError)
-    {
-        case TILL_LOOKUP_SUCCESS:
-            sprintf(ErrorString, "TILL_LOOKUP_SUCCESS");
-            break;
-        case TILL_LOOKUP_OUTSIDE_RHOMIN:
-            sprintf(ErrorString, "TILL_LOOKUP_OUTSIDE_RHOMIN");
-            break;
-        case TILL_LOOKUP_OUTSIDE_RHOMAX:
-            sprintf(ErrorString, "TILL_LOOKUP_OUTSIDE_RHOMAX");
-            break;
-        case TILL_LOOKUP_OUTSIDE_VMIN:
-            sprintf(ErrorString, "TILL_LOOKUP_OUTSIDE_VMIN");
-            break;
-        case TILL_LOOKUP_OUTSIDE_VMAX:
-            sprintf(ErrorString, "TILL_LOOKUP_OUTSIDE_VMAX");
-            break;
-        default:
-            sprintf(ErrorString, "UNKNOWN ERROR");
-    } 
+    strcpy(ErrorString, tillLookupStatusString(iError));
 }
 
 /*

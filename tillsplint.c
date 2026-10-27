@@ -329,8 +329,8 @@ double tillLookupU(TILLMATERIAL *material, double rho1, double u1, double rho2, 
         return tillFindUonIsentrope(material, s, rho2);
     }
 
-    TILL_WARN("tillLookupU: value (%g, %g, %g) outside of look up table, doing direct integration (Error: %i).\n",
-            rho1, u1, rho2, iRet);
+    TILL_WARN("tillLookupU: (rho1= %g, u1= %g, rho2= %g, iMat= %i) outside of the lookup table (%s), doing direct integration.\n",
+            rho1, u1, rho2, material->iMaterial, tillLookupStatusString(iRet));
     return tillCalcU(material, rho1, u1, rho2);
 }
 
