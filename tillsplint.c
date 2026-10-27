@@ -17,9 +17,9 @@
  *
  * tillInitSplines: initialise the cubic splines in u and u1.
  *
- * tillSplineIntU: do a cubic spline interpolation of u in v.
+ * tillSplineIntU: do a cubic spline interpolation of u in s.
  *
- * tillSplineIntU1: do a cubic spline interpolation of u1 in v.
+ * tillSplineIntU1: do a cubic spline interpolation of u1 in s.
  *
  * tillCubicInt: interpolate a value (i,i+1) in logrho and (j,j+1) in s (uses Joachim's 2D
  *               interpolator).
@@ -30,10 +30,11 @@
 #include <stddef.h>   /* offsetof */
 
 /*
- * Natural cubic spline in v along one row of the lookup table, for a field of
+ * Natural cubic spline in s along one row of the lookup table, for a field of
  * TILL_LOOKUP_ENTRY. The data is at byte offset offY in each entry, the second
- * derivatives d2y/dv2 are written to byte offset offY2. The grid in v is
- * uniform (dv), so the tridiagonal system is
+ * derivatives d2y/ds2 are written to byte offset offY2 (the fields are named
+ * udv2/u1dv2 for historical reasons). The grid in s is uniform (step dv, also
+ * a historical name: it is the step in s), so the tridiagonal system is
  *
  *   y2[j-1] + 4 y2[j] + y2[j+1] = 6/dv^2 (y[j+1] - 2 y[j] + y[j-1]),   y2[0] = y2[n-1] = 0,
  *
@@ -58,7 +59,7 @@ static void tillInitSplineField(TILLMATERIAL *material, size_t offY, size_t offY
     for (i = 0; i < material->nTableRho; i++) {
         TILL_LOOKUP_ENTRY *row = &material->Lookup[TILL_INDEX(material, i, 0)];
 
-        /* Natural b.c. at v = 0. */
+        /* Natural b.c. at s = 0 (the cold curve). */
         TILL_FIELD(row[0], offY2) = 0.0;
         w[0] = 0.0;
 
@@ -71,7 +72,7 @@ static void tillInitSplineField(TILLMATERIAL *material, size_t offY, size_t offY
             w[j] = (3.0*r/h - 0.5*w[j-1])/p;
         }
 
-        /* Natural b.c. at v = vmax, then back substitution. */
+        /* Natural b.c. at s = s_max (v = vmax), then back substitution. */
         TILL_FIELD(row[n-1], offY2) = 0.0;
         for (j = n-2; j >= 0; j--) {
             TILL_FIELD(row[j], offY2) = TILL_FIELD(row[j], offY2)*TILL_FIELD(row[j+1], offY2) + w[j];
@@ -83,7 +84,7 @@ static void tillInitSplineField(TILLMATERIAL *material, size_t offY, size_t offY
 }
 
 /*
- * Calculate the second derivatives of u and u1 (du/dlogrho) with respect to v
+ * Calculate the second derivatives of u and u1 (du/dlogrho) with respect to s
  * for every row of the lookup table.
  */
 void tillInitSplines(TILLMATERIAL *material)
@@ -92,13 +93,13 @@ void tillInitSplines(TILLMATERIAL *material)
     tillInitSplineU1(material);
 }
 
-/* Spline of u in v: udv2 = d2u/dv2. */
+/* Spline of u in s: udv2 = d2u/ds2. */
 void tillInitSplineU(TILLMATERIAL *material)
 {
     tillInitSplineField(material, offsetof(TILL_LOOKUP_ENTRY, u), offsetof(TILL_LOOKUP_ENTRY, udv2));
 }
 
-/* Spline of u1 = du/dlogrho in v: u1dv2 = d2u1/dv2. */
+/* Spline of u1 = du/dlogrho in s: u1dv2 = d2u1/ds2. */
 void tillInitSplineU1(TILLMATERIAL *material)
 {
     tillInitSplineField(material, offsetof(TILL_LOOKUP_ENTRY, u1), offsetof(TILL_LOOKUP_ENTRY, u1dv2));
@@ -437,12 +438,12 @@ int tillLookupIndexLogRho(TILLMATERIAL *material, double logrho)
 /*
  * Return the index j, so that s_j and s_j+1 bracket s in the lookup table (s, not v!).
  */
-int tillLookupIndexV(TILLMATERIAL *material, double v)
+int tillLookupIndexV(TILLMATERIAL *material, double s)
 {
     int j;
 
     // Uniform spacing in s; the argument is s. Clamped to [0, nTableV-2], see tillLookupIndexLogRho.
-    j = (int) floor(v/material->dv);
+    j = (int) floor(s/material->dv);
 
     if (j < 0) return 0;
     if (j > material->nTableV-2) return material->nTableV-2;

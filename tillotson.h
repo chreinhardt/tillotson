@@ -1,9 +1,10 @@
-#include <stdio.h>
 /*
  * The header file for the Tillotson EOS library.
  */
 #ifndef TILLOTSON_HINCLUDED
 #define TILLOTSON_HINCLUDED
+
+#include <stdio.h>   /* FILE in tillPrintMat */
 
 /*
  * Version history
@@ -48,6 +49,10 @@
  *          the cold curve, uses Gamma = a + b instead of a growing b/w0). dGasConst is k_B/m_H in
  *          cgs as well (was k_B). tillColdULookup fails for rho <= 0 (returned 0, the expanded
  *          cold curve), so u(rho, T) fails and T(rho, u) falls back to 0 there.
+ *          Documentation: the unused V_EPS and the MIN/MAX macros are gone from this public
+ *          header (MAX was used once, now fmax), <stdio.h> is included inside the include
+ *          guard, the spline and index routines say s where they meant s (not v), and
+ *          tillPrintMat prints nLookupFail.
  *          tillTempRhoU returns T = 0 (counted) below the cold curve and for a non-finite u
  *          instead of the negative (u - u_cold)/cv; within tillUTol of the cold curve T = 0,
  *          not counted. An inconsistent unit pair (exactly one of dKpcUnit, dMsolUnit <= 0, NaN,
@@ -167,17 +172,6 @@ enum till_error_lookup
  */
 /* The look up table is a 1D array with Lookup(i, j) = Lookup[i*nTableV + j], i in rho, j in s. */
 #define TILL_INDEX(m, i, j) (((i)*(m)->nTableV) + (j))
-
-#ifndef MAX
-#define MAX(A,B) ((A) > (B) ? (A) : (B))
-#endif
-
-#ifndef MIN
-#define MIN(A,B) ((A) > (B) ? (B) : (A))
-#endif
-
-/* Define eps so that v <= v_max-eps. */
-#define V_EPS 1e-8
 
 /*
  * The isentropes are labelled by v = u(rho0). The table is uniform in the internal variable s,
@@ -373,6 +367,7 @@ double tillLookupU(TILLMATERIAL *material,double rho1,double u1,double rho2,int 
 double tillColdULookup(TILLMATERIAL *material,double rho);
 
 int tillLookupIndexLogRho(TILLMATERIAL *material, double logrho);
+/* Index j with s_j <= s < s_j+1 (clamped to [0, nTableV-2]); the argument is s, not v (historical name). */
 int tillLookupIndexV(TILLMATERIAL *material, double s);
 
 double tillLookupRho(TILLMATERIAL *material, int i);

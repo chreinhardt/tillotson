@@ -345,6 +345,7 @@ void tillPrintMat(TILLMATERIAL *material, FILE *fp)
     } else {
         fprintf(fp,"# Lookup table: not initialized\n");
     }
+    fprintf(fp,"# Failed lookups and fallbacks (nLookupFail): %ld\n", material->nLookupFail);
 }
 
 /*
@@ -468,7 +469,7 @@ static double tillPressureCore(TILLMATERIAL *material, double rho, double u, int
         /* c^2 = (dP/drho)_s = (dP/drho)_u + P/rho^2 (dP/du)_rho, from the derivatives above. */
         c2 = dPdrho + P/(rho*rho)*dPdu;
         /* Floor at the bulk sound speed of the uncompressed material (always with the cutoff). */
-        c2 = bClip ? MAX(c2, A/rho0) : MAX(c2, 0.0);
+        c2 = bClip ? fmax(c2, A/rho0) : fmax(c2, 0.0);
         *pcSound = sqrt(c2);
     }
     if (pdPdrho != NULL) *pdPdrho = dPdrho;
