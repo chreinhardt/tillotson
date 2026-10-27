@@ -175,6 +175,29 @@ static void testColdCurveExpanded(int iMat)
         CHECK(tillColdULookup(m, rho) == 0.0, "B = 3A: u_cold(rho= %g) = 0", rho);
         CHECK(fabs(tillCubicInt(m, rho, 0.0)) <= 1e-14*m->vmin, "B = 3A: table row 0 at rho= %g is %g", rho, tillCubicInt(m, rho, 0.0));
     }
+    /*
+     * Direct integration clamps u >= 0 like the table: expanding from (rho0, 0) or from just above
+     * the cold curve ends on the cold curve, u = 0. Without the clamp the positive cold pressure
+     * drives u below zero (the unclamped reference shows it). With TILL_PRESS_MELOSH the pressure of
+     * expanded cold states is zero below 0.8 rho0, so a state above the cold curve stays above it.
+     */
+#ifndef TILL_PRESS_MELOSH
+    CHECK(refU(m, m->rho0, 0.0, 0.5*m->rho0, 2000) < 0.0, "B = 3A: the unclamped ODE goes below u = 0");
+#endif
+    for (k = 0; k < 20; k++) {
+        double rho2 = 0.6*m->rho0*pow(1e-3/0.6, k/19.0);   /* below 2/3 rho0; deterministic, keeps the RNG stream of the other tests */
+        CHECK(tillCalcU(m, m->rho0, 0.0, rho2) == 0.0, "B = 3A: tillCalcU from (rho0, 0) to rho2= %g is %g", rho2, tillCalcU(m, m->rho0, 0.0, rho2));
+#ifndef TILL_PRESS_MELOSH
+        CHECK(tillCalcU(m, m->rho0, 1e-3*m->vmin, rho2) == 0.0, "B = 3A: tillCalcU from (rho0, 1e-3 vmin) to rho2= %g", rho2);
+#else
+        /* The cold-region pressure is zero below 0.8 rho0 (Melosh cut), so u only decreases between rho0 and 0.8 rho0. */
+        {
+            double u2 = tillCalcU(m, m->rho0, 1e-3*m->vmin, rho2);
+            CHECK(u2 >= 0.0 && u2 < 1e-3*m->vmin, "B = 3A: tillCalcU from (rho0, 1e-3 vmin) to rho2= %g is %g", rho2, u2);
+        }
+#endif
+        CHECK(tillCalcU(m, m->rho0, 0.0, rho2) == tillLookupU(m, m->rho0, 0.0, rho2, k), "B = 3A: direct integration == lookup on the cold curve");
+    }
     tillFinalizeMaterial(m);
 }
 
@@ -381,7 +404,7 @@ static void testIsentropes(TILLMATERIAL *material)
         /* Direct integration agrees with the ODE and with the lookup. */
         if (k % 8 == 0) {
             double d = tillCalcU(material, rho1, u1, rho2);
-            CHECK(fabs(d - ref) <= 1e-6*fabs(ref) + 1e-9*v, "tillCalcU vs ODE rho1= %g v= %g rho2= %g", rho1, v, rho2);
+            CHECK(fabs(d - ref) <= 1e-6*fabs(ref) + 1e-9*v, "tillCalcU vs ODE rho1= %g v= %g rho2= %g: %.10e vs %.10e (u1= %g, us= %g)", rho1, v, rho2, d, ref, u1, material->us);
         }
     }
     CHECK(n > 100, "enough in-table samples (%d)", n);
@@ -462,9 +485,36 @@ static void testSentinels(TILLMATERIAL *material)
     CHECK(tillLookupU(material, 2.0*material->rho0, NAN, material->rho0, 0) == TILL_FAIL_VALUE, "lookup NaN u");
     CHECK(tillLookupU(material, 2.0*material->rho0, INFINITY, material->rho0, 0) == TILL_FAIL_VALUE, "lookup +inf u");
     CHECK(material->nLookupFail == nfail0 + 16, "every failure and fallback is counted (%ld)", material->nLookupFail - nfail0);
-    /* Outside the table in rho the lookup falls back to direct integration (and is finite, not a failure). */
+    /* Outside the table in rho the lookup falls back to direct integration: finite, and counted as a fallback. */
     CHECK(isfinite(tillLookupU(material, 0.5*material->rhomin, 1.0, material->rhomin, 0)), "lookup below rhomin integrates");
-    CHECK(material->nLookupFail == nfail0 + 16, "direct integration is not a failure");
+    CHECK(material->nLookupFail == nfail0 + 17, "direct integration is counted as a fallback (%ld)", material->nLookupFail - nfail0);
+    CHECK(isfinite(tillLookupU(material, material->rho0, 1.0, 2.0*material->rhomax, 0)), "lookup above rhomax integrates");
+    CHECK(material->nLookupFail == nfail0 + 18, "direct integration is counted as a fallback (%ld)", material->nLookupFail - nfail0);
+    /* An invalid end point is a failure in every path (also the clamp below the cold curve), counted once. */
+    CHECK(tillLookupU(material, 2.0*material->rho0, 2.0*ucold, NAN, 0) == TILL_FAIL_VALUE, "lookup to NaN rho2");
+    CHECK(tillLookupU(material, 2.0*material->rho0, 2.0*ucold, INFINITY, 0) == TILL_FAIL_VALUE, "lookup to +inf rho2");
+    CHECK(tillLookupU(material, 2.0*material->rho0, 2.0*ucold, 0.0, 0) == TILL_FAIL_VALUE, "lookup to rho2 = 0");
+    CHECK(tillLookupU(material, 2.0*material->rho0, 0.5*ucold, INFINITY, 0) == TILL_FAIL_VALUE, "lookup below cold curve to +inf rho2");
+    CHECK(tillLookupU(material, 2.0*material->rho0, 0.5*ucold, -1.0, 0) == TILL_FAIL_VALUE, "lookup below cold curve to rho2 < 0");
+    CHECK(tillLookupU(material, NAN, 1.0, material->rho0, 0) == TILL_FAIL_VALUE, "lookup from NaN rho1");
+    CHECK(tillLookupU(material, INFINITY, 1.0, material->rho0, 0) == TILL_FAIL_VALUE, "lookup from +inf rho1");
+    CHECK(material->nLookupFail == nfail0 + 25, "invalid rho counted once each (%ld)", material->nLookupFail - nfail0);
+    /* tillCalcU: invalid input fails (no undefined behaviour in the step count), counted; a valid integration is not. */
+    CHECK(tillCalcU(material, NAN, 1.0, material->rho0) == TILL_FAIL_VALUE, "tillCalcU NaN rho1");
+    CHECK(tillCalcU(material, material->rho0, 1.0, NAN) == TILL_FAIL_VALUE, "tillCalcU NaN rho2");
+    CHECK(tillCalcU(material, INFINITY, 1.0, material->rho0) == TILL_FAIL_VALUE, "tillCalcU +inf rho1");
+    CHECK(tillCalcU(material, material->rho0, 1.0, INFINITY) == TILL_FAIL_VALUE, "tillCalcU +inf rho2");
+    CHECK(tillCalcU(material, material->rho0, 1.0, 0.0) == TILL_FAIL_VALUE, "tillCalcU rho2 = 0");
+    CHECK(tillCalcU(material, -1.0, 1.0, material->rho0) == TILL_FAIL_VALUE, "tillCalcU rho1 < 0");
+    CHECK(tillCalcU(material, material->rho0, NAN, 2.0*material->rho0) == TILL_FAIL_VALUE, "tillCalcU NaN u1");
+    CHECK(tillCalcU(material, material->rho0, INFINITY, 2.0*material->rho0) == TILL_FAIL_VALUE, "tillCalcU +inf u1");
+    CHECK(tillCalcU(material, material->rho0, NAN, material->rho0) == TILL_FAIL_VALUE, "tillCalcU NaN u1, rho2 = rho1");
+    CHECK(material->nLookupFail == nfail0 + 34, "tillCalcU failures counted (%ld)", material->nLookupFail - nfail0);
+    CHECK(tillCalcU(material, material->rho0, 1.0, material->rho0) == 1.0, "tillCalcU identity");
+    CHECK(isfinite(tillCalcU(material, material->rho0, 1.0, 2.0*material->rho0)), "tillCalcU valid");
+    /* A state below the cold curve (u < 0 below rho0) is lifted to it by the clamp. */
+    CHECK(tillCalcU(material, 0.5*material->rho0, -material->vmin, 0.25*material->rho0) == 0.0, "tillCalcU clamps u >= 0");
+    CHECK(material->nLookupFail == nfail0 + 34, "a valid tillCalcU is not counted (%ld)", material->nLookupFail - nfail0);
     /* Just below the cold curve (roundoff in the hydro code): clamped, close to the in-table result. */
     {
         double rho1 = 2.0*material->rho0, rho2 = 1.5*material->rho0;

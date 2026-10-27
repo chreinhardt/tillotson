@@ -37,6 +37,10 @@
  *          (it was 799 instead of 800 in some unit systems, which changed the whole grid).
  *          Documented why the cold curve is zero below rho0 in both pressure modes
  *          (TILL_PRESS_MELOSH included), and that the total pressure is cut at zero in both.
+ *          tillCalcU rejects a non-positive or non-finite rho1, rho2 and a non-finite u1 with
+ *          TILL_FAIL_VALUE (a NaN or infinite rho was undefined behaviour in the step count) and
+ *          clamps u >= 0 after every step like the table integration; tillLookupU rejects an
+ *          invalid rho2 and counts its direct-integration fallback in nLookupFail.
  */
 #define TILL_VERSION_TEXT    "4.0.0"
 #define TILL_VERSION_MAJOR   4
@@ -64,7 +68,9 @@
  * functions fall back instead: tillTempRhoU never fails, outside the table it returns T = 0, the
  * cold curve, which is the "lowest tabulated temperature" of this EOS (same contract as
  * ANEOSTofRhoU); tillLookupU clamps a state below the cold curve to u_cold(rho2), the end point of
- * the coldest isentrope (same convention as ANEOSisentropicU). Both count the fallback.
+ * the coldest isentrope (same convention as ANEOSisentropicU), and integrates the ODE directly
+ * (tillCalcU) where the start or end point is outside the table. All of these count the fallback.
+ * tillCalcU itself counts only its failures (invalid rho1, rho2 or u1, non-finite result).
  * The pressure, sound speed and their derivatives are analytic and never fail.
  *
  * Every failure is counted in material->nLookupFail and reported on stderr only when the library
@@ -324,6 +330,7 @@ void tillInitLookup(TILLMATERIAL *material, int nTableRho, int nTableV, double r
 /* The standard table TILL_TABLE_* (see above) for this material. */
 void tillInitLookupDefault(TILLMATERIAL *material);
 TILL_LOOKUP_ENTRY *tillSolveIsentropeLogRho(TILLMATERIAL *material, double v);
+/* RK4 integration of du/dlogrho = P/rho from (rho1, u1) to rho2, u >= 0; TILL_FAIL_VALUE for invalid input. */
 double tillCalcU(TILLMATERIAL *material,double rho1,double u1,double rho2);
 /* TILL_LOOKUP_SUCCESS, a TILL_LOOKUP_OUTSIDE_* code, or TILL_FAIL if u is not finite. */
 int tillIsInTable(TILLMATERIAL *material,double rho,double u);

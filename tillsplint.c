@@ -335,13 +335,19 @@ static double tillColdIsentropeU(TILLMATERIAL *material, double rho2)
  * clamped to the cold curve, i.e. u2 = u_cold(rho2), the end point of the coldest isentrope
  * (s = 0) through (rho1, u_cold(rho1)). This is what ANEOSisentropicU and scvheosIsentropicU do
  * (T(rho1, u1) falls back to the lowest temperature and the isentrope of that state is followed);
- * the fallback is counted in nLookupFail and reported under EOSLIB_VERBOSE. Returns
- * TILL_FAIL_VALUE if u1 is not finite (or rho2 is invalid).
+ * the fallback is counted in nLookupFail and reported under EOSLIB_VERBOSE. The direct integration
+ * outside the table (tillCalcU) is a fallback as well and is counted the same way. Returns
+ * TILL_FAIL_VALUE if u1 is not finite or rho2 is not positive and finite.
  */
 double tillLookupU(TILLMATERIAL *material, double rho1, double u1, double rho2, int iOrder)
 {
     double s;
     int iRet;
+
+    /* rho2 is checked first: every path below (also the clamp) needs a valid end point. */
+    if (!(rho2 > 0.0) || !isfinite(rho2))
+        TILL_FAIL_RETURN(material, TILL_FAIL_VALUE, "tillLookupU: Particle %i (rho1= %g, u1= %g, iMat= %i): invalid rho2= %g.\n",
+                         iOrder, rho1, u1, material->iMaterial, rho2);
 
     iRet = tillIsInTable(material, rho1, u1);
 
@@ -366,6 +372,9 @@ double tillLookupU(TILLMATERIAL *material, double rho1, double u1, double rho2, 
         return tillFindUonIsentrope(material, s, rho2);
     }
 
+    /* Fallback: direct integration of the ODE, counted like every fallback (an invalid rho1 is
+     * rejected and counted by tillCalcU instead, so it is not counted twice). */
+    if ((rho1 > 0.0) && isfinite(rho1)) material->nLookupFail++;
     TILL_WARN("tillLookupU: (rho1= %g, u1= %g, rho2= %g, iMat= %i) outside of the lookup table (%s), doing direct integration.\n",
             rho1, u1, rho2, material->iMaterial, tillLookupStatusString(iRet));
     return tillCalcU(material, rho1, u1, rho2);

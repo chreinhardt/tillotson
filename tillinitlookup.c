@@ -221,15 +221,32 @@ TILL_LOOKUP_ENTRY *tillSolveIsentropeLogRho(TILLMATERIAL *material, double v)
  * with initial conditions (rho1, u1). The integration is done in log(rho) because the ODE is
  * very stiff for small rho otherwise. The interval is split into an integer number of equal
  * RK4 steps no larger than dlogrho/100 (or 1/100 of the interval if no table exists), so the
- * last step lands exactly on log(rho2) in either direction.
+ * last step lands exactly on log(rho2) in either direction. As in tillSolveIsentropeLogRho, u is
+ * clamped at zero after every step, so an expanding state ends on the cold curve (u = 0 below
+ * rho0) instead of at a negative u.
+ *
+ * Returns TILL_FAIL_VALUE (counted in nLookupFail) if rho1 or rho2 is not positive and finite, if
+ * u1 is not finite, or if the integration does not give a finite u. A successful integration is
+ * not counted here: tillCalcU is also a plain ODE solver (e.g. for reference values), and the
+ * caller that uses it as a fallback (tillLookupU) counts the fallback.
  */
 double tillCalcU(TILLMATERIAL *material, double rho1, double u1, double rho2)
 {
-    const double logrho1 = log(rho1);
-    const double logrho2 = log(rho2);
-    const double dlogrho = logrho2 - logrho1;
+    double logrho1, logrho2, dlogrho;
     double hmax, h, u;
     long nsteps, s;
+
+    /*
+     * Guard the input: for a NaN or infinite rho, (long) ceil(|dlogrho|/hmax) below would be
+     * undefined behaviour. For finite positive doubles |dlogrho| < 1500, so nsteps is bounded.
+     */
+    if (!(rho1 > 0.0) || !isfinite(rho1) || !(rho2 > 0.0) || !isfinite(rho2) || !isfinite(u1))
+        TILL_FAIL_RETURN(material, TILL_FAIL_VALUE, "tillCalcU: invalid input (rho1= %g u1= %g rho2= %g, iMat= %i).\n",
+                         rho1, u1, rho2, material->iMaterial);
+
+    logrho1 = log(rho1);
+    logrho2 = log(rho2);
+    dlogrho = logrho2 - logrho1;
 
     if (dlogrho == 0.0) return u1;
 
@@ -250,7 +267,13 @@ double tillCalcU(TILLMATERIAL *material, double rho1, double u1, double rho2)
     u = u1;
     for (s = 0; s < nsteps; s++) {
         u = tillRK4Step(material, logrho1 + s*h, u, h);
+        /* Assure that u >= 0.0 (as in the table integration). */
+        if (u < 0.0) u = 0.0;
     }
+
+    if (!isfinite(u))
+        TILL_FAIL_RETURN(material, TILL_FAIL_VALUE, "tillCalcU: integration gave u= %g (rho1= %g u1= %g rho2= %g, iMat= %i).\n",
+                         u, rho1, u1, rho2, material->iMaterial);
 
     return u;
 }
