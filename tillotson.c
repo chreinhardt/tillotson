@@ -66,11 +66,19 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit)
     material->dlogrho = 0.0;
     material->dv = 0.0;
 
-	if (dKpcUnit <= 0.0 || dMsolUnit <= 0.0)
+	/*
+	 * Unit system (the same rule in EOSlib and every sublibrary): both units > 0 and finite are code
+	 * units, both <= 0 is cgs; anything else (exactly one of them <= 0, NaN, inf) is a caller error.
+	 */
+	if (!(((dKpcUnit > 0.0) && (dMsolUnit > 0.0) && isfinite(dKpcUnit) && isfinite(dMsolUnit)) || ((dKpcUnit <= 0.0) && (dMsolUnit <= 0.0)))) {
+		fprintf(stderr, "tillInitMaterial: invalid unit system dKpcUnit= %g dMsolUnit= %g (give both > 0 for code units or both <= 0 for cgs).\n", dKpcUnit, dMsolUnit);
+		assert(0);
+		exit(1);
+	}
+
+	if (dKpcUnit <= 0.0)
 	{
-		/* Both must be zero for cgs; one zero and one positive is a caller error. */
-		assert(dKpcUnit <= 0.0 && dMsolUnit <= 0.0);
-		/* In this case units are not converted, so the code units are cgs. */
+		/* Both <= 0 (checked above): units are not converted, so the code units are cgs. */
 		material->dErgPerGmUnit = 1.0;
 		material->dGmPerCcUnit = 1.0;
 		material->dSecUnit = 1.0;

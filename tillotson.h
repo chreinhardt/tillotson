@@ -50,7 +50,8 @@
  *          cold curve), so u(rho, T) fails and T(rho, u) falls back to 0 there.
  *          tillTempRhoU returns T = 0 (counted) below the cold curve and for a non-finite u
  *          instead of the negative (u - u_cold)/cv; within tillUTol of the cold curve T = 0,
- *          not counted.
+ *          not counted. An inconsistent unit pair (exactly one of dKpcUnit, dMsolUnit <= 0, NaN,
+ *          inf) is fatal with a message also under -DNDEBUG (it was only an assert).
  */
 #define TILL_VERSION_TEXT    "4.0.0"
 #define TILL_VERSION_MAJOR   4
