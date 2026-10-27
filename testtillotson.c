@@ -294,12 +294,38 @@ static void testTable(TILLMATERIAL *material)
         i = (int) (urand()*N); j = (int) (urand()*M);
         if (i == N) i--;
         if (j == M) j--;
-        if (i == 0) continue;   /* u1(0) is copied from u1(1) by construction */
         {
             double rho = tillLookupRho(material, i), u = material->Lookup[TILL_INDEX(material, i, j)].u;
+            /* Where the downward integration clamps u at 0 the stored slope is 0 (flat curve). */
+            double u1ref = (i < material->n && u == 0.0) ? 0.0 : tillPressure(material, rho, u)/rho;
             /* P/rho is a difference of large terms at high compression (100 rho0): roundoff ~1e-11. */
-            CHECK_REL(material->Lookup[TILL_INDEX(material, i, j)].u1 + 1e-300, tillPressure(material, rho, u)/rho + 1e-300, 1e-10, "u1 = P/rho at i= %d j= %d", i, j);
+            CHECK_REL(material->Lookup[TILL_INDEX(material, i, j)].u1 + 1e-300, u1ref + 1e-300, 1e-10, "u1 = P/rho at i= %d j= %d", i, j);
         }
+    }
+    /* Node 0 (rhomin) has its own slope on every isentrope, not a copy of node 1. */
+    for (j = 0; j < M; j++) {
+        double rho = tillLookupRho(material, 0), u = material->Lookup[TILL_INDEX(material, 0, j)].u;
+        double u1ref = (u == 0.0) ? 0.0 : tillPressure(material, rho, u)/rho;
+        CHECK(isfinite(material->Lookup[TILL_INDEX(material, 0, j)].u1), "u1 finite at rhomin, j= %d", j);
+        CHECK_REL(material->Lookup[TILL_INDEX(material, 0, j)].u1 + 1e-300, u1ref + 1e-300, 1e-10, "u1 = P/rho at rhomin, j= %d", j);
+    }
+    /*
+     * The first interval [rhomin, rhomin e^dlogrho] interpolates the isentrope as well as any other:
+     * against the ODE from node 1 to within 3e-6 (|u| + vmin). With u1(0) copied from node 1 the
+     * error was up to ~1e-5 for the built-in materials (2e-7 to 7e-7 with the own slope).
+     */
+    if (N == TILL_TABLE_NRHO && M == TILL_TABLE_NV) {
+        const double lr0 = log(tillLookupRho(material, 0));
+        double maxerr = 0.0;
+        for (j = 0; j < M; j += 3) for (k = 1; k < 10; k++) {
+            double s = tillLookupS(material, j), u1n = material->Lookup[TILL_INDEX(material, 1, j)].u;
+            double rho = exp(lr0 + 0.1*k*material->dlogrho);
+            double ref = refU(material, tillLookupRho(material, 1), u1n, rho, 1000);
+            double err = fabs(tillCubicInt(material, rho, s) - ref)/(fabs(ref) + material->vmin);
+            if (err > maxerr) maxerr = err;
+            CHECK(err <= 3e-6, "first interval rho= %g j= %d: %g vs %g", rho, j, tillCubicInt(material, rho, s), ref);
+        }
+        fprintf(stdout, "  %s: first rho interval max rel err %.2e\n", MatName, maxerr);
     }
 
     /*

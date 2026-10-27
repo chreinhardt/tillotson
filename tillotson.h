@@ -41,6 +41,8 @@
  *          TILL_FAIL_VALUE (a NaN or infinite rho was undefined behaviour in the step count) and
  *          clamps u >= 0 after every step like the table integration; tillLookupU rejects an
  *          invalid rho2 and counts its direct-integration fallback in nLookupFail.
+ *          The table keeps u1 = P/rho at node 0 (rhomin) instead of copying u1 from node 1, so the
+ *          first Hermite interval in log(rho) is consistent with the data.
  */
 #define TILL_VERSION_TEXT    "4.0.0"
 #define TILL_VERSION_MAJOR   4

@@ -207,8 +207,15 @@ TILL_LOOKUP_ENTRY *tillSolveIsentropeLogRho(TILLMATERIAL *material, double v)
         isentrope[i].u1 = (u == 0.0) ? 0.0 : tilldudlogrho(material, logrho, u);
     }
 
-    /* Avoid issues because P/rho is diverging for rho -> 0: set u1(0) = u1(dlogrho). */
-    isentrope[0].u1 = isentrope[1].u1;
+    /*
+     * Node 0 (rhomin) keeps its own slope like every other node, so the Hermite interval [0, 1] is
+     * consistent with the data. P/rho does not diverge there: in the expanded hot region the
+     * A mu exp(-(alpha z + beta z^2)) term underflows (z ~ 1e4 at 1e-4 rho0) and P/rho -> Gamma u,
+     * and the cold term A mu + B mu^2 ~ B - A is negative and cut for B <= A (all built-in
+     * materials). Only for B > A does P/rho grow like (B - A)/rho in the cold and intermediate
+     * regions; the true slope is then still the right Hermite data. (Up to tillotson 4.0.0 u1(0)
+     * was replaced by u1(1), which made the first interval 10-1000x less accurate.)
+     */
 
     return isentrope;
 }
