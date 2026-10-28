@@ -332,25 +332,32 @@ void tillPrintMat(TILLMATERIAL *material, FILE *fp)
     assert(material != NULL);
     tilliMatString(material, MatName);
 
+    /*
+     * Dimensional values in cgs with the unit, like ANEOSPrintMat, scvheosPrintMat and reos3PrintMat
+     * (they were printed in code units without a label). The material is stored in code units.
+     */
+    const double dPUnit = material->dErgPerGmUnit*material->dGmPerCcUnit;   /* code pressure -> erg/cm^3 */
     fprintf(fp,"# Material: %i (%s)\n", material->iMaterial, MatName);
+    fprintf(fp,"# dKpcUnit: %g dMsolUnit: %g\n", material->dKpcUnit, material->dMsolUnit);
     fprintf(fp,"# a:            %g\n", material->a);
     fprintf(fp,"# b:            %g\n", material->b);
-    fprintf(fp,"# A:            %g\n", material->A);
-    fprintf(fp,"# B:            %g\n", material->B);
-    fprintf(fp,"# rho0:         %g\n", material->rho0);
-    fprintf(fp,"# u0:           %g\n", material->u0);
-    fprintf(fp,"# us:           %g\n", material->us);
-    fprintf(fp,"# us2:          %g\n", material->us2);
+    fprintf(fp,"# A (cgs units): %g erg/cm^3\n", material->A*dPUnit);
+    fprintf(fp,"# B (cgs units): %g erg/cm^3\n", material->B*dPUnit);
+    fprintf(fp,"# Reference density rho0 (cgs units): %g g/cc\n", material->rho0*material->dGmPerCcUnit);
+    fprintf(fp,"# u0 (cgs units): %g erg/g\n", material->u0*material->dErgPerGmUnit);
+    fprintf(fp,"# us (cgs units): %g erg/g\n", material->us*material->dErgPerGmUnit);
+    fprintf(fp,"# us2 (cgs units): %g erg/g\n", material->us2*material->dErgPerGmUnit);
     fprintf(fp,"# alpha:        %g\n", material->alpha);
     fprintf(fp,"# beta:         %g\n", material->beta);
-    fprintf(fp,"# cv:           %g\n", material->cv);
+    fprintf(fp,"# cv (cgs units): %g erg/g/K\n", material->cv*material->dErgPerGmUnit);
     if (material->Lookup != NULL) {
-        fprintf(fp,"# Lookup table: %i x %i, rho in [%g, %g], v in [0, %g] (vmin= %g)\n",
-                material->nTableRho, material->nTableV, material->rhomin, material->rhomax,
-                material->vmax, material->vmin);
+        fprintf(fp,"# Lookup table (cgs units): %i x %i, rho in [%g, %g] g/cc, v in [0, %g] erg/g (vmin= %g erg/g)\n",
+                material->nTableRho, material->nTableV, material->rhomin*material->dGmPerCcUnit, material->rhomax*material->dGmPerCcUnit,
+                material->vmax*material->dErgPerGmUnit, material->vmin*material->dErgPerGmUnit);
     } else if (material->ColdCurve != NULL) {
-        fprintf(fp,"# Lookup table: cold curve and top isentrope only (%i x 2), rho in [%g, %g], v in [0, %g] (vmin= %g); isentrope table not built\n",
-                material->nTableRho, material->rhomin, material->rhomax, material->vmax, material->vmin);
+        fprintf(fp,"# Lookup table (cgs units): cold curve and top isentrope only (%i x 2), rho in [%g, %g] g/cc, v in [0, %g] erg/g (vmin= %g erg/g); isentrope table not built\n",
+                material->nTableRho, material->rhomin*material->dGmPerCcUnit, material->rhomax*material->dGmPerCcUnit,
+                material->vmax*material->dErgPerGmUnit, material->vmin*material->dErgPerGmUnit);
     } else {
         fprintf(fp,"# Lookup table: not initialized\n");
     }

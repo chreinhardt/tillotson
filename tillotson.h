@@ -84,6 +84,9 @@
  *          tillIsBelowColdCurve fails exactly where tillColdULookup does (rho > rhomax, rho <= 0,
  *          NaN); below rhomin, where the cold curve is zero, it returns u < 0. It failed for every
  *          rho below rhomin, while tillColdULookup and EOSisbelowColdCurve gave a valid answer there.
+ *          tillPrintMat prints the dimensional parameters (A, B, rho0, u0, us, us2, cv) and the table
+ *          range in cgs with the unit, and the unit pair, like the tabulated libraries (it printed
+ *          them in code units without a label).
  */
 #define TILL_VERSION_TEXT    "4.0.0"
 #define TILL_VERSION_MAJOR   4
