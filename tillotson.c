@@ -568,11 +568,21 @@ double tillTempRhoU(TILLMATERIAL *material, double rho, double u)
 
 /*
  * Calculate u(rho,T) for a material.
+ *
+ * Returns TILL_FAIL_VALUE (counted) for T below the lowest temperature of this EOS, T < 0, and
+ * for a non-finite T, like u(rho, T) of the other libraries below T_min (igeosUofRhoT, ANEOS,
+ * SCvH, REOS3); it returned u_cold + cv T, a state below the cold curve. Also TILL_FAIL_VALUE
+ * if the cold curve fails at rho (counted there).
  */
 double tillURhoTemp(TILLMATERIAL *material, double rho, double T)
 {
-    double ucold = tillColdULookup(material, rho);
+    double ucold;
 
+    if (!(T >= 0.0) || !isfinite(T))
+        TILL_FAIL_RETURN(material, TILL_FAIL_VALUE, "tillURhoTemp: T= %g is negative or not finite (rho= %g, iMat= %i).\n",
+                         T, rho, material->iMaterial);
+
+    ucold = tillColdULookup(material, rho);
     if (tillFailed(ucold)) return TILL_FAIL_VALUE;
     return(ucold + material->cv*T);
 }
@@ -648,8 +658,9 @@ static double tillRhoPTempFunc(TILLMATERIAL *material, double rho, const void *c
  * Calculate rho(P,T) for a material by root finding on the uncut pressure (tillPressureSoundNP),
  * which is monotonic in rho at fixed T where (dP/drho)_T > 0.
  *
- * Returns TILL_FAIL_VALUE if P <= 0 or the root is not bracketed by [rho_min, 0.999*rhomax], with
- * rho_min = TILL_RHOPT_RHOMIN_FAC*rho0 (the same physical bracket in every unit system).
+ * Returns TILL_FAIL_VALUE if P <= 0, T < 0 or not finite, or the root is not bracketed by
+ * [rho_min, 0.999*rhomax], with rho_min = TILL_RHOPT_RHOMIN_FAC*rho0 (the same physical bracket in
+ * every unit system). Counted once per call.
  */
 double tillRhoPTemp(TILLMATERIAL *material, double P, double T)
 {
@@ -661,6 +672,11 @@ double tillRhoPTemp(TILLMATERIAL *material, double P, double T)
     /* For P <= 0 the inversion is not defined (pressure cutoff). */
     if (P <= 0.0)
         TILL_FAIL_RETURN(material, TILL_FAIL_VALUE, "tillRhoPTemp: Called for negative pressure (P= %g).\n", P);
+
+    /* T < 0 (or not finite): u(rho, T) fails at every density. Checked here, so that it is counted
+     * once and not by each of the bracket evaluations and the bracket failure. */
+    if (!(T >= 0.0) || !isfinite(T))
+        TILL_FAIL_RETURN(material, TILL_FAIL_VALUE, "tillRhoPTemp: T= %g is negative or not finite (P= %g).\n", T, P);
 
     ctx.P = P;
     ctx.T = T;

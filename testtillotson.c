@@ -686,6 +686,25 @@ static void testSentinels(TILLMATERIAL *material)
     CHECK(tillTempRhoU(material, 0.5*material->rho0, 0.0) == 0.0, "T on the expanded cold curve is 0");
     CHECK(tillTempRhoU(material, 2.0*material->rho0, ucold + material->cv) > 0.0, "T just above the cold curve");
     CHECK(material->nLookupFail == nfail0 + 43, "T on the cold curve not counted (%ld)", material->nLookupFail - nfail0);
+    /* u(rho, T) and rho(P, T) below the lowest temperature T = 0 (or for a non-finite T): the sentinel, counted once each. */
+    {
+        const double Ts[4] = { -1.0, -1e-300, NAN, INFINITY };
+        const long nfT = material->nLookupFail;
+        for (int q = 0; q < 4; q++) {
+            long nf = material->nLookupFail;
+            CHECK(tillURhoTemp(material, 2.0*material->rho0, Ts[q]) == TILL_FAIL_VALUE, "u(rho, T= %g)", Ts[q]);
+            CHECK(material->nLookupFail == nf + 1, "u(rho, T= %g) counted %ld times", Ts[q], material->nLookupFail - nf);
+            nf = material->nLookupFail;
+            CHECK(tillRhoPTemp(material, material->A, Ts[q]) == TILL_FAIL_VALUE, "rho(P, T= %g)", Ts[q]);
+            CHECK(material->nLookupFail == nf + 1, "rho(P, T= %g) counted %ld times", Ts[q], material->nLookupFail - nf);
+        }
+        /* T = 0 is the cold curve: valid, not counted. */
+        const long nf = material->nLookupFail;
+        CHECK(tillURhoTemp(material, 2.0*material->rho0, 0.0) == tillColdULookup(material, 2.0*material->rho0), "u(rho, T = 0) is the cold curve");
+        CHECK(tillURhoTemp(material, 0.5*material->rho0, 0.0) == tillColdULookup(material, 0.5*material->rho0), "u(rho < rho0, T = 0) is the cold curve");
+        CHECK(material->nLookupFail == nf, "u(rho, T = 0) counted");
+        nfail0 += material->nLookupFail - nfT;   /* keep the running count of the checks below */
+    }
     /* Just below the cold curve (roundoff in the hydro code): clamped, close to the in-table result. */
     {
         double rho1 = 2.0*material->rho0, rho2 = 1.5*material->rho0;

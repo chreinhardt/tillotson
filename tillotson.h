@@ -77,6 +77,10 @@
  *          ColdCurve and TopCurve of TILLMATERIAL. EOSlib builds the edge curves in EOSinitMaterial
  *          and the table in EOSinitIsentropicLookup (it built the table in EOSinitMaterial: with one
  *          instance per thread 6 GB and over a minute of startup for 64 threads x 2 materials).
+ *          tillURhoTemp returns TILL_FAIL_VALUE (counted) for T < 0 or a non-finite T, like u(rho, T)
+ *          of the other libraries below T_min; it returned u_cold + cv T, a state below the cold
+ *          curve, which P(rho, T) in EOSlib then evaluated. tillRhoPTemp fails for such a T at once,
+ *          counted once (the bracket evaluations would have counted it three times).
  */
 #define TILL_VERSION_TEXT    "4.0.0"
 #define TILL_VERSION_MAJOR   4
@@ -99,7 +103,8 @@
  *
  * A failed evaluation never exits. Every function returning a double returns exactly
  * TILL_FAIL_VALUE (-1e50), in any unit system, when it cannot deliver a value (rho outside the
- * lookup table for the cold curve and u(rho, T); (rho, u) below the cold curve or above the table
+ * lookup table for the cold curve and u(rho, T); T < 0 or not finite for u(rho, T) and rho(P, T),
+ * below the lowest temperature T = 0 of this EOS; (rho, u) below the cold curve or above the table
  * for tillFindEntropyCurve; rho(P, T) not bracketed); status functions return TILL_FAIL. Two
  * functions fall back instead: tillTempRhoU never fails, outside the table in rho, below the cold
  * curve and for a non-finite u it returns T = 0, the cold curve, which is the "lowest tabulated
@@ -349,10 +354,10 @@ double tillPressureNP(TILLMATERIAL *material, double rho, double u);
 double tilldudrho(TILLMATERIAL *material, double rho, double u);
 double tilldudlogrho(TILLMATERIAL *material, double logrho, double u);
 
-/* Temperature: u(rho, T) = u_cold(rho) + cv*T. These need the cold curve (tillInitColdCurve or tillInitLookup). tillTempRhoU never fails and is >= 0. */
+/* Temperature: u(rho, T) = u_cold(rho) + cv*T. These need the cold curve (tillInitColdCurve or tillInitLookup). tillTempRhoU never fails and is >= 0; tillURhoTemp fails for T < 0 or a non-finite T. */
 double tillTempRhoU(TILLMATERIAL *material, double rho, double u);
 double tillURhoTemp(TILLMATERIAL *material, double rho, double T);
-/* rho(P, T) by root finding; TILL_FAIL_VALUE if P <= 0 or not bracketed. */
+/* rho(P, T) by root finding; TILL_FAIL_VALUE if P <= 0, T < 0 or not finite, or not bracketed. */
 double tillRhoPTemp(TILLMATERIAL *material, double P, double T);
 
 int tillPhase(TILLMATERIAL *material, double rho, double u);
