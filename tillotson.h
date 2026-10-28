@@ -81,6 +81,9 @@
  *          of the other libraries below T_min; it returned u_cold + cv T, a state below the cold
  *          curve, which P(rho, T) in EOSlib then evaluated. tillRhoPTemp fails for such a T at once,
  *          counted once (the bracket evaluations would have counted it three times).
+ *          tillIsBelowColdCurve fails exactly where tillColdULookup does (rho > rhomax, rho <= 0,
+ *          NaN); below rhomin, where the cold curve is zero, it returns u < 0. It failed for every
+ *          rho below rhomin, while tillColdULookup and EOSisbelowColdCurve gave a valid answer there.
  */
 #define TILL_VERSION_TEXT    "4.0.0"
 #define TILL_VERSION_MAJOR   4
@@ -401,7 +404,7 @@ TILL_LOOKUP_ENTRY *tillSolveIsentropeLogRho(TILLMATERIAL *material, double v);
 double tillCalcU(TILLMATERIAL *material,double rho1,double u1,double rho2);
 /* TILL_LOOKUP_SUCCESS, a TILL_LOOKUP_OUTSIDE_* code, or TILL_FAIL if u is not finite. */
 int tillIsInTable(TILLMATERIAL *material,double rho,double u);
-/* 1 if (rho, u) is below the cold curve, 0 if not, TILL_FAIL if rho is outside the table or u is not finite. */
+/* 1 if (rho, u) is below the cold curve, 0 if not, TILL_FAIL where tillColdULookup fails (rho > rhomax, rho <= 0, NaN) or u is not finite; below rhomin the cold curve is 0. */
 int tillIsBelowColdCurve(TILLMATERIAL *material,double rho,double u);
 
 /*
@@ -425,7 +428,7 @@ double tillFindUonIsentrope(TILLMATERIAL *material,double s,double rho);
 double tillFindEntropyCurve(TILLMATERIAL *material,double rho,double u,int iOrder);
 /* Returns u2 on the isentrope through (rho1, u1) at rho2; u_cold(rho2) if (rho1, u1) is below the cold curve, TILL_FAIL_VALUE for a non-finite u1. */
 double tillLookupU(TILLMATERIAL *material,double rho1,double u1,double rho2,int iOrder);
-/* u_cold(rho) = u(rho, s=0), or TILL_FAIL_VALUE if rho is outside the table. */
+/* u_cold(rho) = u(rho, s=0); 0 for 0 < rho < rho0 (also below rhomin), TILL_FAIL_VALUE for rho > rhomax, rho <= 0 or NaN. */
 double tillColdULookup(TILLMATERIAL *material,double rho);
 
 int tillLookupIndexLogRho(TILLMATERIAL *material, double logrho);

@@ -632,6 +632,25 @@ static void testSentinels(TILLMATERIAL *material)
     CHECK(tillIsBelowColdCurve(material, 2.0*material->rho0, 2.0*ucold) == 0, "isbelow false");
     /* A non-finite u is rejected by every function that takes one, never passed on as NaN. */
     CHECK(tillIsBelowColdCurve(material, 2.0*material->rho0, NAN) == TILL_FAIL, "isbelow NaN u");
+    /*
+     * Below rhomin the cold curve is zero (tillColdULookup), so the status is u < 0 there, as in
+     * EOSisbelowColdCurve; it fails only where tillColdULookup fails (up to 4.0.0 it failed for every
+     * rho below rhomin). The failures are counted once each; nothing else is counted.
+     */
+    {
+        const long nf = material->nLookupFail;
+        CHECK(tillIsBelowColdCurve(material, 0.5*material->rhomin, -1.0) == 1, "isbelow below rhomin, u < 0");
+        CHECK(tillIsBelowColdCurve(material, 0.5*material->rhomin, 0.0) == 0, "isbelow below rhomin, u = 0");
+        CHECK(tillIsBelowColdCurve(material, 0.5*material->rhomin, 1.0) == 0, "isbelow below rhomin, u > 0");
+        CHECK(tillIsBelowColdCurve(material, 0.5*material->rho0, -1e-30) == 1, "isbelow below rho0, u < 0");
+        CHECK(material->nLookupFail == nf, "isbelow below rhomin counted %ld times", material->nLookupFail - nf);
+        CHECK(tillIsBelowColdCurve(material, 0.0, 1.0) == TILL_FAIL, "isbelow at rho = 0");
+        CHECK(tillIsBelowColdCurve(material, -1.0, 1.0) == TILL_FAIL, "isbelow at rho < 0");
+        CHECK(tillIsBelowColdCurve(material, NAN, 1.0) == TILL_FAIL, "isbelow at a NaN rho");
+        CHECK(tillIsBelowColdCurve(material, 2.0*material->rhomax, NAN) == TILL_FAIL, "isbelow above rhomax, NaN u");
+        CHECK(material->nLookupFail == nf + 4, "isbelow failures counted %ld times (expected 4)", material->nLookupFail - nf);
+        material->nLookupFail = nf;
+    }
     CHECK(tillFindEntropyCurve(material, 2.0*material->rho0, NAN, 0) == TILL_FAIL_VALUE, "entropy curve NaN u");
     CHECK(tillLookupU(material, 2.0*material->rho0, NAN, material->rho0, 0) == TILL_FAIL_VALUE, "lookup NaN u");
     CHECK(tillLookupU(material, 2.0*material->rho0, INFINITY, material->rho0, 0) == TILL_FAIL_VALUE, "lookup +inf u");
@@ -807,8 +826,7 @@ static void testColdCurveOnly(int iMat)
         double a3 = tillColdULookup(c, rho), b3 = tillColdULookup(t, rho);
         double a4 = tillRhoPTemp(c, 1e-3*c->A*(1 + k % 97), T), b4 = tillRhoPTemp(t, 1e-3*t->A*(1 + k % 97), T);
         int a5 = tillIsInTable(c, rho, u), b5 = tillIsInTable(t, rho, u);
-        int a6 = (rho >= c->rhomin && rho <= c->rhomax) ? tillIsBelowColdCurve(c, rho, u) : 0;
-        int b6 = (rho >= t->rhomin && rho <= t->rhomax) ? tillIsBelowColdCurve(t, rho, u) : 0;
+        int a6 = tillIsBelowColdCurve(c, rho, u), b6 = tillIsBelowColdCurve(t, rho, u);
 #define SAME(x, y) ((x) == (y) || (tillFailed(x) && tillFailed(y)))
         if (!SAME(a1, b1) || !SAME(a2, b2) || !SAME(a3, b3) || !SAME(a4, b4) || a5 != b5 || a6 != b6 ||
             c->nLookupFail - nc != t->nLookupFail - nt) nDiff++;

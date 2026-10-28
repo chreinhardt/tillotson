@@ -453,24 +453,23 @@ int tillIsInTable(TILLMATERIAL *material, double rho, double u)
 /*
  * This function checks if a given (rho,u) is in an unphysical state below the cold curve.
  *
- * Returns 1 (true) if (rho,u) is below the cold curve, 0 (false) if not, and TILL_FAIL if
- * rho is outside the table or u is not finite.
+ * Returns 1 (true) if (rho,u) is below the cold curve, 0 (false) if not, and TILL_FAIL (counted
+ * once) where the cold curve is not defined, i.e. exactly where tillColdULookup fails (rho > rhomax,
+ * rho <= 0, NaN), or if u is not finite. Below rhomin the cold curve is zero (see tillColdULookup),
+ * so u < 0 is below it there. Up to 4.0.0 this function failed for every rho outside [rhomin,
+ * rhomax], while tillColdULookup, and with it EOSisbelowColdCurve, gave a valid answer below rhomin.
  */
 int tillIsBelowColdCurve(TILLMATERIAL *material, double rho, double u)
 {
-    int iRet = 1;
-
-    if (!(rho >= material->rhomin*(1.0 - TILL_EDGE_TOL)) || (rho > material->rhomax*(1.0 + TILL_EDGE_TOL)))
-        TILL_FAIL_RETURN(material, TILL_FAIL, "tillIsBelowColdCurve: rho= %g outside of the lookup table (iMat= %i, rhomin= %g, rhomax= %g).\n",
-                         rho, material->iMaterial, material->rhomin, material->rhomax);
+    double ucold;
 
     if (!isfinite(u))
         TILL_FAIL_RETURN(material, TILL_FAIL, "tillIsBelowColdCurve: non-finite u= %g (rho= %g, iMat= %i).\n",
                          u, rho, material->iMaterial);
 
-    if (u >= tillColdULookup(material, rho)) {
-        iRet = 0;
-    }
+    /* Counted there if it fails (rho > rhomax, rho <= 0, NaN). */
+    ucold = tillColdULookup(material, rho);
+    if (tillFailed(ucold)) return TILL_FAIL;
 
-    return iRet;
+    return (u < ucold) ? 1 : 0;
 }
