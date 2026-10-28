@@ -87,6 +87,9 @@
  *          tillIsBelowColdCurve uses the roundoff tolerance of tillIsInTable and tillTempRhoU,
  *          u < u_cold - tillUTol(u): a state within roundoff below the cold curve was "below" there
  *          while tillIsInTable reported it inside and tillTempRhoU inverted it without a fallback.
+ *          The failure contract says what P, c and the derivatives do below the cold curve and
+ *          outside the table: they are evaluated at the given (rho, u), uncounted (it said only
+ *          that they never fail). No change in behaviour.
  *          tillPrintMat prints the dimensional parameters (A, B, rho0, u0, us, us2, cv) and the table
  *          range in cgs with the unit, and the unit pair, like the tabulated libraries (it printed
  *          them in code units without a label).
@@ -121,7 +124,15 @@
  * the coldest isentrope (same convention as ANEOSisentropicU), and integrates the ODE directly
  * (tillCalcU) where the start or end point is outside the table. All of these count the fallback.
  * tillCalcU itself counts only its failures (invalid rho1, rho2 or u1, non-finite result).
- * The pressure, sound speed and their derivatives are analytic and never fail.
+ * The pressure, sound speed and their derivatives (tillPressure, tillPressureSound, tillSoundSpeed,
+ * tilldPdrho, tilldPdu, tilldudrho and the *NP variants) are analytic in (rho, u) and need no table:
+ * they are evaluated at the given (rho, u) everywhere, also below the cold curve (a u < 0 enters
+ * the Grueneisen term as Gamma = a + b, see tillPressureCore) and outside [rhomin, rhomax]. They
+ * never fail, never fall back and count nothing. This is the one place where Tillotson differs
+ * from the tabulated libraries, which evaluate P and c of a state below the cold curve at
+ * (rho, T_min): here P(rho, u) below the cold curve is not P(rho, T(rho, u) = 0). EOSlib documents
+ * it as the Tillotson exception of its failure contract; EOSIsUsable tells the caller whether P,
+ * c and T of a state belong together.
  *
  * Every failure is counted in material->nLookupFail and reported on stderr only when the library
  * is compiled with -DEOSLIB_VERBOSE (TILL_WARN). Test a returned value with tillFailed(x) (true
