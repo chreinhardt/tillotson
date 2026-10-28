@@ -38,7 +38,8 @@
  * We do:
  * Initialize variables
  * Convert quantities to code units
- * The memory for the look up table is allocated in tillInitLookup()
+ * The memory for the look up table is allocated in tillInitLookup() (the cold curve and the top
+ * isentrope alone in tillInitColdCurve())
  */
 TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit)
 {
@@ -255,6 +256,8 @@ void tillFinalizeMaterial(TILLMATERIAL *material)
 {
 
     if (material->Lookup != NULL) free(material->Lookup);
+    if (material->ColdCurve != NULL) free(material->ColdCurve);
+    if (material->TopCurve != NULL) free(material->TopCurve);
 
     free(material);
 }
@@ -345,6 +348,9 @@ void tillPrintMat(TILLMATERIAL *material, FILE *fp)
         fprintf(fp,"# Lookup table: %i x %i, rho in [%g, %g], v in [0, %g] (vmin= %g)\n",
                 material->nTableRho, material->nTableV, material->rhomin, material->rhomax,
                 material->vmax, material->vmin);
+    } else if (material->ColdCurve != NULL) {
+        fprintf(fp,"# Lookup table: cold curve and top isentrope only (%i x 2), rho in [%g, %g], v in [0, %g] (vmin= %g); isentrope table not built\n",
+                material->nTableRho, material->rhomin, material->rhomax, material->vmax, material->vmin);
     } else {
         fprintf(fp,"# Lookup table: not initialized\n");
     }

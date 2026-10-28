@@ -719,6 +719,103 @@ static int initUnitsRejected(int iMat, double dKpcUnit, double dMsolUnit)
 }
 
 /*
+ * Call one of the lookups that need the full isentrope table in a child process on a material that
+ * has only the cold curve. Returns 1 if it stopped the program (assert(0), or exit(1) with
+ * -DNDEBUG), 0 if it returned, -1 otherwise.
+ */
+static int tableLookupFatal(TILLMATERIAL *m, int which)
+{
+    fflush(NULL);
+    pid_t pid = fork();
+    if (pid == 0) {
+        if (freopen("/dev/null", "w", stderr) == NULL) _exit(3);   /* the expected diagnostic */
+        const double rho = 1.5*m->rho0, u = tillURhoTemp(m, rho, 1000.0);
+        switch (which) {
+            case 0: (void) tillLookupU(m, rho, u, 2.0*rho, 0); break;
+            case 1: (void) tillLookupU(m, 1e-9*m->rho0, u, 2.0*rho, 0); break;   /* a path that would integrate directly */
+            case 2: (void) tillFindEntropyCurve(m, rho, u, 0); break;
+            case 3: (void) tillFindUonIsentrope(m, 1.0, rho); break;
+            case 4: (void) tillCubicInt(m, rho, 1.0); break;
+            case 5: { double e; int i; tillLocateRho(m, rho, &i, &e); (void) tillCubicIntGrid(m, i, e, m->nTableV/2); } break;
+        }
+        _exit(0);
+    }
+    int status = 0;
+    if (pid < 0 || waitpid(pid, &status, 0) != pid) return -1;
+    if (WIFEXITED(status) && WEXITSTATUS(status) == 0) return 0;
+    if ((WIFSIGNALED(status) && WTERMSIG(status) == SIGABRT) || (WIFEXITED(status) && WEXITSTATUS(status) == 1)) return 1;
+    return -1;
+}
+
+/*
+ * tillInitColdCurve builds the grid and the two edge isentropes only (what EOSinitMaterial does);
+ * the full table follows with tillInitLookup (EOSinitIsentropicLookup). The edge curves must be
+ * rows 0 and nTableV-1 of the full table bit for bit, everything that needs only them (temperature,
+ * u(rho, T), rho(P, T), cold curve, table status) must be bit-identical with and without the table,
+ * and the isentropic lookups must be fatal without it. tillInitColdCurve after tillInitLookup frees
+ * the table.
+ */
+static void testColdCurveOnly(int iMat)
+{
+    const double dKpcUnit = 6.371e8/3.085678e21, dMsolUnit = 5.972e27/1.99e33;
+    TILLMATERIAL *c = tillInitMaterial(iMat, dKpcUnit, dMsolUnit);
+    TILLMATERIAL *t = tillInitMaterial(iMat, dKpcUnit, dMsolUnit);
+    /* Own random states: the later tests keep the sequence they were written with. */
+    const unsigned long long rngSaved = rngState;
+    int k, nDiff = 0;
+
+    tillInitColdCurveDefault(c);
+    tillInitLookupDefault(t);
+    CHECK(c->Lookup == NULL && c->ColdCurve != NULL && c->TopCurve != NULL, "tillInitColdCurve builds the edge curves only");
+    CHECK(c->nTableRho == t->nTableRho && c->nTableV == t->nTableV && c->n == t->n && c->dlogrho == t->dlogrho && c->dv == t->dv &&
+          c->rhomin == t->rhomin && c->rhomax == t->rhomax && c->vmin == t->vmin && c->vmax == t->vmax &&
+          c->logrhomin == t->logrhomin && c->invdlogrho == t->invdlogrho && c->invdv == t->invdv, "same grid as the full table");
+    for (k = 0; k < t->nTableRho; k++) {
+        const TILL_LOOKUP_ENTRY *r0 = &t->Lookup[TILL_INDEX(t, k, 0)], *rn = &t->Lookup[TILL_INDEX(t, k, t->nTableV-1)];
+        if (c->ColdCurve[k].u != r0->u || c->ColdCurve[k].u1 != r0->u1 || c->TopCurve[k].u != rn->u || c->TopCurve[k].u1 != rn->u1) nDiff++;
+    }
+    CHECK(nDiff == 0, "edge curves differ from rows 0 and nTableV-1 of the table at %d densities", nDiff);
+
+    /* Same results and the same failure counts without and with the table. */
+    nDiff = 0;
+    for (k = 0; k < 20000; k++) {
+        double rho = lograndom(1e-6*c->rho0, 300.0*c->rho0), T = lograndom(1.0, 1e8);
+        double u = (k % 5 == 0) ? -lograndom(1e-6, 1.0)*c->cv*T : tillURhoTemp(t, rho, T);
+        if (tillFailed(u)) u = c->cv*T;
+        long nc = c->nLookupFail, nt = t->nLookupFail;
+        double a1 = tillTempRhoU(c, rho, u), b1 = tillTempRhoU(t, rho, u);
+        double a2 = tillURhoTemp(c, rho, T), b2 = tillURhoTemp(t, rho, T);
+        double a3 = tillColdULookup(c, rho), b3 = tillColdULookup(t, rho);
+        double a4 = tillRhoPTemp(c, 1e-3*c->A*(1 + k % 97), T), b4 = tillRhoPTemp(t, 1e-3*t->A*(1 + k % 97), T);
+        int a5 = tillIsInTable(c, rho, u), b5 = tillIsInTable(t, rho, u);
+        int a6 = (rho >= c->rhomin && rho <= c->rhomax) ? tillIsBelowColdCurve(c, rho, u) : 0;
+        int b6 = (rho >= t->rhomin && rho <= t->rhomax) ? tillIsBelowColdCurve(t, rho, u) : 0;
+#define SAME(x, y) ((x) == (y) || (tillFailed(x) && tillFailed(y)))
+        if (!SAME(a1, b1) || !SAME(a2, b2) || !SAME(a3, b3) || !SAME(a4, b4) || a5 != b5 || a6 != b6 ||
+            c->nLookupFail - nc != t->nLookupFail - nt) nDiff++;
+#undef SAME
+    }
+    CHECK(nDiff == 0, "%d of 20000 states differ between the cold curve only and the full table", nDiff);
+
+    /* The isentropic lookups need the table: fatal without it, on every path. */
+    for (k = 0; k <= 5; k++) CHECK(tableLookupFatal(c, k) == 1, "lookup %d without the table must be fatal", k);
+    CHECK(tableLookupFatal(t, 0) == 0 && tableLookupFatal(t, 2) == 0, "with the table the lookups return");
+
+    /* Building the table later on the cold-curve material gives the same table; tillInitColdCurve frees it again. */
+    tillInitLookupDefault(c);
+    nDiff = 0;
+    for (k = 0; k < c->nTableRho*c->nTableV; k++)
+        if (c->Lookup[k].u != t->Lookup[k].u || c->Lookup[k].u1 != t->Lookup[k].u1 || c->Lookup[k].udv2 != t->Lookup[k].udv2 || c->Lookup[k].u1dv2 != t->Lookup[k].u1dv2) nDiff++;
+    CHECK(nDiff == 0, "table built after tillInitColdCurve differs at %d entries", nDiff);
+    tillInitColdCurveDefault(c);
+    CHECK(c->Lookup == NULL && c->ColdCurve != NULL, "tillInitColdCurve frees the table");
+
+    tillFinalizeMaterial(c);
+    tillFinalizeMaterial(t);
+    rngState = rngSaved;
+}
+
+/*
  * One rule for the unit pair in EOSlib and every sublibrary: both units > 0 (and finite) are code
  * units, both <= 0 is cgs, anything else is fatal. (Before, exactly one unit <= 0 made igeos divide
  * by zero, Tillotson assert, and ANEOS, SCvH and REOS3 silently use cgs.)
@@ -781,6 +878,7 @@ int main(int argc, char **argv)
         testColdCurveExpanded(iMat);
         testPressure(material);
         testNegativeU(material);
+        testColdCurveOnly(iMat);
 
         /* The standard table, as EOSlib initializes it. */
         tillInitLookupDefault(material);

@@ -173,8 +173,20 @@ void tillLocateRho(TILLMATERIAL *material, double rho, int *pi, double *pe)
  */
 double tillCubicIntGrid(TILLMATERIAL *material, int i, double e, int j)
 {
-    const TILL_LOOKUP_ENTRY *p0 = &material->Lookup[TILL_INDEX(material, i, j)];
-    const TILL_LOOKUP_ENTRY *p1 = &material->Lookup[TILL_INDEX(material, i+1, j)];
+    const TILL_LOOKUP_ENTRY *p0, *p1;
+
+    /* The edge rows come from the edge curves, which exist without the full table (tillInitColdCurve). */
+    if (j == 0 && material->ColdCurve != NULL) {
+        p0 = &material->ColdCurve[i];
+        p1 = &material->ColdCurve[i+1];
+    } else if (j == material->nTableV-1 && material->TopCurve != NULL) {
+        p0 = &material->TopCurve[i];
+        p1 = &material->TopCurve[i+1];
+    } else {
+        tillRequireLookup(material, "tillCubicIntGrid");
+        p0 = &material->Lookup[TILL_INDEX(material, i, j)];
+        p1 = &material->Lookup[TILL_INDEX(material, i+1, j)];
+    }
 
     return tillHermite(p0->u, p1->u, p0->u1, p1->u1, material->dlogrho, e, NULL);
 }
@@ -238,6 +250,8 @@ double tillCubicIntD(TILLMATERIAL *material, double rho, double s, double *pduds
     double e;
     int i;
 
+    tillRequireLookup(material, "tillCubicIntD");
+
     tillLocateRho(material, rho, &i, &e);
     return tillCubicIntDLocated(material, i, e, s, pduds);
 }
@@ -267,6 +281,8 @@ double tillFindEntropyCurve(TILLMATERIAL *material, double rho, double u, int iO
     const double utol = tillUTol(material, u);
     double e, ulo, uhi, slo, shi, s, f, dfds;
     int i, jlo, jhi, iter;
+
+    tillRequireLookup(material, "tillFindEntropyCurve");
 
     /* NaN would pass both range tests below and send the bisection astray. */
     if (!isfinite(u))
@@ -353,6 +369,10 @@ double tillLookupU(TILLMATERIAL *material, double rho1, double u1, double rho2, 
     double s;
     int iRet;
 
+    /* Fatal without the full table, on every path (also those that would not use it), so that a
+     * missing tillInitLookup shows at the first call and not only for some states. */
+    tillRequireLookup(material, "tillLookupU");
+
     /* rho2 is checked first: every path below (also the clamp) needs a valid end point. */
     if (!(rho2 > 0.0) || !isfinite(rho2))
         TILL_FAIL_RETURN(material, TILL_FAIL_VALUE, "tillLookupU: Particle %i (rho1= %g, u1= %g, iMat= %i): invalid rho2= %g.\n",
@@ -403,8 +423,13 @@ double tillLookupU(TILLMATERIAL *material, double rho1, double u1, double rho2, 
  */
 double tillColdULookup(TILLMATERIAL *material, double rho)
 {
-	// Make sure that the look up table is initialized.
-	assert(material->Lookup != NULL);
+    /* The cold curve (tillInitColdCurve or tillInitLookup) must exist: a programming error otherwise. */
+    if (material->ColdCurve == NULL) {
+        fprintf(stderr, "tillColdULookup: the cold curve of Tillotson material %i is not built. Call "
+                "tillInitColdCurve or tillInitLookup (EOSinitMaterial in EOSlib) first.\n", material->iMaterial);
+        assert(0);
+        exit(1);
+    }
 
     /* Expanded states: the cold curve is zero (see above), for any rho > 0. */
     if (rho < material->rho0) {

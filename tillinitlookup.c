@@ -8,6 +8,9 @@
  * 
  * tillInitLookup: generate the look up table for the isentropes (allocates memory).
  *
+ * tillInitColdCurve: only the grid and the cold curve and top isentrope (all that the
+ * temperature and the table status need).
+ *
  * tillSolveIsentropeLogRho: integrate du/dlogrho = P/rho for a given initial value v = u(rho0).
  *
  * tillCalcU: the same for an arbitrary start and end point (used outside the table).
@@ -21,14 +24,11 @@
 #include "tillotson.h"
 
 /*
- * Generate the look up table for the isentropic evolution of the internal energy.
+ * The grid of the table (tillInitLookup and tillInitColdCurve share it): rho and s axes and the
+ * derived constants. Does not allocate.
  */
-void tillInitLookup(TILLMATERIAL *material, int nTableRho, int nTableV, double rhomin, double rhomax, double vmin, double vmax)
+static void tillInitGrid(TILLMATERIAL *material, int nTableRho, int nTableV, double rhomin, double rhomax, double vmin, double vmax)
 {
-	TILL_LOOKUP_ENTRY *isentrope;
-	double v;
-    int i, j;
-
     /* Check if the material is properly initialized. */
     assert(material != NULL);
 
@@ -82,6 +82,57 @@ void tillInitLookup(TILLMATERIAL *material, int nTableRho, int nTableV, double r
     material->logrhomin = log(material->rhomin);
     material->invdlogrho = 1.0/material->dlogrho;
     material->invdv = 1.0/material->dv;
+}
+
+/*
+ * The two edge isentropes, row 0 (v = 0, the cold curve) and row nTableV-1 (v = vmax), on the grid
+ * of tillInitGrid. The same tillSolveIsentropeLogRho calls as for the table rows, with v from
+ * tillLookupV, so the rows are bit-identical.
+ */
+static void tillInitEdgeCurves(TILLMATERIAL *material)
+{
+    if (material->ColdCurve != NULL) free(material->ColdCurve);
+    if (material->TopCurve != NULL) free(material->TopCurve);
+    material->ColdCurve = tillSolveIsentropeLogRho(material, tillLookupV(material, 0));
+    material->TopCurve = tillSolveIsentropeLogRho(material, tillLookupV(material, material->nTableV-1));
+}
+
+/*
+ * The grid and the edge curves only (see tillotson.h). A full table of a previous call is freed:
+ * it may belong to another grid.
+ */
+void tillInitColdCurve(TILLMATERIAL *material, int nTableRho, int nTableV, double rhomin, double rhomax, double vmin, double vmax)
+{
+    assert(material != NULL);
+    tillInitGrid(material, nTableRho, nTableV, rhomin, rhomax, vmin, vmax);
+    if (material->Lookup != NULL) {
+        free(material->Lookup);
+        material->Lookup = NULL;
+    }
+    tillInitEdgeCurves(material);
+}
+
+void tillInitColdCurveDefault(TILLMATERIAL *material)
+{
+    assert(material != NULL);
+    tillInitColdCurve(material, TILL_TABLE_NRHO, TILL_TABLE_NV,
+                      TILL_TABLE_RHOMIN_FAC*material->rho0, TILL_TABLE_RHOMAX_FAC*material->rho0,
+                      material->cv*TILL_TABLE_TMIN, material->cv*TILL_TABLE_TMAX);
+}
+
+/*
+ * Generate the look up table for the isentropic evolution of the internal energy (and the edge
+ * curves, which are its first and last row).
+ */
+void tillInitLookup(TILLMATERIAL *material, int nTableRho, int nTableV, double rhomin, double rhomax, double vmin, double vmax)
+{
+	TILL_LOOKUP_ENTRY *isentrope;
+	double v;
+    int i, j;
+
+    assert(material != NULL);
+    tillInitGrid(material, nTableRho, nTableV, rhomin, rhomax, vmin, vmax);
+    tillInitEdgeCurves(material);
 
 	/* We arrange the look up table as a 1D array with Lookup[i][j] = Lookup[i*Ntable+j] */
     if (material->Lookup != NULL) free(material->Lookup);
@@ -89,25 +140,46 @@ void tillInitLookup(TILLMATERIAL *material, int nTableRho, int nTableV, double r
     assert(material->Lookup != NULL);
 
 	/*
-     * Integrate the isentropes for different v = v(s_j).
+     * Integrate the isentropes for different v = v(s_j); the edge rows are the edge curves.
      */
 	for (j=0; j<material->nTableV; j++)
 	{
-		v = tillLookupV(material, j);
-		isentrope = tillSolveIsentropeLogRho(material,v);
+        if (j == 0) {
+            isentrope = material->ColdCurve;
+        } else if (j == material->nTableV-1) {
+            isentrope = material->TopCurve;
+        } else {
+		    v = tillLookupV(material, j);
+		    isentrope = tillSolveIsentropeLogRho(material,v);
+        }
 		
-		/* Copy one row to the look up table. This is of course not efficient at all. */
+		/* Copy one row to the look up table. */
 		for (i=0; i<material->nTableRho; i++)
 		{
 			/* Careful with the indices! Lookup[i][j] = Lookup(rho,s). */
 			material->Lookup[TILL_INDEX(material,i,j)] = isentrope[i];		
 		}
 		
-		free(isentrope);
+		if (j != 0 && j != material->nTableV-1) free(isentrope);
 	}
 
     /* Solve splines for both u and u1 in v storing the 2nd derivatives wrt v */
 	tillInitSplines(material);
+}
+
+/*
+ * Fatal if the full isentrope table is not built (see tillotson.h): a programming error, the
+ * caller must build it with tillInitLookup (in EOSlib: EOSinitIsentropicLookup) first.
+ */
+void tillRequireLookup(const TILLMATERIAL *material, const char *chFunc)
+{
+    if (material->Lookup == NULL) {
+        fprintf(stderr, "%s: the isentrope table of Tillotson material %i is not built. Call tillInitLookup "
+                "(EOSinitIsentropicLookup in EOSlib) before the isentropic lookups; tillInitColdCurve builds "
+                "only the cold curve and the top isentrope.\n", chFunc, material->iMaterial);
+        assert(0);
+        exit(1);
+    }
 }
 
 /*

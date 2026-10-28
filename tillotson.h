@@ -69,6 +69,14 @@
  *          more accurate (1e-8 instead of 1e-4 relative) and the table builds in 0.6 s instead
  *          of 2 s per material; TILL_ISENTROPE_NSUB is gone. The remaining lookup error is the
  *          interpolation across the kinks of P/rho (see the standard table below).
+ *          tillInitColdCurve(Default) builds only the grid and the two edge isentropes of the
+ *          table (cold curve and top isentrope, 77 kB and two integrations instead of 46 MB and
+ *          ~0.6 s), which is all T(rho, u), u(rho, T), rho(P, T), the cold curve and tillIsInTable
+ *          need; results are bit-identical to the full table. The isentropic lookups need the full
+ *          table (tillInitLookup) and are fatal without it (tillRequireLookup). New members
+ *          ColdCurve and TopCurve of TILLMATERIAL. EOSlib builds the edge curves in EOSinitMaterial
+ *          and the table in EOSinitIsentropicLookup (it built the table in EOSinitMaterial: with one
+ *          instance per thread 6 GB and over a minute of startup for 64 threads x 2 materials).
  */
 #define TILL_VERSION_TEXT    "4.0.0"
 #define TILL_VERSION_MAJOR   4
@@ -292,6 +300,16 @@ typedef struct tillMaterial
 
 	/* The lookup table u(rho, s) along the isentropes, NULL until tillInitLookup */
 	TILL_LOOKUP_ENTRY *Lookup;
+	/*
+	 * The two edge isentropes of the table, nTableRho entries each: row j = 0 (the cold curve,
+	 * v = 0) and row j = nTableV-1 (the top isentrope, v = vmax). They are all that T(rho, u),
+	 * u(rho, T), rho(P, T), the cold curve and tillIsInTable need, so tillInitColdCurve builds only
+	 * these (77 kB, two isentrope integrations, instead of the 46 MB table) and the full table is
+	 * built on demand by tillInitLookup. Integrated by the same tillSolveIsentropeLogRho call as the
+	 * table rows, so they are bit-identical to rows 0 and nTableV-1 of the table. NULL before.
+	 */
+	TILL_LOOKUP_ENTRY *ColdCurve;
+	TILL_LOOKUP_ENTRY *TopCurve;
 
 	/* Diagnostics: number of failed evaluations since init (see TILL_FAIL_RETURN). */
 	long nLookupFail;
@@ -331,7 +349,7 @@ double tillPressureNP(TILLMATERIAL *material, double rho, double u);
 double tilldudrho(TILLMATERIAL *material, double rho, double u);
 double tilldudlogrho(TILLMATERIAL *material, double logrho, double u);
 
-/* Temperature: u(rho, T) = u_cold(rho) + cv*T. These need the lookup table (cold curve). tillTempRhoU never fails and is >= 0. */
+/* Temperature: u(rho, T) = u_cold(rho) + cv*T. These need the cold curve (tillInitColdCurve or tillInitLookup). tillTempRhoU never fails and is >= 0. */
 double tillTempRhoU(TILLMATERIAL *material, double rho, double u);
 double tillURhoTemp(TILLMATERIAL *material, double rho, double T);
 /* rho(P, T) by root finding; TILL_FAIL_VALUE if P <= 0 or not bracketed. */
@@ -354,11 +372,25 @@ int tillBrent(double (*f)(TILLMATERIAL *, double, const void *), TILLMATERIAL *m
 /*
  * Build the isentrope table: nTableRho log-spaced densities in [rhomin, rhomax] (rhomax is moved
  * onto the grid so that rho0 is a grid point), nTableV isentropes with v = u(rho0) from 0 to
- * vmax, spaced in s = log(1 + v/vmin). All in code units. Replaces an existing table.
+ * vmax, spaced in s = log(1 + v/vmin). All in code units. Replaces an existing table and builds
+ * the edge curves (see tillInitColdCurve) as well. 46 MB and ~0.6 s for the standard table.
  */
 void tillInitLookup(TILLMATERIAL *material, int nTableRho, int nTableV, double rhomin, double rhomax, double vmin, double vmax);
 /* The standard table TILL_TABLE_* (see above) for this material. */
 void tillInitLookupDefault(TILLMATERIAL *material);
+/*
+ * The grid of the table and its two edge isentropes only, the cold curve (row 0) and the top
+ * isentrope (row nTableV-1), with the same arguments as tillInitLookup and the same grid: enough
+ * for T(rho, u), u(rho, T), rho(P, T), tillColdULookup, tillIsInTable and tillIsBelowColdCurve,
+ * bit-identical to the full table. The isentropic lookups (tillLookupU, tillFindEntropyCurve,
+ * tillFindUonIsentrope, tillCubicInt*) need the full table and stop the program (fatal, with a
+ * message) until tillInitLookup is called. Frees an existing full table.
+ */
+void tillInitColdCurve(TILLMATERIAL *material, int nTableRho, int nTableV, double rhomin, double rhomax, double vmin, double vmax);
+/* The edge curves of the standard table TILL_TABLE_*. */
+void tillInitColdCurveDefault(TILLMATERIAL *material);
+/* Fatal (message, assert(0), exit(1)) if the full isentrope table of tillInitLookup is not built; chFunc names the caller. */
+void tillRequireLookup(const TILLMATERIAL *material, const char *chFunc);
 TILL_LOOKUP_ENTRY *tillSolveIsentropeLogRho(TILLMATERIAL *material, double v);
 /* RK4 integration of du/dlogrho = P/rho from (rho1, u1) to rho2, u >= 0; TILL_FAIL_VALUE for invalid input. */
 double tillCalcU(TILLMATERIAL *material,double rho1,double u1,double rho2);
