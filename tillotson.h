@@ -84,6 +84,9 @@
  *          tillIsBelowColdCurve fails exactly where tillColdULookup does (rho > rhomax, rho <= 0,
  *          NaN); below rhomin, where the cold curve is zero, it returns u < 0. It failed for every
  *          rho below rhomin, while tillColdULookup and EOSisbelowColdCurve gave a valid answer there.
+ *          tillIsBelowColdCurve uses the roundoff tolerance of tillIsInTable and tillTempRhoU,
+ *          u < u_cold - tillUTol(u): a state within roundoff below the cold curve was "below" there
+ *          while tillIsInTable reported it inside and tillTempRhoU inverted it without a fallback.
  *          tillPrintMat prints the dimensional parameters (A, B, rho0, u0, us, us2, cv) and the table
  *          range in cgs with the unit, and the unit pair, like the tabulated libraries (it printed
  *          them in code units without a label).
@@ -407,7 +410,11 @@ TILL_LOOKUP_ENTRY *tillSolveIsentropeLogRho(TILLMATERIAL *material, double v);
 double tillCalcU(TILLMATERIAL *material,double rho1,double u1,double rho2);
 /* TILL_LOOKUP_SUCCESS, a TILL_LOOKUP_OUTSIDE_* code, or TILL_FAIL if u is not finite. */
 int tillIsInTable(TILLMATERIAL *material,double rho,double u);
-/* 1 if (rho, u) is below the cold curve, 0 if not, TILL_FAIL where tillColdULookup fails (rho > rhomax, rho <= 0, NaN) or u is not finite; below rhomin the cold curve is 0. */
+/*
+ * 1 if (rho, u) is below the cold curve, u < u_cold(rho) - tillUTol(u) (the tolerance of tillIsInTable
+ * and tillTempRhoU), 0 if not, TILL_FAIL where tillColdULookup fails (rho > rhomax, rho <= 0, NaN) or
+ * u is not finite; below rhomin the cold curve is 0.
+ */
 int tillIsBelowColdCurve(TILLMATERIAL *material,double rho,double u);
 
 /*

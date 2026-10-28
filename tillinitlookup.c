@@ -458,6 +458,11 @@ int tillIsInTable(TILLMATERIAL *material, double rho, double u)
  * rho <= 0, NaN), or if u is not finite. Below rhomin the cold curve is zero (see tillColdULookup),
  * so u < 0 is below it there. Up to 4.0.0 this function failed for every rho outside [rhomin,
  * rhomax], while tillColdULookup, and with it EOSisbelowColdCurve, gave a valid answer below rhomin.
+ *
+ * "Below" uses the roundoff tolerance tillUTol of tillIsInTable and tillTempRhoU: u below u_cold by
+ * at most tillUTol(u) is on the cold curve (in the table, T = 0 without a fallback), not below it.
+ * Up to 4.0.0 it compared u < u_cold without a tolerance, so such a state was "below" here while
+ * tillIsInTable reported it inside and tillTempRhoU inverted it without a fallback.
  */
 int tillIsBelowColdCurve(TILLMATERIAL *material, double rho, double u)
 {
@@ -471,5 +476,5 @@ int tillIsBelowColdCurve(TILLMATERIAL *material, double rho, double u)
     ucold = tillColdULookup(material, rho);
     if (tillFailed(ucold)) return TILL_FAIL;
 
-    return (u < ucold) ? 1 : 0;
+    return (u < ucold - tillUTol(material, u)) ? 1 : 0;
 }

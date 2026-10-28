@@ -630,6 +630,29 @@ static void testSentinels(TILLMATERIAL *material)
     CHECK(tillIsBelowColdCurve(material, 2.0*material->rhomax, 1.0) == TILL_FAIL, "isbelow above rhomax");
     CHECK(tillIsBelowColdCurve(material, 2.0*material->rho0, 0.5*ucold) == 1, "isbelow true");
     CHECK(tillIsBelowColdCurve(material, 2.0*material->rho0, 2.0*ucold) == 0, "isbelow false");
+    /*
+     * Within roundoff below the cold curve the state is on it: not below, in the table, T = 0 without
+     * a fallback. Clearly below (10 tolerances) it is below, outside and a counted fallback. The same
+     * below rhomin, where the cold curve is 0. Up to 4.0.0 tillIsBelowColdCurve used u < u_cold.
+     */
+    {
+        const long nf = material->nLookupFail;
+        const double rhos[2] = { 2.0*material->rho0, 0.5*material->rhomin };
+        for (int q = 0; q < 2; q++) {
+            const double uc = tillColdULookup(material, rhos[q]);
+            const double uOn = uc - 0.1*tillUTol(material, uc), uOff = uc - 10.0*tillUTol(material, uc);
+            CHECK(tillIsBelowColdCurve(material, rhos[q], uOn) == 0, "isbelow within roundoff of the cold curve (rho= %g)", rhos[q]);
+            CHECK(tillTempRhoU(material, rhos[q], uOn) == 0.0, "T within roundoff of the cold curve (rho= %g)", rhos[q]);
+            CHECK(material->nLookupFail == nf, "state within roundoff of the cold curve counted (rho= %g)", rhos[q]);
+            CHECK(tillIsBelowColdCurve(material, rhos[q], uOff) == 1, "isbelow 10 tolerances below the cold curve (rho= %g)", rhos[q]);
+            if (q == 0) {
+                /* tillIsInTable is defined in [rhomin, rhomax] only. */
+                CHECK(tillIsInTable(material, rhos[q], uOn) == TILL_LOOKUP_SUCCESS, "in table within roundoff of the cold curve");
+                CHECK(tillIsInTable(material, rhos[q], uOff) == TILL_LOOKUP_OUTSIDE_VMIN, "outside 10 tolerances below the cold curve");
+            }
+        }
+        CHECK(material->nLookupFail == nf, "isbelow and isintable counted (%ld)", material->nLookupFail - nf);
+    }
     /* A non-finite u is rejected by every function that takes one, never passed on as NaN. */
     CHECK(tillIsBelowColdCurve(material, 2.0*material->rho0, NAN) == TILL_FAIL, "isbelow NaN u");
     /*
@@ -642,7 +665,9 @@ static void testSentinels(TILLMATERIAL *material)
         CHECK(tillIsBelowColdCurve(material, 0.5*material->rhomin, -1.0) == 1, "isbelow below rhomin, u < 0");
         CHECK(tillIsBelowColdCurve(material, 0.5*material->rhomin, 0.0) == 0, "isbelow below rhomin, u = 0");
         CHECK(tillIsBelowColdCurve(material, 0.5*material->rhomin, 1.0) == 0, "isbelow below rhomin, u > 0");
-        CHECK(tillIsBelowColdCurve(material, 0.5*material->rho0, -1e-30) == 1, "isbelow below rho0, u < 0");
+        /* Below rho0 the cold curve is 0: below it by more than the roundoff tolerance is below, -1e-30 is on it. */
+        CHECK(tillIsBelowColdCurve(material, 0.5*material->rho0, -10.0*tillUTol(material, 0.0)) == 1, "isbelow below rho0, u < 0");
+        CHECK(tillIsBelowColdCurve(material, 0.5*material->rho0, -1e-30) == 0, "isbelow below rho0, u = -1e-30 is on the cold curve");
         CHECK(material->nLookupFail == nf, "isbelow below rhomin counted %ld times", material->nLookupFail - nf);
         CHECK(tillIsBelowColdCurve(material, 0.0, 1.0) == TILL_FAIL, "isbelow at rho = 0");
         CHECK(tillIsBelowColdCurve(material, -1.0, 1.0) == TILL_FAIL, "isbelow at rho < 0");
