@@ -603,6 +603,51 @@ static void testTemperature(TILLMATERIAL *material)
     if (nskip > 0) SKIP("rho(P, T) not unique or not bracketed for %d of %d states (non-monotonic P(rho, T))", nskip, nskip + n);
 }
 
+/*
+ * An invalid density (rho <= 0, NaN, inf) fails in every analytic (rho, u) function: P, c and the
+ * derivatives are TILL_FAIL_VALUE, counted once per call (they returned NaN, uncounted; tilldudrho
+ * divided the result by rho^2). T(rho, u) falls back to 0, counted once.
+ */
+static void testInvalidDensity(TILLMATERIAL *material)
+{
+    const double bad[] = { 0.0, -1.0, -material->rho0, NAN, INFINITY, -INFINITY };
+    const double u = material->u0;
+    const long nf0 = material->nLookupFail;
+#define TILL_ONCE(expr, what) do { long n_ = material->nLookupFail; double v_ = (expr); \
+        CHECK(v_ == TILL_FAIL_VALUE, "%s at rho= %g: %g", what, r, v_); \
+        CHECK(material->nLookupFail == n_ + 1, "%s at rho= %g counted %ld times", what, r, material->nLookupFail - n_); } while (0)
+    for (size_t k = 0; k < sizeof(bad) / sizeof(bad[0]); k++) {
+        const double r = bad[k];
+        double c = 1.0;
+        TILL_ONCE(tillPressure(material, r, u), "tillPressure");
+        TILL_ONCE(tillPressureNP(material, r, u), "tillPressureNP");
+        TILL_ONCE(tillSoundSpeed(material, r, u), "tillSoundSpeed");
+        TILL_ONCE(tilldPdrho(material, r, u), "tilldPdrho");
+        TILL_ONCE(tilldPdu(material, r, u), "tilldPdu");
+        TILL_ONCE(tilldudrho(material, r, u), "tilldudrho");
+        TILL_ONCE(tillPressureSound(material, r, u, &c), "tillPressureSound");
+        CHECK(c == TILL_FAIL_VALUE, "tillPressureSound c at rho= %g: %g", r, c);
+        c = 1.0;
+        TILL_ONCE(tillPressureSoundNP(material, r, u, &c), "tillPressureSoundNP");
+        CHECK(c == TILL_FAIL_VALUE, "tillPressureSoundNP c at rho= %g: %g", r, c);
+        {
+            long n = material->nLookupFail;
+            CHECK(tillTempRhoU(material, r, u) == 0.0 && material->nLookupFail == n + 1, "T at rho= %g falls back to 0, counted once", r);
+        }
+    }
+    /* A valid density is unchanged and not counted, also far outside the table and below the cold curve. */
+    {
+        long n = material->nLookupFail;
+        CHECK(isfinite(tillPressure(material, 1e-3*material->rhomin, u)), "P below rhomin");
+        CHECK(isfinite(tillPressure(material, 10.0*material->rhomax, u)), "P above rhomax");
+        CHECK(isfinite(tillPressure(material, material->rho0, -u)), "P below the cold curve");
+        CHECK(isfinite(tilldudrho(material, 1e-3*material->rhomin, u)), "du/drho below rhomin");
+        CHECK(material->nLookupFail == n, "valid densities counted (%ld)", material->nLookupFail - n);
+    }
+#undef TILL_ONCE
+    material->nLookupFail = nf0;
+}
+
 static void testSentinels(TILLMATERIAL *material)
 {
     double ucold = tillColdULookup(material, 2.0*material->rho0);
@@ -952,6 +997,7 @@ int main(int argc, char **argv)
         testIsentropes(material);
         testTemperature(material);
         testSentinels(material);
+        testInvalidDensity(material);
         testCalcUOutside(material);
         /* Grid constants derived by tillInitLookup for the lookups. */
         CHECK(material->logrhomin == log(material->rhomin), "logrhomin");

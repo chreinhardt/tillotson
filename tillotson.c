@@ -403,6 +403,21 @@ static double tillPressureCore(TILLMATERIAL *material, double rho, double u, int
     int bCold, bHot;
     const int bDeriv = (pcSound != NULL || pdPdrho != NULL || pdPdu != NULL);
 
+    /*
+     * An invalid density (rho <= 0, NaN, inf) has no pressure: eta = 0 makes z infinite and P NaN.
+     * Like a density outside a table it fails, counted once, with every output set to the
+     * sentinel. Up to 4.0.0 it returned NaN (rho = 0, NaN) or inf, uncounted. One comparison on the
+     * hot path; the isentrope integration never gets here with an invalid rho (rho = exp(logrho)).
+     */
+    if (!(rho > 0.0) || !isfinite(rho)) {
+        material->nLookupFail++;
+        TILL_WARN("tillPressureCore: invalid density rho= %g (u= %g, iMat= %i).\n", rho, u, material->iMaterial);
+        if (pcSound != NULL) *pcSound = TILL_FAIL_VALUE;
+        if (pdPdrho != NULL) *pdPdrho = TILL_FAIL_VALUE;
+        if (pdPdu != NULL) *pdPdu = TILL_FAIL_VALUE;
+        return TILL_FAIL_VALUE;
+    }
+
     eta = rho/rho0;
     mu = eta - 1.0;
     z = (1.0 - eta)/eta;
@@ -712,7 +727,9 @@ double tillRhoPTemp(TILLMATERIAL *material, double P, double T)
  */
 double tilldudrho(TILLMATERIAL *material, double rho, double u)
 {
-    return (tillPressure(material,rho,u)/(rho*rho));
+    const double P = tillPressure(material,rho,u);
+    if (tillFailed(P)) return TILL_FAIL_VALUE;   /* invalid rho, counted there; never divided by rho^2 */
+    return (P/(rho*rho));
 }
 
 /*
@@ -723,8 +740,10 @@ double tilldudrho(TILLMATERIAL *material, double rho, double u)
  */
 double tilldudlogrho(TILLMATERIAL *material, double logrho, double u)
 {
-    double rho = exp(logrho);
-    return (tillPressure(material,rho,u)/(rho));
+    const double rho = exp(logrho);
+    const double P = tillPressure(material,rho,u);
+    if (tillFailed(P)) return TILL_FAIL_VALUE;   /* rho = exp(logrho) is 0 or inf only for |logrho| > ~700 */
+    return (P/(rho));
 }
 
 /*

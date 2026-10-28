@@ -90,6 +90,9 @@
  *          The failure contract says what P, c and the derivatives do below the cold curve and
  *          outside the table: they are evaluated at the given (rho, u), uncounted (it said only
  *          that they never fail). No change in behaviour.
+ *          P, c and the derivatives (tillPressureCore, tilldudrho, tilldudlogrho) return
+ *          TILL_FAIL_VALUE, counted once, for an invalid density (rho <= 0, NaN, inf); they returned
+ *          NaN or inf, uncounted.
  *          tillPrintMat prints the dimensional parameters (A, B, rho0, u0, us, us2, cv) and the table
  *          range in cgs with the unit, and the unit pair, like the tabulated libraries (it printed
  *          them in code units without a label).
@@ -126,9 +129,11 @@
  * tillCalcU itself counts only its failures (invalid rho1, rho2 or u1, non-finite result).
  * The pressure, sound speed and their derivatives (tillPressure, tillPressureSound, tillSoundSpeed,
  * tilldPdrho, tilldPdu, tilldudrho and the *NP variants) are analytic in (rho, u) and need no table:
- * they are evaluated at the given (rho, u) everywhere, also below the cold curve (a u < 0 enters
- * the Grueneisen term as Gamma = a + b, see tillPressureCore) and outside [rhomin, rhomax]. They
- * never fail, never fall back and count nothing. This is the one place where Tillotson differs
+ * they are evaluated at the given (rho, u) for every valid density, also below the cold curve (a
+ * u < 0 enters the Grueneisen term as Gamma = a + b, see tillPressureCore) and outside [rhomin,
+ * rhomax]. There they never fail, never fall back and count nothing. An invalid density (rho <= 0,
+ * NaN, inf) fails like a density outside a table: TILL_FAIL_VALUE for P and every output (c, the
+ * derivatives), counted once. This is the one place where Tillotson differs
  * from the tabulated libraries, which evaluate P and c of a state below the cold curve at
  * (rho, T_min): here P(rho, u) below the cold curve is not P(rho, T(rho, u) = 0). EOSlib documents
  * it as the Tillotson exception of its failure contract; EOSIsUsable tells the caller whether P,
@@ -362,7 +367,11 @@ const char *tillLookupStatusString(int iError);
 void tillErrorString(int iError, char *ErrorString);   /* copies tillLookupStatusString into the buffer */
 void tillPrintMat(TILLMATERIAL *material, FILE *fp);
 
-/* Pressure, sound speed and derivatives of the cut EOS (negative pressures set to zero). */
+/*
+ * Pressure, sound speed and derivatives of the cut EOS (negative pressures set to zero). All of
+ * these, the *NP variants included, return TILL_FAIL_VALUE (and set every output to it), counted
+ * once, for rho <= 0, NaN or inf.
+ */
 double tillPressureSound(TILLMATERIAL *material, double rho, double u, double *pcSound);
 double tillPressure(TILLMATERIAL *material, double rho, double u);
 double tillSoundSpeed(TILLMATERIAL *material, double rho, double u);
