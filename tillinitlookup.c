@@ -24,49 +24,74 @@
 #include "tillotson.h"
 
 /*
+ * A grid that cannot be built is a programming error of the caller (fatal, also with -DNDEBUG,
+ * like the unit pair): the message names the call and the offending values.
+ */
+#define TILL_GRID_FATAL(...) do { fprintf(stderr, __VA_ARGS__); assert(0); exit(1); } while (0)
+
+/*
  * The grid of the table (tillInitLookup and tillInitColdCurve share it): rho and s axes and the
  * derived constants. Does not allocate.
+ *
+ * Requirements, checked before anything is changed (fatal otherwise, also with -DNDEBUG; up to
+ * tillotson 4.0.0 they were asserts, so a bad grid went through silently in a release build):
+ *  - all bounds finite, 0 < rhomin < rho0 < rhomax and 0 < vmin < vmax (logarithmic axes),
+ *  - nTableRho >= 3 and nTableV >= 3 (the cubic splines in v need three nodes; nTableV = 1
+ *    divided by zero in dv, nTableV = 2 was only caught later by tillInitSplineField),
+ *  - rho0 on an interior node: 1 <= n <= nTableRho-2 (the isentropes are integrated from rho0
+ *    in both directions).
  */
 static void tillInitGrid(TILLMATERIAL *material, int nTableRho, int nTableV, double rhomin, double rhomax, double vmin, double vmax)
 {
-    /* Check if the material is properly initialized. */
-    assert(material != NULL);
+    int n;
+
+    if (material == NULL) TILL_GRID_FATAL("tillInitGrid: material is NULL.\n");
+    {
+        const double rho0 = material->rho0;
+        const int iMat = material->iMaterial;
+
+        if (!isfinite(rhomin) || !isfinite(rhomax) || !isfinite(vmin) || !isfinite(vmax) || !isfinite(rho0))
+            TILL_GRID_FATAL("tillInitGrid: iMat= %i: non-finite grid bounds rhomin= %g rhomax= %g vmin= %g vmax= %g (rho0= %g).\n",
+                            iMat, rhomin, rhomax, vmin, vmax, rho0);
+        /* rhomin > 0 for the logarithmic spacing; rho0 strictly inside, the isentropes start there. */
+        if (!(rhomin > 0.0 && rhomin < rho0 && rho0 < rhomax))
+            TILL_GRID_FATAL("tillInitGrid: iMat= %i: need 0 < rhomin < rho0 < rhomax, got rhomin= %g rho0= %g rhomax= %g.\n",
+                            iMat, rhomin, rho0, rhomax);
+        /* vmin > 0 for s = log(1 + v/vmin). */
+        if (!(vmin > 0.0 && vmin < vmax))
+            TILL_GRID_FATAL("tillInitGrid: iMat= %i: need 0 < vmin < vmax, got vmin= %g vmax= %g.\n", iMat, vmin, vmax);
+        if (nTableRho < 3 || nTableV < 3)
+            TILL_GRID_FATAL("tillInitGrid: iMat= %i: need nTableRho >= 3 and nTableV >= 3, got nTableRho= %i nTableV= %i.\n",
+                            iMat, nTableRho, nTableV);
+
+        /*
+         * Set dlogrho so that log(rho0) lies on the grid. The index of rho0 is the integer part of
+         * x = log(rho0/rhomin)/log(rhomax/rhomin)*nTableRho. For the standard table x is an integer
+         * (2/3*1200 = 800) and the logarithms of the code-unit densities make it 800 - 1e-13 in some
+         * unit systems: a plain floor then gives 799, a different grid (dlogrho, rhomax) and a
+         * different table. The roundoff slack makes the grid the same in every unit system.
+         */
+        {
+            const double x = (log(rho0)-log(rhomin))/(log(rhomax)-log(rhomin))*nTableRho;
+            n = (int) floor(x + 1e-9*(1.0 + x));
+        }
+        if (n < 1 || n > nTableRho-2)
+            TILL_GRID_FATAL("tillInitGrid: iMat= %i: rho0= %g falls on node %i of %i, not an interior node "
+                            "(rho0 too close to rhomin= %g or rhomax= %g for this nTableRho).\n",
+                            iMat, rho0, n, nTableRho, rhomin, rhomax);
+    }
 
     /* Min and max values for the lookup table (in code units). */
     material->rhomin = rhomin;
-	material->rhomax = rhomax;
-	material->vmin = vmin;
-	material->vmax = vmax;
-    assert(material->vmin > 0.0 && material->vmin < material->vmax);
+    material->rhomax = rhomax;
+    material->vmin = vmin;
+    material->vmax = vmax;
 
-    /* rhomin has to be larger than zero otherwise the logarithmic spacing does not work. */
-    assert(material->rhomin > 0.0 && material->rhomin < material->rhomax);
-        
-    /* rhomin has to be smaller than rho0. */
-    assert(material->rhomin < material->rho0);
+    /* Number of grid points for the look up table. */
+    material->nTableRho = nTableRho;
+    material->nTableV = nTableV;
 
-    assert(material->rhomax > 0.0);
-    assert(material->vmax > 0.0);
-
-	/* Number of grid points for the look up table. */
-	material->nTableRho = nTableRho;
-	material->nTableV = nTableV;
-
-    assert(material->nTableRho > 0);
-    assert(material->nTableV > 0);
-
-    /*
-     * Set dlogrho so that log(rho0) lies on the grid. The index of rho0 is the integer part of
-     * x = log(rho0/rhomin)/log(rhomax/rhomin)*nTableRho. For the standard table x is an integer
-     * (2/3*1200 = 800) and the logarithms of the code-unit densities make it 800 - 1e-13 in some
-     * unit systems: a plain floor then gives 799, a different grid (dlogrho, rhomax) and a
-     * different table. The roundoff slack makes the grid the same in every unit system.
-     */
-    {
-        const double x = (log(material->rho0)-log(material->rhomin))/(log(material->rhomax)-log(material->rhomin))*material->nTableRho;
-        material->n = (int) floor(x + 1e-9*(1.0 + x));
-    }
-    assert(material->n >= 1 && material->n <= material->nTableRho-2);
+    material->n = n;
     material->dlogrho = (log(material->rho0)-log(material->rhomin))/material->n;
 
     /* Set the actual rhomax (it can differ from the requested value after the correction). */
@@ -103,7 +128,7 @@ static void tillInitEdgeCurves(TILLMATERIAL *material)
  */
 void tillInitColdCurve(TILLMATERIAL *material, int nTableRho, int nTableV, double rhomin, double rhomax, double vmin, double vmax)
 {
-    assert(material != NULL);
+    if (material == NULL) TILL_GRID_FATAL("%s: material is NULL.\n", __func__);
     tillInitGrid(material, nTableRho, nTableV, rhomin, rhomax, vmin, vmax);
     if (material->Lookup != NULL) {
         free(material->Lookup);
@@ -114,7 +139,7 @@ void tillInitColdCurve(TILLMATERIAL *material, int nTableRho, int nTableV, doubl
 
 void tillInitColdCurveDefault(TILLMATERIAL *material)
 {
-    assert(material != NULL);
+    if (material == NULL) TILL_GRID_FATAL("%s: material is NULL.\n", __func__);
     tillInitColdCurve(material, TILL_TABLE_NRHO, TILL_TABLE_NV,
                       TILL_TABLE_RHOMIN_FAC*material->rho0, TILL_TABLE_RHOMAX_FAC*material->rho0,
                       material->cv*TILL_TABLE_TMIN, material->cv*TILL_TABLE_TMAX);
@@ -130,14 +155,16 @@ void tillInitLookup(TILLMATERIAL *material, int nTableRho, int nTableV, double r
 	double v;
     int i, j;
 
-    assert(material != NULL);
+    if (material == NULL) TILL_GRID_FATAL("%s: material is NULL.\n", __func__);
     tillInitGrid(material, nTableRho, nTableV, rhomin, rhomax, vmin, vmax);
     tillInitEdgeCurves(material);
 
 	/* We arrange the look up table as a 1D array with Lookup[i][j] = Lookup[i*Ntable+j] */
     if (material->Lookup != NULL) free(material->Lookup);
     material->Lookup = calloc((size_t) material->nTableRho*material->nTableV, sizeof(TILL_LOOKUP_ENTRY));
-    assert(material->Lookup != NULL);
+    if (material->Lookup == NULL)
+        TILL_GRID_FATAL("tillInitLookup: iMat= %i: could not allocate the isentrope table (%i x %i).\n",
+                        material->iMaterial, material->nTableRho, material->nTableV);
 
 	/*
      * Integrate the isentropes for different v = v(s_j); the edge rows are the edge curves.
@@ -205,7 +232,7 @@ static double tillRK4Step(TILLMATERIAL *material, double logrho, double u, doubl
  */
 void tillInitLookupDefault(TILLMATERIAL *material)
 {
-    assert(material != NULL);
+    if (material == NULL) TILL_GRID_FATAL("%s: material is NULL.\n", __func__);
     tillInitLookup(material, TILL_TABLE_NRHO, TILL_TABLE_NV,
                    TILL_TABLE_RHOMIN_FAC*material->rho0, TILL_TABLE_RHOMAX_FAC*material->rho0,
                    material->cv*TILL_TABLE_TMIN, material->cv*TILL_TABLE_TMAX);
@@ -306,8 +333,10 @@ TILL_LOOKUP_ENTRY *tillSolveIsentropeLogRho(TILLMATERIAL *material, double v)
     double logrho, u, h;
     int i;
 
-    isentrope = malloc(material->nTableRho*sizeof(TILL_LOOKUP_ENTRY));
-    assert(isentrope != NULL);
+    isentrope = malloc((size_t) material->nTableRho*sizeof(TILL_LOOKUP_ENTRY));
+    if (isentrope == NULL)
+        TILL_GRID_FATAL("tillSolveIsentropeLogRho: iMat= %i: could not allocate an isentrope (%i nodes).\n",
+                        material->iMaterial, material->nTableRho);
 
     i = material->n;
     isentrope[i].u = v;

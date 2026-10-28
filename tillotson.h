@@ -96,6 +96,12 @@
  *          tillPrintMat prints the dimensional parameters (A, B, rho0, u0, us, us2, cv) and the table
  *          range in cgs with the unit, and the unit pair, like the tabulated libraries (it printed
  *          them in code units without a label).
+ *          tillInitLookup and tillInitColdCurve check the grid before changing anything and stop the
+ *          program with a message (also with -DNDEBUG) for non-finite bounds, rhomin <= 0, rhomin >=
+ *          rho0 or rho0 >= rhomax, vmin <= 0 or vmin >= vmax, nTableRho < 3 or nTableV < 3, and rho0
+ *          not on an interior node; they were asserts, so a release build went on with a bad grid
+ *          (nTableV = 1 divided by zero in dv, nTableV = 2 was caught only by tillInitSplineField).
+ *          A failed allocation of the table or of an isentrope is fatal with a message, too.
  */
 #define TILL_VERSION_TEXT    "4.0.0"
 #define TILL_VERSION_MAJOR   4
@@ -408,6 +414,9 @@ int tillBrent(double (*f)(TILLMATERIAL *, double, const void *), TILLMATERIAL *m
  * onto the grid so that rho0 is a grid point), nTableV isentropes with v = u(rho0) from 0 to
  * vmax, spaced in s = log(1 + v/vmin). All in code units. Replaces an existing table and builds
  * the edge curves (see tillInitColdCurve) as well. 46 MB and ~0.6 s for the standard table.
+ * Requires finite bounds with 0 < rhomin < rho0 < rhomax and 0 < vmin < vmax, nTableRho >= 3,
+ * nTableV >= 3 (the cubic splines in s) and rho0 on an interior node of the rho axis; anything
+ * else is fatal (message, assert(0), exit(1)), also with -DNDEBUG, before the material is changed.
  */
 void tillInitLookup(TILLMATERIAL *material, int nTableRho, int nTableV, double rhomin, double rhomax, double vmin, double vmax);
 /* The standard table TILL_TABLE_* (see above) for this material. */
@@ -418,7 +427,8 @@ void tillInitLookupDefault(TILLMATERIAL *material);
  * for T(rho, u), u(rho, T), rho(P, T), tillColdULookup, tillIsInTable and tillIsBelowColdCurve,
  * bit-identical to the full table. The isentropic lookups (tillLookupU, tillFindEntropyCurve,
  * tillFindUonIsentrope, tillCubicInt*) need the full table and stop the program (fatal, with a
- * message) until tillInitLookup is called. Frees an existing full table.
+ * message) until tillInitLookup is called. Frees an existing full table. The grid requirements
+ * (fatal otherwise) are those of tillInitLookup.
  */
 void tillInitColdCurve(TILLMATERIAL *material, int nTableRho, int nTableV, double rhomin, double rhomax, double vmin, double vmax);
 /* The edge curves of the standard table TILL_TABLE_*. */

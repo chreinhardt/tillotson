@@ -949,6 +949,71 @@ static void testUnitPair(int iMat)
 
 }
 
+/*
+ * Build a grid (tillInitColdCurve if bColdOnly, else tillInitLookup) in a child process. Returns 0 if
+ * accepted, 1 if the program was stopped (assert(0), or exit(1) with -DNDEBUG), -1 otherwise.
+ */
+static int gridRejected(int iMat, int bColdOnly, int nRho, int nV, double fRhoMin, double fRhoMax, double fVMin, double fVMax)
+{
+    fflush(NULL);
+    pid_t pid = fork();
+    if (pid == 0) {
+        if (freopen("/dev/null", "w", stderr) == NULL) _exit(3);   /* the expected diagnostic */
+        TILLMATERIAL *m = tillInitMaterial(iMat, 0.0, 0.0);
+        const double rhomin = fRhoMin*m->rho0, rhomax = fRhoMax*m->rho0, vmin = fVMin*m->cv, vmax = fVMax*m->cv;
+        if (bColdOnly) tillInitColdCurve(m, nRho, nV, rhomin, rhomax, vmin, vmax);
+        else tillInitLookup(m, nRho, nV, rhomin, rhomax, vmin, vmax);
+        tillFinalizeMaterial(m);
+        _exit(0);
+    }
+    int status = 0;
+    if (pid < 0 || waitpid(pid, &status, 0) != pid) return -1;
+    if (WIFEXITED(status) && WEXITSTATUS(status) == 0) return 0;
+    if ((WIFSIGNALED(status) && WTERMSIG(status) == SIGABRT) || (WIFEXITED(status) && WEXITSTATUS(status) == 1)) return 1;
+    return -1;
+}
+
+/*
+ * The grid of tillInitLookup and tillInitColdCurve is checked before it is built, fatal also with
+ * -DNDEBUG (up to 4.0.0 only asserts: nTableV = 1 divided by zero in dv, nTableV = 2 was caught only
+ * by the spline, a bad rho0 index went through). Densities in units of rho0, energies in units of cv
+ * (i.e. temperatures).
+ */
+static void testGridRejected(int iMat)
+{
+    MatName = "grid";
+    static const struct { int nRho, nV; double fRhoMin, fRhoMax, fVMin, fVMax; int bRejected; const char *what; } cases[] = {
+        {100, 50, 1e-4, 100.0, 1.0, 1e7, 0, "a small standard-like grid"},
+        {3, 3, 0.5, 2.0, 1.0, 1e4, 0, "the smallest grid (3 x 3, rho0 on node 1)"},
+        {100, 2, 1e-4, 100.0, 1.0, 1e7, 1, "nTableV = 2 (no spline)"},
+        {100, 1, 1e-4, 100.0, 1.0, 1e7, 1, "nTableV = 1 (dv = x/0)"},
+        {100, 0, 1e-4, 100.0, 1.0, 1e7, 1, "nTableV = 0"},
+        {2, 50, 1e-4, 100.0, 1.0, 1e7, 1, "nTableRho = 2"},
+        {-5, 50, 1e-4, 100.0, 1.0, 1e7, 1, "nTableRho < 0"},
+        {100, 50, 0.0, 100.0, 1.0, 1e7, 1, "rhomin = 0"},
+        {100, 50, -1.0, 100.0, 1.0, 1e7, 1, "rhomin < 0"},
+        {100, 50, 2.0, 100.0, 1.0, 1e7, 1, "rhomin > rho0"},
+        {100, 50, 1.0, 100.0, 1.0, 1e7, 1, "rhomin = rho0"},
+        {100, 50, 1e-4, 0.5, 1.0, 1e7, 1, "rhomax < rho0"},
+        {100, 50, 1e-4, 1e-5, 1.0, 1e7, 1, "rhomax < rhomin"},
+        {100, 50, NAN, 100.0, 1.0, 1e7, 1, "rhomin NaN"},
+        {100, 50, 1e-4, INFINITY, 1.0, 1e7, 1, "rhomax inf"},
+        {100, 50, 1e-4, 100.0, 0.0, 1e7, 1, "vmin = 0"},
+        {100, 50, 1e-4, 100.0, -1.0, 1e7, 1, "vmin < 0"},
+        {100, 50, 1e-4, 100.0, 1e7, 1.0, 1, "vmin > vmax"},
+        {100, 50, 1e-4, 100.0, 1.0, NAN, 1, "vmax NaN"},
+        {100, 50, 1e-4, 100.0, 1.0, INFINITY, 1, "vmax inf"},
+        {10, 50, 0.999, 1e6, 1.0, 1e7, 1, "rho0 on node 0 (too close to rhomin)"},
+        {10, 50, 1e-6, 1.001, 1.0, 1e7, 1, "rho0 on the last node (too close to rhomax)"},
+    };
+    for (int bCold = 0; bCold <= 1; bCold++)
+        for (size_t k = 0; k < sizeof(cases) / sizeof(cases[0]); k++) {
+            int r = gridRejected(iMat, bCold, cases[k].nRho, cases[k].nV, cases[k].fRhoMin, cases[k].fRhoMax, cases[k].fVMin, cases[k].fVMax);
+            CHECK(r == cases[k].bRejected, "%s: %s: %s (got %d)", bCold ? "tillInitColdCurve" : "tillInitLookup", cases[k].what,
+                  cases[k].bRejected ? "must be fatal" : "must be accepted", r);
+        }
+}
+
 static double fcube(TILLMATERIAL *m, double x, const void *ctx) { (void) m; (void) ctx; return x*x*x - 2.0; }
 
 static void testBrent(void)
@@ -970,6 +1035,7 @@ int main(int argc, char **argv)
 
     testBrent();
     testUnitPair(GRANITE);
+    testGridRejected(GRANITE);
 
     for (m = 0; m < (argc > 1 ? argc-1 : nMat); m++) {
         int iMat = (argc > 1) ? atoi(argv[m+1]) : allMat[m];
