@@ -92,7 +92,8 @@
  *          that they never fail). No change in behaviour.
  *          P, c and the derivatives (tillPressureCore, tilldudrho, tilldudlogrho) return
  *          TILL_FAIL_VALUE, counted once, for an invalid density (rho <= 0, NaN, inf); they returned
- *          NaN or inf, uncounted.
+ *          NaN or inf, uncounted. A NaN u still gives NaN in all of them (tilldudrho passes on only
+ *          the sentinel of an invalid rho).
  *          tillPrintMat prints the dimensional parameters (A, B, rho0, u0, us, us2, cv) and the table
  *          range in cgs with the unit, and the unit pair, like the tabulated libraries (it printed
  *          them in code units without a label).

@@ -642,6 +642,8 @@ static void testInvalidDensity(TILLMATERIAL *material)
         CHECK(isfinite(tillPressure(material, 10.0*material->rhomax, u)), "P above rhomax");
         CHECK(isfinite(tillPressure(material, material->rho0, -u)), "P below the cold curve");
         CHECK(isfinite(tilldudrho(material, 1e-3*material->rhomin, u)), "du/drho below rhomin");
+        /* A NaN u gives NaN in P and so in du/drho, not the sentinel (only an invalid rho does). */
+        CHECK(isnan(tillPressure(material, material->rho0, NAN)) && isnan(tilldudrho(material, material->rho0, NAN)), "NaN u: P and du/drho NaN");
         CHECK(material->nLookupFail == n, "valid densities counted (%ld)", material->nLookupFail - n);
     }
 #undef TILL_ONCE

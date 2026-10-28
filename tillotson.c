@@ -728,7 +728,12 @@ double tillRhoPTemp(TILLMATERIAL *material, double P, double T)
 double tilldudrho(TILLMATERIAL *material, double rho, double u)
 {
     const double P = tillPressure(material,rho,u);
-    if (tillFailed(P)) return TILL_FAIL_VALUE;   /* invalid rho, counted there; never divided by rho^2 */
+    /*
+     * The sentinel of an invalid rho (counted in tillPressureCore) is passed on, never divided by rho^2.
+     * Only the sentinel: a NaN P (from a NaN u) stays NaN like P, c and dP/drho (tillFailed is true for
+     * NaN as well, which made du/drho the sentinel there, uncounted).
+     */
+    if (P == TILL_FAIL_VALUE) return TILL_FAIL_VALUE;
     return (P/(rho*rho));
 }
 
@@ -742,7 +747,7 @@ double tilldudlogrho(TILLMATERIAL *material, double logrho, double u)
 {
     const double rho = exp(logrho);
     const double P = tillPressure(material,rho,u);
-    if (tillFailed(P)) return TILL_FAIL_VALUE;   /* rho = exp(logrho) is 0 or inf only for |logrho| > ~700 */
+    if (P == TILL_FAIL_VALUE) return TILL_FAIL_VALUE;   /* the sentinel only, as in tilldudrho; rho = exp(logrho) is 0 or inf only for |logrho| > ~700 */
     return (P/(rho));
 }
 
