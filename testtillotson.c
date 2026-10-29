@@ -659,6 +659,46 @@ static void testTemperature(TILLMATERIAL *material)
 }
 
 /*
+ * The table status of u(rho, T): wherever tillURhoTemp succeeds, (rho, u) is a state EOSIsUsable
+ * accepts, TILL_LOOKUP_SUCCESS or _OUTSIDE_VMAX in the table and, below rhomin, OUTSIDE_RHOMIN with
+ * u >= -tillUTol. EOSSolveBCEval in EOSlib relies on this and skips EOSIsUsable for Tillotson.
+ * u = u_cold + cv T with T >= 0 and the same u_cold as the status test, also in the cell just below
+ * rho0, where tillColdULookup returns 0 and the status interpolates row 0 of the table. T = 0 is
+ * the cold curve itself, the tightest case.
+ */
+static void testUofRhoTStatus(TILLMATERIAL *material)
+{
+    const double rhoLo = material->rhomin*(1.0 - TILL_EDGE_TOL);
+    const double Ts[6] = { 0.0, 1e-12, 1.0, 1e3, 1e5, 1e8 };
+    int k, j, n = 0;
+
+    for (k = 0; k < 1200; k++) {
+        double rho;
+        if (k < 600) rho = lograndom(0.1*material->rhomin, material->rhomax);
+        else if (k < 800) rho = material->rho0*exp(-material->dlogrho*(k - 600 + 0.5)/200.0);   /* the cell below rho0 */
+        else if (k < 1000) rho = material->rho0*exp(material->dlogrho*(k - 800 + 0.5)/200.0);   /* and above */
+        else if (k < 1100) rho = exp(material->logrhomin + (k - 1000)*material->dlogrho);       /* table nodes */
+        else rho = (k % 2) ? material->rhomin*(1.0 - 0.5*TILL_EDGE_TOL) : material->rhomax*(1.0 + 0.5*TILL_EDGE_TOL);
+        for (j = 0; j < 6; j++) {
+            const long nf = material->nLookupFail;
+            const double u = tillURhoTemp(material, rho, Ts[j]);
+            int st;
+            if (tillFailed(u)) { material->nLookupFail = nf; continue; }
+            st = tillIsInTable(material, rho, u);
+            n++;
+            if (rho >= rhoLo)
+                CHECK(st == TILL_LOOKUP_SUCCESS || (st == TILL_LOOKUP_OUTSIDE_VMAX && isfinite(u)),
+                      "u(rho= %.17g, T= %g) = %.17g has status %d", rho, Ts[j], u, st);
+            else
+                CHECK(st == TILL_LOOKUP_OUTSIDE_RHOMIN && u >= -tillUTol(material, u),
+                      "u(rho= %.17g, T= %g) = %.17g below rhomin has status %d", rho, Ts[j], u, st);
+            material->nLookupFail = nf;
+        }
+    }
+    CHECK(n > 6000, "only %d states checked", n);
+}
+
+/*
  * An invalid density (rho <= 0, NaN, inf) fails in every analytic (rho, u) function: P, c and the
  * derivatives are TILL_FAIL_VALUE, counted once per call (they returned NaN, uncounted; tilldudrho
  * divided the result by rho^2). T(rho, u) falls back to 0, counted once.
@@ -1140,6 +1180,7 @@ int main(int argc, char **argv)
         testTableNodes(material);
         testIsentropes(material);
         testTemperature(material);
+        testUofRhoTStatus(material);
         testSentinels(material);
         testInvalidDensity(material);
         testCalcUOutside(material);
