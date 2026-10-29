@@ -206,7 +206,8 @@ static inline int tillFailed(double x) {
 
 /*
  * Return codes of tillIsInTable (EOSlib maps them one by one). Besides these, tillIsInTable
- * returns TILL_FAIL for a non-finite u (no state at all, mapped to EOS_FAIL by EOSlib).
+ * returns TILL_FAIL for a non-finite u (no state at all; EOSlib reports it as EOS_OUTSIDE_VMIN for
+ * NaN and -inf and EOS_OUTSIDE_VMAX for +inf, like the other libraries, and EOSIsUsable rejects it).
  */
 enum till_error_lookup
 {

@@ -465,7 +465,8 @@ int tillIsInTable(TILLMATERIAL *material, double rho, double u)
      * A non-finite u is not a state outside one particular bound but no state at all. NaN would
      * otherwise fail the test u <= uhi below and be reported as OUTSIDE_VMAX (and +inf would be
      * reported the same way), which EOSIsUsable tolerates for Tillotson because the pressure is
-     * analytic. TILL_FAIL is mapped to EOS_FAIL by EOSIsInTable and rejected by EOSIsUsable.
+     * analytic. EOSIsInTable maps TILL_FAIL by the side u lies on (NaN and -inf to
+     * EOS_OUTSIDE_VMIN, +inf to EOS_OUTSIDE_VMAX), and EOSIsUsable rejects both.
      */
     if (!isfinite(u))
     {
