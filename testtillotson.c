@@ -18,6 +18,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <float.h>   /* DBL_MIN in testTinyDensity */
 #include <signal.h>
 #include <unistd.h>
 #include <sys/wait.h>
@@ -248,6 +249,60 @@ static void testNegativeU(TILLMATERIAL *material)
         }
         CHECK_REL((tillPressure(material, rho, u + du) - tillPressure(material, rho, u - du))/(2.0*du), tilldPdu(material, rho, u), 1e-6, "dP/du at u < 0, rho= %g", rho);
         CHECK_REL((tillPressure(material, rho + dr, u) - tillPressure(material, rho - dr, u))/(2.0*dr), tilldPdrho(material, rho, u), 1e-6, "dP/drho at u < 0, rho= %g", rho);
+    }
+}
+
+/*
+ * Densities down to the smallest double, in the cold (u < 0, u = 0, 0 < u < us), intermediate and
+ * hot regions. Up to tillotson 4.0.0 three products of 0 and inf gave NaN there: P for u <= 0
+ * below ~1e-162 rho0 (0/0 in w0, u0 eta^2 underflows), dP/drho for 0 < u < us below ~1e-155 rho0
+ * (w0 = inf) and for intermediate and hot states below ~4e-103 rho0 (exp(...) = 0 times a factor
+ * growing like 1/eta^3), and c fell to the floor sqrt(A/rho0) because fmax dropped the NaN; P/rho^2
+ * overflowed in c below rho ~ 1e-154. Below eta ~ 1e-14 Pc of A == B materials cancels to exactly 0
+ * and escaped the cut (dP/drho < 0 at P = 0). In the hot region at eta < 1e-20 the exponentials are
+ * 0 and w0 = inf, so P = a u rho and c^2 = max(a (1 + a) u, A/rho0) exactly.
+ */
+static void testTinyDensity(TILLMATERIAL *material)
+{
+    const double rho0 = material->rho0, cmin2 = material->A/rho0, a = material->a;
+    const double us[5] = { -material->u0, 0.0, 0.5*material->us, 0.5*(material->us + material->us2), 3.0*material->us2 };
+    int k, q, nHot = 0;
+    const long nf = material->nLookupFail;
+
+    for (k = 0; k <= 330; k++) {
+        /* eta = 10^-(10 + k), and the smallest positive double as density. */
+        const double rho = (k < 330) ? rho0*pow(10.0, -10.0 - k) : 4.9406564584124654e-324;
+        /* Normal doubles only for the checks that need P = a u rho itself: below DBL_MIN P underflows to 0. */
+        const int bNormal = (rho >= DBL_MIN && a*us[4]*rho >= DBL_MIN);
+        if (!(rho > 0.0)) continue;   /* rho0*10^-k underflowed: not a valid density */
+        for (q = 0; q < 5; q++) {
+            const double u = us[q];
+            double c, cnp, dPdrho = tilldPdrho(material, rho, u), dPdu = tilldPdu(material, rho, u);
+            double P = tillPressureSound(material, rho, u, &c), Pnp = tillPressureSoundNP(material, rho, u, &cnp);
+            CHECK(isfinite(P) && P >= 0.0 && isfinite(Pnp), "P at rho/rho0= %g u= %g: %g (NP %g)", rho/rho0, u, P, Pnp);
+            CHECK(isfinite(c) && c*c >= cmin2*(1.0 - 1e-14) && isfinite(cnp) && cnp >= 0.0, "c at rho/rho0= %g u= %g: %g (NP %g)", rho/rho0, u, c, cnp);
+            CHECK(isfinite(dPdrho) && isfinite(dPdu), "derivatives at rho/rho0= %g u= %g: %g %g", rho/rho0, u, dPdrho, dPdu);
+            if (P == 0.0 && bNormal) CHECK(dPdrho == 0.0 && dPdu == 0.0, "P = 0 but derivatives %g %g at rho/rho0= %g u= %g", dPdrho, dPdu, rho/rho0, u);
+#ifndef TILL_PRESS_MELOSH
+            CHECK(P == fmax(Pnp, 0.0), "P == max(P_NP, 0) at rho/rho0= %g u= %g", rho/rho0, u);
+#endif
+            if (q == 4 && rho/rho0 < 1e-20 && bNormal) {
+                const double Pref = a*u*rho;
+                CHECK(fabs(P - Pref) <= 1e-14*Pref, "hot limit P = a u rho at rho/rho0= %g: %g vs %g", rho/rho0, P, Pref);
+                CHECK_REL(c*c, fmax(a*(1.0 + a)*u, cmin2), 1e-13, "hot limit c^2 = a (1 + a) u at rho/rho0= %g", rho/rho0);
+                nHot++;
+            }
+        }
+    }
+    CHECK(nHot > 200, "hot limit tested %d times", nHot);
+    CHECK(material->nLookupFail == nf, "valid tiny densities counted (%ld)", material->nLookupFail - nf);
+    /* A NaN u is NaN in P and c alike (c was the floor). */
+    {
+        double c = 1.0, P = tillPressureSound(material, 0.5*rho0, NAN, &c);
+        CHECK(isnan(P) && isnan(c), "NaN u: P= %g c= %g", P, c);
+        P = tillPressureSound(material, 2.0*rho0, NAN, &c);
+        CHECK(isnan(P) && isnan(c), "NaN u (condensed): P= %g c= %g", P, c);
+        CHECK(isnan(tillSoundSpeed(material, rho0, NAN)), "tillSoundSpeed for a NaN u");
     }
 }
 
@@ -1055,6 +1110,7 @@ int main(int argc, char **argv)
         testColdCurveExpanded(iMat);
         testPressure(material);
         testNegativeU(material);
+        testTinyDensity(material);
         testColdCurveOnly(iMat);
 
         /* The standard table, as EOSlib initializes it. */

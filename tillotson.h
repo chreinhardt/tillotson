@@ -93,7 +93,7 @@
  *          P, c and the derivatives (tillPressureCore, tilldudrho, tilldudlogrho) return
  *          TILL_FAIL_VALUE, counted once, for an invalid density (rho <= 0, NaN, inf); they returned
  *          NaN or inf, uncounted. A NaN u still gives NaN in all of them (tilldudrho passes on only
- *          the sentinel of an invalid rho).
+ *          the sentinel of an invalid rho; the sound speed was the floor, see below).
  *          tillPrintMat prints the dimensional parameters (A, B, rho0, u0, us, us2, cv) and the table
  *          range in cgs with the unit, and the unit pair, like the tabulated libraries (it printed
  *          them in code units without a label).
@@ -109,6 +109,17 @@
  *          P(rho, T), the cold curve and T(rho, u) failed or fell back between the two). rho0 is on
  *          node 799 instead of 800; dlogrho is 0.13% larger, so every table value between the nodes
  *          changes at the level of the interpolation error.
+ *          tillPressureCore is finite down to the smallest double: products of 0 and inf gave NaN in
+ *          P for u <= 0 below rho ~ 1e-162 rho0 (0/0 in w0), in dP/drho for 0 < u < us below
+ *          ~1e-155 rho0 (w0 = inf) and for intermediate and hot states below ~4e-103 rho0 (an
+ *          underflowed exponential times a factor ~ 1/eta^3), where c silently fell to its floor
+ *          sqrt(A/rho0) (fmax drops a NaN; c of hot granite was 2.6 instead of 6.4 in code units);
+ *          P/rho^2 in c overflowed below rho ~ 1e-154 in code units. Below eta ~ 1e-14 the cold term
+ *          of the materials with A == B (granite, basalt, ice, dunite, forsterite) cancels to exactly
+ *          0 and escaped the cut, so dP/drho was (A - 2B)/rho0 + a u < 0 at P = 0; Pc == 0 below rho0
+ *          is cut now. P and P_NP are bit-identical everywhere; the derivatives and c wherever they
+ *          were finite, except for that cut (eta < 1.2e-14, A == B only). A NaN u gives a NaN c (it
+ *          gave the floor), as in P and the derivatives.
  */
 #define TILL_VERSION_TEXT    "4.0.0"
 #define TILL_VERSION_MAJOR   4

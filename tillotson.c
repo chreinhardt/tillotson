@@ -23,6 +23,7 @@
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
+#include <float.h>   /* DBL_MIN in tillPressureCore */
 #include "tillotson.h"
 
 /*
@@ -427,8 +428,14 @@ static double tillPressureCore(TILLMATERIAL *material, double rho, double u, int
      * negative u is below the cold curve and has no Tillotson meaning, so w0 is evaluated with
      * max(u, 0), i.e. w0 >= 1. P stays continuous at u = 0 (u still multiplies Gamma), and the
      * derivative formulas below remain exact because they reduce to the w0 = const case at w0 = 1.
+     *
+     * For u <= 0 w0 is set to 1 directly: below rho ~ 1e-162 rho0 (in Earth-like units; where
+     * u0*eta^2 underflows to 0) max(u, 0)/(u0 eta^2) was 0/0 and P NaN. For u > 0 the expression
+     * is the same as before; there w0 overflows to inf below ~1e-155 rho0, which gives b/w0 = 0
+     * (the correct limit) and is guarded in the derivatives below. A NaN u gives w0 = 1 as before
+     * (fmax(NaN, 0) = 0), and NaN in P through u itself.
      */
-    w0 = fmax(u, 0.0)/(u0*eta*eta) + 1.0;
+    w0 = (u > 0.0) ? u/(u0*eta*eta) + 1.0 : 1.0;
 
     bCold = (rho >= rho0 || u < material->us);  /* Pc only */
     bHot = (!bCold && u > material->us2);        /* Pe only */
@@ -449,13 +456,22 @@ static double tillPressureCore(TILLMATERIAL *material, double rho, double u, int
 #ifdef TILL_PRESS_MELOSH
             bCut = (eta < 0.8);
 #else
-            bCut = (Pc < 0.0);
+            /*
+             * Pc == 0 below rho0 is cut too. Below eta ~ 1e-16, mu = eta - 1 rounds to -1 and for
+             * A == B (granite, basalt, dunite, forsterite, ice) A mu + B mu^2 cancels to exactly 0,
+             * absorbing Gamma u rho: the true Pc ~ eta (Gamma u rho0 - A) is negative, but Pc == 0
+             * escaped the cut, and dP/drho was (A - 2B)/rho0 + a u < 0 for P = 0. Not at rho0, where
+             * Pc = 0 at u = 0 is the reference state with the slope A/rho0. P is the same either way.
+             */
+            bCut = (Pc < 0.0) || (Pc == 0.0 && rho < rho0);
 #endif
         }
         if (bCut) {
             Pc = 0.0;       /* dPcdrho = dPcdu = 0 */
         } else if (bDeriv) {
-            dPcdrho = a*u + b*u/(w0*w0)*(3.0*w0 - 2.0) + (A + 2.0*B*mu)/rho0;
+            /* w0 = inf (u > 0 at rho below ~1e-155 rho0): b u (3 w0 - 2)/w0^2 -> 0, written out as
+             * 0*inf = NaN otherwise. Unchanged for every finite w0. */
+            dPcdrho = a*u + (isinf(w0) ? 0.0 : b*u/(w0*w0)*(3.0*w0 - 2.0)) + (A + 2.0*B*mu)/rho0;
             dPcdu = a*rho + b*rho/(w0*w0);
         }
     }
@@ -474,8 +490,14 @@ static double tillPressureCore(TILLMATERIAL *material, double rho, double u, int
              * d/deta [mu exp(-(alpha z + beta z^2))] = exp(...) (1 + mu (alpha + 2 beta z)/eta^2).
              * (The previous expression had a spurious "- eta" inside the bracket.)
              */
-            dPedrho = (a + b/w0*eb*(2.0*beta*z/eta + 3.0 - 2.0/w0))*u
-                    + A/rho0*ex*(1.0 + mu/(eta*eta)*(alpha + 2.0*beta*z));
+            /*
+             * The exponentials underflow to 0 already at eta ~ 0.1 (z ~ 10), while the factors they
+             * multiply grow like 1/eta^2 and 1/eta^3 and overflow below eta ~ 4e-103: 0*inf gave a
+             * NaN dP/drho there, and c fell to its floor sqrt(A/rho0) because fmax drops the NaN.
+             * The terms are 0 wherever their exponential is 0; unchanged otherwise.
+             */
+            dPedrho = (a + ((eb > 0.0) ? b/w0*eb*(2.0*beta*z/eta + 3.0 - 2.0/w0) : 0.0))*u
+                    + ((ex > 0.0) ? A/rho0*ex*(1.0 + mu/(eta*eta)*(alpha + 2.0*beta*z)) : 0.0);
             dPedu = (a + b/(w0*w0)*eb)*rho;
         }
     }
@@ -506,9 +528,18 @@ static double tillPressureCore(TILLMATERIAL *material, double rho, double u, int
 
     if (pcSound != NULL) {
         /* c^2 = (dP/drho)_s = (dP/drho)_u + P/rho^2 (dP/du)_rho, from the derivatives above. */
-        c2 = dPdrho + P/(rho*rho)*dPdu;
-        /* Floor at the bulk sound speed of the uncompressed material (always with the cutoff). */
-        c2 = bClip ? fmax(c2, A/rho0) : fmax(c2, 0.0);
+        /*
+         * rho^2 underflows below rho ~ 1e-154 (code units): then P/rho^2 is inf or NaN, so divide
+         * twice. At denormal rho P/rho can still overflow while dP/du = a rho underflows to 0; the
+         * term is 0 then (it was inf*0). Unchanged wherever rho^2 is a normal double.
+         */
+        const double rho2 = rho*rho;
+        c2 = dPdrho + ((rho2 >= DBL_MIN) ? P/rho2*dPdu : ((P == 0.0 || dPdu == 0.0) ? 0.0 : (P/rho)*(dPdu/rho)));
+        /*
+         * Floor at the bulk sound speed of the uncompressed material (always with the cutoff). A NaN
+         * (NaN u) is passed on like in P: fmax would replace it by the floor, a finite c for a NaN state.
+         */
+        if (c2 == c2) c2 = bClip ? fmax(c2, A/rho0) : fmax(c2, 0.0);
         *pcSound = sqrt(c2);
     }
     if (pdPdrho != NULL) *pdPdrho = dPdrho;
