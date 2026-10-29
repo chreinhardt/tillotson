@@ -120,11 +120,15 @@
  *          is cut now. P and P_NP are bit-identical everywhere; the derivatives and c wherever they
  *          were finite, except for that cut (eta < 1.2e-14, A == B only). A NaN u gives a NaN c (it
  *          gave the floor), as in P and the derivatives.
+ *   4.0.1  Documentation and test only, no change in code: the comments of tillIsInTable say how
+ *          EOSlib 1.3.0 reports a non-finite u (EOS_OUTSIDE_VMIN for NaN and -inf, EOS_OUTSIDE_VMAX
+ *          for +inf, it was EOS_FAIL). testtillotson checks that every u(rho, T) is a state
+ *          EOSIsUsable accepts (EOSlib 1.3.0 relies on it in EOSSolveBC).
  */
-#define TILL_VERSION_TEXT    "4.0.0"
+#define TILL_VERSION_TEXT    "4.0.1"
 #define TILL_VERSION_MAJOR   4
 #define TILL_VERSION_MINOR   0
-#define TILL_VERSION_PATCH   0
+#define TILL_VERSION_PATCH   1
 
 #include <stdlib.h>
 #include <assert.h>
