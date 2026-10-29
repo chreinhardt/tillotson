@@ -1006,7 +1006,9 @@ static void testGridRejected(int iMat)
         {100, 50, 1e-4, 100.0, 1.0, NAN, 1, "vmax NaN"},
         {100, 50, 1e-4, 100.0, 1.0, INFINITY, 1, "vmax inf"},
         {10, 50, 0.999, 1e6, 1.0, 1e7, 1, "rho0 on node 0 (too close to rhomin)"},
-        {10, 50, 1e-6, 1.001, 1.0, 1e7, 1, "rho0 on the last node (too close to rhomax)"},
+        /* With nTableRho-1 intervals rho0 reaches the last node only through the roundoff slack of the node index. */
+        {10, 50, 1e-6, 1.0 + 1e-12, 1.0, 1e7, 1, "rho0 on the last node (within roundoff of rhomax)"},
+        {10, 50, 1e-6, 1.001, 1.0, 1e7, 0, "rho0 one per mille below rhomax (rhomax moves up onto the grid)"},
     };
     for (int bCold = 0; bCold <= 1; bCold++)
         for (size_t k = 0; k < sizeof(cases) / sizeof(cases[0]); k++) {
@@ -1060,6 +1062,24 @@ int main(int argc, char **argv)
         CHECK(material->nTableRho == TILL_TABLE_NRHO && material->nTableV == TILL_TABLE_NV, "standard table sizes");
         CHECK(material->vmin == material->cv*TILL_TABLE_TMIN && material->vmax == material->cv*TILL_TABLE_TMAX, "standard table v range");
         CHECK(material->rhomin == TILL_TABLE_RHOMIN_FAC*material->rho0, "standard table rhomin");
+        /*
+         * The table reaches the requested rhomax (it ended at 98.86 rho0 up to 4.0.0, the grid counted
+         * nTableRho intervals instead of nTableRho-1) and overshoots it by less than
+         * log(rhomax/rhomin)/log(rho0/rhomin) = 1.5 intervals. At 100 rho0 the cold-curve lookups work.
+         */
+        CHECK(material->rhomax >= TILL_TABLE_RHOMAX_FAC*material->rho0*(1.0 - 1e-9), "standard table rhomax= %g rho0, below %g rho0",
+              material->rhomax/material->rho0, TILL_TABLE_RHOMAX_FAC);
+        CHECK(material->rhomax <= TILL_TABLE_RHOMAX_FAC*material->rho0*exp(1.5*material->dlogrho), "standard table rhomax= %g rho0 overshoots",
+              material->rhomax/material->rho0);
+        {
+            const long nf = material->nLookupFail;
+            const double rho = TILL_TABLE_RHOMAX_FAC*material->rho0, u = tillURhoTemp(material, rho, 1000.0);
+            CHECK(!tillFailed(tillColdULookup(material, rho)) && !tillFailed(u), "cold curve and u(rho, T) at 100 rho0");
+            CHECK_REL(tillTempRhoU(material, rho, u), 1000.0, 1e-10, "T(rho, u) at 100 rho0");
+            CHECK(tillIsInTable(material, rho, u) == TILL_LOOKUP_SUCCESS, "(100 rho0, u(1000 K)) in the table");
+            CHECK(!tillFailed(tillRhoPTemp(material, tillPressure(material, rho, u), 1000.0)), "rho(P, T) at 100 rho0");
+            CHECK(material->nLookupFail == nf, "lookups at 100 rho0 counted (%ld)", material->nLookupFail - nf);
+        }
         testTable(material);
         testTableNodes(material);
         testIsentropes(material);
@@ -1074,7 +1094,10 @@ int main(int argc, char **argv)
         /* Re-initialization with other parameters works (no leak, no stale state). */
         tillInitLookup(material, 300, 200, 1e-3, 50.0, 1e-4, 100.0);
         CHECK(material->nTableRho == 300 && material->nTableV == 200, "re-init sizes");
-        CHECK(material->rhomax >= 50.0*exp(-material->dlogrho) && material->rhomax <= 50.0*exp(material->dlogrho), "re-init rhomax= %g adjusted to the grid", material->rhomax);
+        /* At or above the requested 50, by fewer than log(50/1e-3)/log(rho0/1e-3) intervals (see tillInitGrid). */
+        CHECK(material->rhomax >= 50.0*(1.0 - 1e-9) &&
+              material->rhomax <= 50.0*exp(material->dlogrho*log(50.0/1e-3)/log(material->rho0/1e-3)),
+              "re-init rhomax= %g adjusted to the grid", material->rhomax);
         CHECK(material->logrhomin == log(material->rhomin) && material->invdlogrho == 1.0/material->dlogrho && material->invdv == 1.0/material->dv, "re-init grid constants");
         testTable(material);
 

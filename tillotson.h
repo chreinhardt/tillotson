@@ -103,6 +103,12 @@
  *          not on an interior node; they were asserts, so a release build went on with a bad grid
  *          (nTableV = 1 divided by zero in dv, nTableV = 2 was caught only by tillInitSplineField).
  *          A failed allocation of the table or of an isentrope is fatal with a message, too.
+ *          The rho grid counts nTableRho-1 intervals (it divided by nTableRho), so the last node is
+ *          at or above the requested rhomax (by half an interval for the standard table, which ends at
+ *          100.58 rho0; it ended at 98.86 rho0, short of the documented 100 rho0, and u(rho, T),
+ *          P(rho, T), the cold curve and T(rho, u) failed or fell back between the two). rho0 is on
+ *          node 799 instead of 800; dlogrho is 0.13% larger, so every table value between the nodes
+ *          changes at the level of the interpolation error.
  */
 #define TILL_VERSION_TEXT    "4.0.0"
 #define TILL_VERSION_MAJOR   4
@@ -244,8 +250,10 @@ enum till_error_lookup
  * Standard table (tillInitLookupDefault, used by EOSlib): since u(rho0, T) = cv*T, the v range
  * is given as temperatures at rho0, vmin = cv*TILL_TABLE_TMIN and vmax = cv*TILL_TABLE_TMAX,
  * and the density range in units of rho0. The table is then the same physical table for every
- * material and unit system: 1200/ln(1e7) = 74 rows per decade in T and 1200/ln(1e6) = 87 per
- * decade in rho; 1200 x 1200 entries of 32 bytes = 46 MB per material. Override with -D.
+ * material and unit system: 1199/log10(1e7) = 171 rows per decade in T (above T_min) and
+ * 799/log10(1e4) = 200 per decade in rho; 1200 x 1200 entries of 32 bytes = 46 MB per material.
+ * The density axis runs from TILL_TABLE_RHOMIN_FAC rho0 to the first node at or above
+ * TILL_TABLE_RHOMAX_FAC rho0 (100.58 rho0), because rho0 must be a node. Override with -D.
  *
  * Accuracy: the nodes are integrated adaptively (TILL_ODE_RTOL in tillinitlookup.c) and agree with
  * a converged ODE solution to ~1e-8 relative. The lookup error (tillLookupU against the ODE) is set
@@ -411,8 +419,8 @@ int tillBrent(double (*f)(TILLMATERIAL *, double, const void *), TILLMATERIAL *m
  * tillinitlookup.c
  */
 /*
- * Build the isentrope table: nTableRho log-spaced densities in [rhomin, rhomax] (rhomax is moved
- * onto the grid so that rho0 is a grid point), nTableV isentropes with v = u(rho0) from 0 to
+ * Build the isentrope table: nTableRho log-spaced densities from rhomin to rhomax (rhomax is moved
+ * up onto the grid so that rho0 is a grid point; see tillInitGrid), nTableV isentropes with v = u(rho0) from 0 to
  * vmax, spaced in s = log(1 + v/vmin). All in code units. Replaces an existing table and builds
  * the edge curves (see tillInitColdCurve) as well. 46 MB and ~0.6 s for the standard table.
  * Requires finite bounds with 0 < rhomin < rho0 < rhomax and 0 < vmin < vmax, nTableRho >= 3,

@@ -39,7 +39,8 @@
  *  - nTableRho >= 3 and nTableV >= 3 (the cubic splines in v need three nodes; nTableV = 1
  *    divided by zero in dv, nTableV = 2 was only caught later by tillInitSplineField),
  *  - rho0 on an interior node: 1 <= n <= nTableRho-2 (the isentropes are integrated from rho0
- *    in both directions).
+ *    in both directions). n = 0 means rho0 lies less than one interval above rhomin; n =
+ *    nTableRho-1 can only happen through the roundoff slack, rho0 within ~1e-9 of rhomax.
  */
 static void tillInitGrid(TILLMATERIAL *material, int nTableRho, int nTableV, double rhomin, double rhomax, double vmin, double vmax)
 {
@@ -65,14 +66,24 @@ static void tillInitGrid(TILLMATERIAL *material, int nTableRho, int nTableV, dou
                             iMat, nTableRho, nTableV);
 
         /*
-         * Set dlogrho so that log(rho0) lies on the grid. The index of rho0 is the integer part of
-         * x = log(rho0/rhomin)/log(rhomax/rhomin)*nTableRho. For the standard table x is an integer
-         * (2/3*1200 = 800) and the logarithms of the code-unit densities make it 800 - 1e-13 in some
-         * unit systems: a plain floor then gives 799, a different grid (dlogrho, rhomax) and a
-         * different table. The roundoff slack makes the grid the same in every unit system.
+         * Set dlogrho so that log(rho0) lies on the grid. The axis has nTableRho nodes and
+         * nTableRho-1 intervals, so rho0 lies x = log(rho0/rhomin)/log(rhomax/rhomin)*(nTableRho-1)
+         * intervals above rhomin, and its node is n = floor(x). Then dlogrho = log(rho0/rhomin)/n >=
+         * log(rhomax/rhomin)/(nTableRho-1): the last node lies at or above the requested rhomax, by
+         * (x - n)/x*log(rhomax/rhomin) in log rho, i.e. by fewer than log(rhomax/rhomin)/log(rho0/rhomin)
+         * intervals (1.5 for the standard table, where it is half an interval: 100.58 rho0).
+         *
+         * Up to tillotson 4.0.0 x was computed with nTableRho instead of nTableRho-1, so the last node
+         * fell short of rhomax by about one interval: the standard table ended at 98.86 rho0 instead
+         * of 100 rho0 (x was exactly 800, n = 800 and rhomax = rhomin*exp(1199*dlogrho)).
+         *
+         * The roundoff slack: where x is an integer up to roundoff (the logarithms of code-unit
+         * densities move it by ~1e-13), floor(x) would depend on the unit system and so would the
+         * whole grid; with the slack it is the same in every unit system. Then n can exceed x by
+         * ~1e-9, and rhomax fall short of the requested value by as much, relative to log(rhomax/rhomin).
          */
         {
-            const double x = (log(rho0)-log(rhomin))/(log(rhomax)-log(rhomin))*nTableRho;
+            const double x = (log(rho0)-log(rhomin))/(log(rhomax)-log(rhomin))*(nTableRho-1);
             n = (int) floor(x + 1e-9*(1.0 + x));
         }
         if (n < 1 || n > nTableRho-2)
@@ -94,7 +105,7 @@ static void tillInitGrid(TILLMATERIAL *material, int nTableRho, int nTableV, dou
     material->n = n;
     material->dlogrho = (log(material->rho0)-log(material->rhomin))/material->n;
 
-    /* Set the actual rhomax (it can differ from the requested value after the correction). */
+    /* The actual rhomax, the last node: at or above the requested value (see above). */
     material->rhomax = tillLookupRho(material, material->nTableRho-1);
 
     /*
