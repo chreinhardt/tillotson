@@ -23,9 +23,15 @@
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
+#include <float.h>   /* DBL_MIN in tillPressureCore */
 #include "tillotson.h"
 
-/* Compile with -DTILL_PRESS_MELOSH to cut the cold term for rho/rho0 < 0.8 (Melosh 1989) instead of where it is negative. */
+/*
+ * Compile with -DTILL_PRESS_MELOSH to cut the cold term for rho/rho0 < 0.8 (Melosh 1989) instead
+ * of where it is negative. The total pressure is cut at zero in both modes, so the flag does not
+ * allow tension; it removes the (positive) cold term of expanded cold states below 0.8 rho0, which
+ * makes P(rho) jump there.
+ */
 
 /*
  * Initialize a material from the Tillotson library
@@ -33,7 +39,8 @@
  * We do:
  * Initialize variables
  * Convert quantities to code units
- * The memory for the look up table is allocated in tillInitLookup()
+ * The memory for the look up table is allocated in tillInitLookup() (the cold curve and the top
+ * isentrope alone in tillInitColdCurve())
  */
 TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit)
 {
@@ -60,23 +67,27 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit)
     material->n = 0;
     material->dlogrho = 0.0;
     material->dv = 0.0;
+    material->logrhomin = 0.0;
+    material->invdlogrho = 0.0;
+    material->invdv = 0.0;
 
-	if (dKpcUnit <= 0.0 || dMsolUnit <= 0.0)
+	/*
+	 * Unit system (the same rule in EOSlib and every sublibrary): both units > 0 and finite are code
+	 * units, both <= 0 is cgs; anything else (exactly one of them <= 0, NaN, inf) is a caller error.
+	 */
+	if (!(((dKpcUnit > 0.0) && (dMsolUnit > 0.0) && isfinite(dKpcUnit) && isfinite(dMsolUnit)) || ((dKpcUnit <= 0.0) && (dMsolUnit <= 0.0)))) {
+		fprintf(stderr, "tillInitMaterial: invalid unit system dKpcUnit= %g dMsolUnit= %g (give both > 0 for code units or both <= 0 for cgs).\n", dKpcUnit, dMsolUnit);
+		assert(0);
+		exit(1);
+	}
+
+	if (dKpcUnit <= 0.0)
 	{
-		/* Both must be zero for cgs; one zero and one positive is a caller error. */
-		assert(dKpcUnit <= 0.0 && dMsolUnit <= 0.0);
-		/* In this case units are not converted, so the code units are cgs. */
-		material->dGasConst = KBOLTZ;   // dGasConst is NOT KBOLZ !!!!!!!
+		/* Both <= 0 (checked above): units are not converted, so the code units are cgs. */
 		material->dErgPerGmUnit = 1.0;
 		material->dGmPerCcUnit = 1.0;
 		material->dSecUnit = 1.0;
 	} else {
-		/*
-		** Convert kboltz/mhydrogen to system units, assuming that
-		** G == 1.
-		*/
-		material->dGasConst = material->dKpcUnit*KPCCM*KBOLTZ
-		/MHYDR/GCGS/material->dMsolUnit/MSOLG;
 		/* code energy per unit mass --> erg per g */
 		material->dErgPerGmUnit = GCGS*material->dMsolUnit*MSOLG/(material->dKpcUnit*KPCCM);
 		/* code density --> g per cc */
@@ -84,6 +95,13 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit)
 		/* code time --> seconds */
 		material->dSecUnit = sqrt(1/(material->dGmPerCcUnit*GCGS));
 	}
+
+	/*
+	 * k_B/m_H in code units (specific energy per K), as in igeos. It was k_B (not divided by m_H)
+	 * in cgs; the code-unit value is unchanged (dKpcUnit*KPCCM/(GCGS*dMsolUnit*MSOLG) is
+	 * 1/dErgPerGmUnit).
+	 */
+	material->dGasConst = (KBOLTZ/MHYDR)/material->dErgPerGmUnit;
 
 	/*
 	 * Set the Tillotson parameters for the material.
@@ -239,6 +257,8 @@ void tillFinalizeMaterial(TILLMATERIAL *material)
 {
 
     if (material->Lookup != NULL) free(material->Lookup);
+    if (material->ColdCurve != NULL) free(material->ColdCurve);
+    if (material->TopCurve != NULL) free(material->TopCurve);
 
     free(material);
 }
@@ -313,25 +333,36 @@ void tillPrintMat(TILLMATERIAL *material, FILE *fp)
     assert(material != NULL);
     tilliMatString(material, MatName);
 
+    /*
+     * Dimensional values in cgs with the unit, like ANEOSPrintMat, scvheosPrintMat and reos3PrintMat
+     * (they were printed in code units without a label). The material is stored in code units.
+     */
+    const double dPUnit = material->dErgPerGmUnit*material->dGmPerCcUnit;   /* code pressure -> erg/cm^3 */
     fprintf(fp,"# Material: %i (%s)\n", material->iMaterial, MatName);
+    fprintf(fp,"# dKpcUnit: %g dMsolUnit: %g\n", material->dKpcUnit, material->dMsolUnit);
     fprintf(fp,"# a:            %g\n", material->a);
     fprintf(fp,"# b:            %g\n", material->b);
-    fprintf(fp,"# A:            %g\n", material->A);
-    fprintf(fp,"# B:            %g\n", material->B);
-    fprintf(fp,"# rho0:         %g\n", material->rho0);
-    fprintf(fp,"# u0:           %g\n", material->u0);
-    fprintf(fp,"# us:           %g\n", material->us);
-    fprintf(fp,"# us2:          %g\n", material->us2);
+    fprintf(fp,"# A (cgs units): %g erg/cm^3\n", material->A*dPUnit);
+    fprintf(fp,"# B (cgs units): %g erg/cm^3\n", material->B*dPUnit);
+    fprintf(fp,"# Reference density rho0 (cgs units): %g g/cc\n", material->rho0*material->dGmPerCcUnit);
+    fprintf(fp,"# u0 (cgs units): %g erg/g\n", material->u0*material->dErgPerGmUnit);
+    fprintf(fp,"# us (cgs units): %g erg/g\n", material->us*material->dErgPerGmUnit);
+    fprintf(fp,"# us2 (cgs units): %g erg/g\n", material->us2*material->dErgPerGmUnit);
     fprintf(fp,"# alpha:        %g\n", material->alpha);
     fprintf(fp,"# beta:         %g\n", material->beta);
-    fprintf(fp,"# cv:           %g\n", material->cv);
+    fprintf(fp,"# cv (cgs units): %g erg/g/K\n", material->cv*material->dErgPerGmUnit);
     if (material->Lookup != NULL) {
-        fprintf(fp,"# Lookup table: %i x %i, rho in [%g, %g], v in [0, %g] (vmin= %g)\n",
-                material->nTableRho, material->nTableV, material->rhomin, material->rhomax,
-                material->vmax, material->vmin);
+        fprintf(fp,"# Lookup table (cgs units): %i x %i, rho in [%g, %g] g/cc, v in [0, %g] erg/g (vmin= %g erg/g)\n",
+                material->nTableRho, material->nTableV, material->rhomin*material->dGmPerCcUnit, material->rhomax*material->dGmPerCcUnit,
+                material->vmax*material->dErgPerGmUnit, material->vmin*material->dErgPerGmUnit);
+    } else if (material->ColdCurve != NULL) {
+        fprintf(fp,"# Lookup table (cgs units): cold curve and top isentrope only (%i x 2), rho in [%g, %g] g/cc, v in [0, %g] erg/g (vmin= %g erg/g); isentrope table not built\n",
+                material->nTableRho, material->rhomin*material->dGmPerCcUnit, material->rhomax*material->dGmPerCcUnit,
+                material->vmax*material->dErgPerGmUnit, material->vmin*material->dErgPerGmUnit);
     } else {
         fprintf(fp,"# Lookup table: not initialized\n");
     }
+    fprintf(fp,"# Failed lookups and fallbacks (nLookupFail): %ld\n", material->nLookupFail);
 }
 
 /*
@@ -348,14 +379,18 @@ void tillPrintMat(TILLMATERIAL *material, FILE *fp)
  * derivatives are those of the cut pressure, i.e. zero where the cutoff is active, and the sound
  * speed c^2 = (dP/drho)_u + P/rho^2 (dP/du)_rho is floored at the bulk sound speed sqrt(A/rho0).
  * With TILL_PRESS_MELOSH the cold term is cut for rho/rho0 < 0.8 as suggested by Melosh (1989)
- * instead.
+ * instead, also where it is positive (P jumps at 0.8 rho0); negative values above 0.8 rho0 are
+ * still removed by the final cut. In both modes the cut pressure is P = max(P_NP, 0), except that
+ * with TILL_PRESS_MELOSH it is 0 for expanded cold states below 0.8 rho0.
  *
  * bClip == 0 (tillPressureNP, tillPressureSoundNP) leaves the cold region raw, including negative
  * pressures, and applies no final cut; this is what the inversion tillRhoPTemp needs because the
  * raw P(rho) at fixed T is monotonic where the cut one is flat. The cut of Pc inside the
  * intermediate blend is kept in both modes (see below).
  *
- * Any of pcSound, pdPdrho and pdPdu may be NULL.
+ * Any of pcSound, pdPdrho and pdPdu may be NULL. If all three are NULL (tillPressure, the RK4
+ * stages of the isentrope integration) the derivatives are not computed at all; P is the same
+ * expression either way, so it is bit-identical with and without them.
  */
 static double tillPressureCore(TILLMATERIAL *material, double rho, double u, int bClip,
                                double *pcSound, double *pdPdrho, double *pdPdu)
@@ -365,13 +400,42 @@ static double tillPressureCore(TILLMATERIAL *material, double rho, double u, int
     const double alpha = material->alpha, beta = material->beta;
     double eta, mu, z, w0, ex;
     double Pc = 0.0, Pe = 0.0, dPcdrho = 0.0, dPedrho = 0.0, dPcdu = 0.0, dPedu = 0.0;
-    double P, c2, dPdrho, dPdu, y;
+    double P, c2, dPdrho = 0.0, dPdu = 0.0, y;
     int bCold, bHot;
+    const int bDeriv = (pcSound != NULL || pdPdrho != NULL || pdPdu != NULL);
+
+    /*
+     * An invalid density (rho <= 0, NaN, inf) has no pressure: eta = 0 makes z infinite and P NaN.
+     * Like a density outside a table it fails, counted once, with every output set to the
+     * sentinel. Up to 4.0.0 it returned NaN (rho = 0, NaN) or inf, uncounted. One comparison on the
+     * hot path; the isentrope integration never gets here with an invalid rho (rho = exp(logrho)).
+     */
+    if (!(rho > 0.0) || !isfinite(rho)) {
+        material->nLookupFail++;
+        TILL_WARN("tillPressureCore: invalid density rho= %g (u= %g, iMat= %i).\n", rho, u, material->iMaterial);
+        if (pcSound != NULL) *pcSound = TILL_FAIL_VALUE;
+        if (pdPdrho != NULL) *pdPdrho = TILL_FAIL_VALUE;
+        if (pdPdu != NULL) *pdPdu = TILL_FAIL_VALUE;
+        return TILL_FAIL_VALUE;
+    }
 
     eta = rho/rho0;
     mu = eta - 1.0;
     z = (1.0 - eta)/eta;
-    w0 = u/(u0*eta*eta) + 1.0;
+    /*
+     * w0 = u/(u0 eta^2) + 1 enters as b/w0 and is only defined for u >= 0: for u < 0 it drops below
+     * 1, the Grueneisen term b/w0 grows without bound and divides by zero at u = -u0 eta^2. A
+     * negative u is below the cold curve and has no Tillotson meaning, so w0 is evaluated with
+     * max(u, 0), i.e. w0 >= 1. P stays continuous at u = 0 (u still multiplies Gamma), and the
+     * derivative formulas below remain exact because they reduce to the w0 = const case at w0 = 1.
+     *
+     * For u <= 0 w0 is set to 1 directly: below rho ~ 1e-162 rho0 (in Earth-like units; where
+     * u0*eta^2 underflows to 0) max(u, 0)/(u0 eta^2) was 0/0 and P NaN. For u > 0 the expression
+     * is the same as before; there w0 overflows to inf below ~1e-155 rho0, which gives b/w0 = 0
+     * (the correct limit) and is guarded in the derivatives below. A NaN u gives w0 = 1 as before
+     * (fmax(NaN, 0) = 0), and NaN in P through u itself.
+     */
+    w0 = (u > 0.0) ? u/(u0*eta*eta) + 1.0 : 1.0;
 
     bCold = (rho >= rho0 || u < material->us);  /* Pc only */
     bHot = (!bCold && u > material->us2);        /* Pe only */
@@ -392,34 +456,50 @@ static double tillPressureCore(TILLMATERIAL *material, double rho, double u, int
 #ifdef TILL_PRESS_MELOSH
             bCut = (eta < 0.8);
 #else
-            bCut = (Pc < 0.0);
+            /*
+             * Pc == 0 below rho0 is cut too. Below eta ~ 1e-16, mu = eta - 1 rounds to -1 and for
+             * A == B (granite, basalt, dunite, forsterite, ice) A mu + B mu^2 cancels to exactly 0,
+             * absorbing Gamma u rho: the true Pc ~ eta (Gamma u rho0 - A) is negative, but Pc == 0
+             * escaped the cut, and dP/drho was (A - 2B)/rho0 + a u < 0 for P = 0. Not at rho0, where
+             * Pc = 0 at u = 0 is the reference state with the slope A/rho0. P is the same either way.
+             */
+            bCut = (Pc < 0.0) || (Pc == 0.0 && rho < rho0);
 #endif
         }
         if (bCut) {
-            Pc = 0.0;
-            dPcdrho = 0.0;
-            dPcdu = 0.0;
-        } else {
-            dPcdrho = a*u + b*u/(w0*w0)*(3.0*w0 - 2.0) + (A + 2.0*B*mu)/rho0;
+            Pc = 0.0;       /* dPcdrho = dPcdu = 0 */
+        } else if (bDeriv) {
+            /* w0 = inf (u > 0 at rho below ~1e-155 rho0): b u (3 w0 - 2)/w0^2 -> 0, written out as
+             * 0*inf = NaN otherwise. Unchanged for every finite w0. */
+            dPcdrho = a*u + (isinf(w0) ? 0.0 : b*u/(w0*w0)*(3.0*w0 - 2.0)) + (A + 2.0*B*mu)/rho0;
             dPcdu = a*rho + b*rho/(w0*w0);
         }
     }
 
     /* Expanded term Pe: needed in the hot and the intermediate region. */
     if (!bCold) {
-        double Gammae;
+        /* exp(-beta z^2) is computed once (it was written out three times, for Pe and both derivatives). */
+        const double eb = exp(-beta*z*z);
+        const double Gammae = a + b/w0*eb;
 
         ex = exp(-(alpha*z + beta*z*z));
-        Gammae = a + b/w0*exp(-beta*z*z);
         Pe = Gammae*u*rho + A*mu*ex;
-        /*
-         * With z = 1/eta - 1: dz/deta = -1/eta^2, dw0/deta = -2(w0-1)/eta, so
-         * d/deta [mu exp(-(alpha z + beta z^2))] = exp(...) (1 + mu (alpha + 2 beta z)/eta^2).
-         * (The previous expression had a spurious "- eta" inside the bracket.)
-         */
-        dPedrho = (a + b/w0*exp(-beta*z*z)*(2.0*beta*z/eta + 3.0 - 2.0/w0))*u
-                + A/rho0*ex*(1.0 + mu/(eta*eta)*(alpha + 2.0*beta*z));
-        dPedu = (a + b/(w0*w0)*exp(-beta*z*z))*rho;
+        if (bDeriv) {
+            /*
+             * With z = 1/eta - 1: dz/deta = -1/eta^2, dw0/deta = -2(w0-1)/eta, so
+             * d/deta [mu exp(-(alpha z + beta z^2))] = exp(...) (1 + mu (alpha + 2 beta z)/eta^2).
+             * (The previous expression had a spurious "- eta" inside the bracket.)
+             */
+            /*
+             * The exponentials underflow to 0 already at eta ~ 0.1 (z ~ 10), while the factors they
+             * multiply grow like 1/eta^2 and 1/eta^3 and overflow below eta ~ 4e-103: 0*inf gave a
+             * NaN dP/drho there, and c fell to its floor sqrt(A/rho0) because fmax drops the NaN.
+             * The terms are 0 wherever their exponential is 0; unchanged otherwise.
+             */
+            dPedrho = (a + ((eb > 0.0) ? b/w0*eb*(2.0*beta*z/eta + 3.0 - 2.0/w0) : 0.0))*u
+                    + ((ex > 0.0) ? A/rho0*ex*(1.0 + mu/(eta*eta)*(alpha + 2.0*beta*z)) : 0.0);
+            dPedu = (a + b/(w0*w0)*eb)*rho;
+        }
     }
 
     /* Combine. */
@@ -431,8 +511,10 @@ static double tillPressureCore(TILLMATERIAL *material, double rho, double u, int
         /* y depends on u, which contributes (Pe - Pc) dy/du to dP/du. */
         y = (u - material->us)/(material->us2 - material->us);
         P = (1.0 - y)*Pc + y*Pe;
-        dPdrho = (1.0 - y)*dPcdrho + y*dPedrho;
-        dPdu = (1.0 - y)*dPcdu + y*dPedu + (Pe - Pc)/(material->us2 - material->us);
+        if (bDeriv) {
+            dPdrho = (1.0 - y)*dPcdrho + y*dPedrho;
+            dPdu = (1.0 - y)*dPcdu + y*dPedu + (Pe - Pc)/(material->us2 - material->us);
+        }
     }
 
     /* Final cutoff of the total pressure (can act in the hot and intermediate region). */
@@ -442,11 +524,22 @@ static double tillPressureCore(TILLMATERIAL *material, double rho, double u, int
         dPdu = 0.0;
     }
 
+    if (!bDeriv) return P;
+
     if (pcSound != NULL) {
         /* c^2 = (dP/drho)_s = (dP/drho)_u + P/rho^2 (dP/du)_rho, from the derivatives above. */
-        c2 = dPdrho + P/(rho*rho)*dPdu;
-        /* Floor at the bulk sound speed of the uncompressed material (always with the cutoff). */
-        c2 = bClip ? MAX(c2, A/rho0) : MAX(c2, 0.0);
+        /*
+         * rho^2 underflows below rho ~ 1e-154 (code units): then P/rho^2 is inf or NaN, so divide
+         * twice. At denormal rho P/rho can still overflow while dP/du = a rho underflows to 0; the
+         * term is 0 then (it was inf*0). Unchanged wherever rho^2 is a normal double.
+         */
+        const double rho2 = rho*rho;
+        c2 = dPdrho + ((rho2 >= DBL_MIN) ? P/rho2*dPdu : ((P == 0.0 || dPdu == 0.0) ? 0.0 : (P/rho)*(dPdu/rho)));
+        /*
+         * Floor at the bulk sound speed of the uncompressed material (always with the cutoff). A NaN
+         * (NaN u) is passed on like in P: fmax would replace it by the floor, a finite c for a NaN state.
+         */
+        if (c2 == c2) c2 = bClip ? fmax(c2, A/rho0) : fmax(c2, 0.0);
         *pcSound = sqrt(c2);
     }
     if (pdPdrho != NULL) *pdPdrho = dPdrho;
@@ -506,24 +599,43 @@ double tilldPdu(TILLMATERIAL *material, double rho, double u)
 /*
  * Calculate T(rho,u) for a material. As an approximation
  * we use u(rho,T) = uc(rho) + cv*T.
+ *
+ * Never fails and never negative (EOSlib contract for T(rho, u), same as ANEOSTofRhoU): where
+ * u(rho, T) cannot be inverted it returns T = 0, the cold curve, which is the lowest temperature
+ * of this EOS. That is the case outside the table in rho (counted by tillColdULookup) and for a
+ * state below the cold curve, u < u_cold(rho), or a non-finite u (counted here). A state within
+ * the roundoff tolerance tillUTol below the cold curve is on it: T = 0, not counted.
  */
 double tillTempRhoU(TILLMATERIAL *material, double rho, double u)
 {
     double ucold = tillColdULookup(material, rho);
 
-    /* Never fails (EOSlib contract for T(rho, u)): outside the table, T = 0, the cold curve.
-     * The failure is counted and reported by tillColdULookup. */
     if (tillFailed(ucold)) return 0.0;
-    return ((u-ucold)/material->cv);
+
+    if (!(u >= ucold - tillUTol(material, u)) || !isfinite(u))
+        TILL_FAIL_RETURN(material, 0.0, "tillTempRhoU: (rho= %g, u= %g, iMat= %i) below the cold curve u_cold= %g (or u not finite), T = 0.\n",
+                         rho, u, material->iMaterial, ucold);
+
+    return fmax((u-ucold)/material->cv, 0.0);
 }
 
 /*
  * Calculate u(rho,T) for a material.
+ *
+ * Returns TILL_FAIL_VALUE (counted) for T below the lowest temperature of this EOS, T < 0, and
+ * for a non-finite T, like u(rho, T) of the other libraries below T_min (igeosUofRhoT, ANEOS,
+ * SCvH, REOS3); it returned u_cold + cv T, a state below the cold curve. Also TILL_FAIL_VALUE
+ * if the cold curve fails at rho (counted there).
  */
 double tillURhoTemp(TILLMATERIAL *material, double rho, double T)
 {
-    double ucold = tillColdULookup(material, rho);
+    double ucold;
 
+    if (!(T >= 0.0) || !isfinite(T))
+        TILL_FAIL_RETURN(material, TILL_FAIL_VALUE, "tillURhoTemp: T= %g is negative or not finite (rho= %g, iMat= %i).\n",
+                         T, rho, material->iMaterial);
+
+    ucold = tillColdULookup(material, rho);
     if (tillFailed(ucold)) return TILL_FAIL_VALUE;
     return(ucold + material->cv*T);
 }
@@ -599,18 +711,25 @@ static double tillRhoPTempFunc(TILLMATERIAL *material, double rho, const void *c
  * Calculate rho(P,T) for a material by root finding on the uncut pressure (tillPressureSoundNP),
  * which is monotonic in rho at fixed T where (dP/drho)_T > 0.
  *
- * Returns TILL_FAIL_VALUE if P <= 0 or the root is not bracketed by [rho_min, 0.999*rhomax].
+ * Returns TILL_FAIL_VALUE if P <= 0, T < 0 or not finite, or the root is not bracketed by
+ * [rho_min, 0.999*rhomax], with rho_min = TILL_RHOPT_RHOMIN_FAC*rho0 (the same physical bracket in
+ * every unit system). Counted once per call.
  */
 double tillRhoPTemp(TILLMATERIAL *material, double P, double T)
 {
     struct tillRhoPTempCtx ctx;
-    const double rho_min = 1e-10;               /* P diverges for rho = 0 and u = 0 */
+    const double rho_min = TILL_RHOPT_RHOMIN_FAC*material->rho0;   /* P diverges for rho = 0 and u = 0 */
     const double rho_max = 0.999*material->rhomax;
     double fa, fb, rho;
 
     /* For P <= 0 the inversion is not defined (pressure cutoff). */
     if (P <= 0.0)
         TILL_FAIL_RETURN(material, TILL_FAIL_VALUE, "tillRhoPTemp: Called for negative pressure (P= %g).\n", P);
+
+    /* T < 0 (or not finite): u(rho, T) fails at every density. Checked here, so that it is counted
+     * once and not by each of the bracket evaluations and the bracket failure. */
+    if (!(T >= 0.0) || !isfinite(T))
+        TILL_FAIL_RETURN(material, TILL_FAIL_VALUE, "tillRhoPTemp: T= %g is negative or not finite (P= %g).\n", T, P);
 
     ctx.P = P;
     ctx.T = T;
@@ -639,7 +758,14 @@ double tillRhoPTemp(TILLMATERIAL *material, double P, double T)
  */
 double tilldudrho(TILLMATERIAL *material, double rho, double u)
 {
-    return (tillPressure(material,rho,u)/(rho*rho));
+    const double P = tillPressure(material,rho,u);
+    /*
+     * The sentinel of an invalid rho (counted in tillPressureCore) is passed on, never divided by rho^2.
+     * Only the sentinel: a NaN P (from a NaN u) stays NaN like P, c and dP/drho (tillFailed is true for
+     * NaN as well, which made du/drho the sentinel there, uncounted).
+     */
+    if (P == TILL_FAIL_VALUE) return TILL_FAIL_VALUE;
+    return (P/(rho*rho));
 }
 
 /*
@@ -650,8 +776,10 @@ double tilldudrho(TILLMATERIAL *material, double rho, double u)
  */
 double tilldudlogrho(TILLMATERIAL *material, double logrho, double u)
 {
-    double rho = exp(logrho);
-    return (tillPressure(material,rho,u)/(rho));
+    const double rho = exp(logrho);
+    const double P = tillPressure(material,rho,u);
+    if (P == TILL_FAIL_VALUE) return TILL_FAIL_VALUE;   /* the sentinel only, as in tilldudrho; rho = exp(logrho) is 0 or inf only for |logrho| > ~700 */
+    return (P/(rho));
 }
 
 /*

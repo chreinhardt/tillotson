@@ -8,11 +8,20 @@
  * (non-monotonic P(rho, T) of some materials) are reported and skipped, not counted.
  *
  *   make testtillotson && ./testtillotson [iMat ...]
+ *
+ * Build it with -DTILL_PRESS_MELOSH as well to test that pressure mode (same invariants; the
+ * isentrope accuracy is lower there, see TILL_TEST_LABEL_TOL).
  */
+/* fork() and waitpid() for the fatal paths (POSIX). */
+#define _POSIX_C_SOURCE 200809L
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <float.h>   /* DBL_MIN in testTinyDensity */
+#include <signal.h>
+#include <unistd.h>
+#include <sys/wait.h>
 #include "tillotson.h"
 
 static int nFail = 0, nCheck = 0, nSkip = 0;
@@ -60,6 +69,9 @@ static void testUnits(int iMat)
     CHECK(cgs->dErgPerGmUnit == 1.0 && cgs->dGmPerCcUnit == 1.0, "cgs unit factors");
     CHECK(code->rho0 > 0.0 && code->A > 0.0 && code->us2 > code->us && code->cv > 0.0, "material parameters");
     CHECK_REL(cgs->rho0, code->rho0*code->dGmPerCcUnit, 1e-14, "rho0 conversion");
+    /* dGasConst is k_B/m_H in every unit system (it was k_B in cgs). */
+    CHECK_REL(cgs->dGasConst, 1.38e-16/1.67e-24, 1e-14, "dGasConst = k_B/m_H in cgs");
+    CHECK_REL(code->dGasConst*code->dErgPerGmUnit, cgs->dGasConst, 1e-12, "dGasConst conversion");
 
     for (k = 0; k < 200; k++) {
         double rho_cgs = cgs->rho0*lograndom(0.1, 10.0), u_cgs = lograndom(1e8, 1e13);
@@ -72,6 +84,226 @@ static void testUnits(int iMat)
     }
     tillFinalizeMaterial(cgs);
     tillFinalizeMaterial(code);
+}
+
+/*
+ * The same physical states in three unit systems must give the same physical answers: cgs, Earth
+ * units (u ~ 1e-2..1e2 in code units) and a "heavy" system with GM/L ~ 1e18 erg/g, where code
+ * energies are ~1e-8 and code densities ~1e9 g/cc. No tolerance may be an absolute constant in
+ * code units. A reduced table with the physical parameters of the standard table keeps it fast.
+ */
+static void testUnitInvariance(int iMat)
+{
+    const double units[3][2] = {
+        {0.0, 0.0},                                         /* cgs */
+        {6.371e8/3.085678e21, 5.972e27/1.99e33},            /* Earth radius and mass */
+        {1.3e8/3.085678e21, 1.0},                           /* one solar mass in 1300 km: GM/L ~ 1e18 erg/g */
+    };
+    TILLMATERIAL *m[3];
+    int k, iu, nRhoPT = 0;
+    /* Own random stream, so that the samples of the other tests do not depend on this one. */
+    const unsigned long long rngSaved = rngState;
+    rngState = 0x9E3779B97F4A7C15ULL;
+
+    for (iu = 0; iu < 3; iu++) {
+        m[iu] = tillInitMaterial(iMat, units[iu][0], units[iu][1]);
+        tillInitLookup(m[iu], 300, 300, TILL_TABLE_RHOMIN_FAC*m[iu]->rho0, TILL_TABLE_RHOMAX_FAC*m[iu]->rho0,
+                       m[iu]->cv*TILL_TABLE_TMIN, m[iu]->cv*TILL_TABLE_TMAX);
+    }
+    CHECK(m[2]->dErgPerGmUnit > 1e17, "heavy unit system: dErgPerGmUnit= %g", m[2]->dErgPerGmUnit);
+    /* The same grid in every unit system: rho0 at the same index, the same spacing in log(rho) and s. */
+    for (iu = 1; iu < 3; iu++) {
+        CHECK(m[iu]->n == m[0]->n, "index of rho0 in unit system %d: %d vs %d", iu, m[iu]->n, m[0]->n);
+        CHECK_REL(m[iu]->dlogrho, m[0]->dlogrho, 1e-12, "dlogrho in unit system %d", iu);
+        CHECK_REL(m[iu]->rhomax*m[iu]->dGmPerCcUnit, m[0]->rhomax, 1e-12, "rhomax in unit system %d", iu);
+        CHECK_REL(m[iu]->dv, m[0]->dv, 1e-12, "dv in unit system %d", iu);
+    }
+
+    for (k = 0; k < 300; k++) {
+        /* A physical state (cgs) on the condensed or expanded side, and a target density. */
+        double rho_cgs = m[0]->rho0*lograndom(0.3, 3.0), T = lograndom(10.0, 3e4);
+        double u_cgs = tillURhoTemp(m[0], rho_cgs, T), rho2_cgs = rho_cgs*lograndom(0.5, 2.0);
+        double s[3], u2[3];
+        int st[3];
+
+        for (iu = 0; iu < 3; iu++) {
+            double rho = rho_cgs/m[iu]->dGmPerCcUnit, u = u_cgs/m[iu]->dErgPerGmUnit, rho2 = rho2_cgs/m[iu]->dGmPerCcUnit;
+            st[iu] = tillIsInTable(m[iu], rho, u);
+            s[iu] = (st[iu] == TILL_LOOKUP_SUCCESS) ? tillFindEntropyCurve(m[iu], rho, u, k) : 0.0;
+            u2[iu] = tillLookupU(m[iu], rho, u, rho2, k)*m[iu]->dErgPerGmUnit;
+        }
+        for (iu = 1; iu < 3; iu++) {
+            CHECK(st[iu] == st[0], "table status in unit system %d: %d vs %d (rho= %g u= %g)", iu, st[iu], st[0], rho_cgs, u_cgs);
+            /* s is dimensionless; the root finder converges to TILL_EDGE_TOL in u. */
+            CHECK(fabs(s[iu] - s[0]) <= 1e-8*(1.0 + s[0]), "isentrope label in unit system %d: %.12g vs %.12g (rho= %g T= %g)", iu, s[iu], s[0], rho_cgs, T);
+            CHECK_REL(u2[iu] + m[0]->vmin, u2[0] + m[0]->vmin, 1e-8, "isentrope lookup in unit system %d (rho= %g T= %g)", iu, rho_cgs, T);
+        }
+
+        /* rho(P, T) on the same physical bracket, also for strongly expanded states (down to 1e-3 rho0). */
+        {
+            double r_cgs = m[0]->rho0*lograndom(1e-3, 3.0);
+            double P_cgs = tillPressure(m[0], r_cgs, tillURhoTemp(m[0], r_cgs, T));
+            double r[3];
+            if (!(P_cgs > 0.0)) continue;
+            for (iu = 0; iu < 3; iu++) {
+                double rr = tillRhoPTemp(m[iu], P_cgs/(m[iu]->dGmPerCcUnit*m[iu]->dErgPerGmUnit), T);
+                r[iu] = tillFailed(rr) ? rr : rr*m[iu]->dGmPerCcUnit;
+            }
+            for (iu = 1; iu < 3; iu++) {
+                CHECK(tillFailed(r[iu]) == tillFailed(r[0]), "rho(P, T) fails in one unit system only (%d): rho= %g T= %g", iu, r_cgs, T);
+                if (!tillFailed(r[iu]) && !tillFailed(r[0])) CHECK_REL(r[iu], r[0], 1e-8, "rho(P, T) in unit system %d (rho= %g T= %g)", iu, r_cgs, T);
+            }
+            if (!tillFailed(r[0])) nRhoPT++;
+        }
+    }
+    CHECK(nRhoPT > 50, "enough rho(P, T) samples (%d)", nRhoPT);
+    for (iu = 0; iu < 3; iu++) tillFinalizeMaterial(m[iu]);
+    rngState = rngSaved;
+}
+
+/*
+ * tillColdULookup returns 0 below rho0 without reading the table. That holds for any material in
+ * both pressure modes (P >= 0 can only lower u when expanding from u(rho0) = 0, and u is clamped
+ * at 0), also where the cold term A mu + B mu^2 is positive: test it with B = 3A.
+ */
+static void testColdCurveExpanded(int iMat)
+{
+    const double dKpcUnit = 6.371e8/3.085678e21, dMsolUnit = 5.972e27/1.99e33;
+    TILLMATERIAL *m = tillInitMaterial(iMat, dKpcUnit, dMsolUnit);
+    int i, k;
+
+    m->B = 3.0*m->A;   /* cold term positive at u = 0 for rho < 2/3 rho0 */
+#ifndef TILL_PRESS_MELOSH
+    CHECK(tillPressure(m, 0.5*m->rho0, 0.0) > 0.0, "B = 3A: positive cold pressure at 0.5 rho0");   /* cut below 0.8 rho0 with the flag */
+#endif
+    tillInitLookup(m, 300, 300, TILL_TABLE_RHOMIN_FAC*m->rho0, TILL_TABLE_RHOMAX_FAC*m->rho0,
+                   m->cv*TILL_TABLE_TMIN, m->cv*TILL_TABLE_TMAX);
+    for (i = 0; i <= m->n; i++) CHECK(m->Lookup[TILL_INDEX(m, i, 0)].u == 0.0, "B = 3A: cold curve zero at i= %d", i);
+    for (k = 0; k < 100; k++) {
+        double rho = m->rho0*lograndom(1e-4, 0.999);
+        CHECK(tillColdULookup(m, rho) == 0.0, "B = 3A: u_cold(rho= %g) = 0", rho);
+        CHECK(fabs(tillCubicInt(m, rho, 0.0)) <= 1e-14*m->vmin, "B = 3A: table row 0 at rho= %g is %g", rho, tillCubicInt(m, rho, 0.0));
+    }
+    /*
+     * Direct integration clamps u >= 0 like the table: expanding from (rho0, 0) or from just above
+     * the cold curve ends on the cold curve, u = 0. Without the clamp the positive cold pressure
+     * drives u below zero (the unclamped reference shows it). With TILL_PRESS_MELOSH the pressure of
+     * expanded cold states is zero below 0.8 rho0, so a state above the cold curve stays above it.
+     */
+#ifndef TILL_PRESS_MELOSH
+    CHECK(refU(m, m->rho0, 0.0, 0.5*m->rho0, 2000) < 0.0, "B = 3A: the unclamped ODE goes below u = 0");
+#endif
+    for (k = 0; k < 20; k++) {
+        double rho2 = 0.6*m->rho0*pow(1e-3/0.6, k/19.0);   /* below 2/3 rho0; deterministic, keeps the RNG stream of the other tests */
+        CHECK(tillCalcU(m, m->rho0, 0.0, rho2) == 0.0, "B = 3A: tillCalcU from (rho0, 0) to rho2= %g is %g", rho2, tillCalcU(m, m->rho0, 0.0, rho2));
+#ifndef TILL_PRESS_MELOSH
+        CHECK(tillCalcU(m, m->rho0, 1e-3*m->vmin, rho2) == 0.0, "B = 3A: tillCalcU from (rho0, 1e-3 vmin) to rho2= %g", rho2);
+#else
+        /* The cold-region pressure is zero below 0.8 rho0 (Melosh cut), so u only decreases between rho0 and 0.8 rho0. */
+        {
+            double u2 = tillCalcU(m, m->rho0, 1e-3*m->vmin, rho2);
+            CHECK(u2 >= 0.0 && u2 < 1e-3*m->vmin, "B = 3A: tillCalcU from (rho0, 1e-3 vmin) to rho2= %g is %g", rho2, u2);
+        }
+#endif
+        CHECK(tillCalcU(m, m->rho0, 0.0, rho2) == tillLookupU(m, m->rho0, 0.0, rho2, k), "B = 3A: direct integration == lookup on the cold curve");
+    }
+    tillFinalizeMaterial(m);
+}
+
+/*
+ * u < 0 is below the cold curve and not a Tillotson state, but a hydro code can produce it. w0 =
+ * u/(u0 eta^2) + 1 is evaluated with max(u, 0), so Gamma = a + b for u <= 0 and the raw pressure is
+ * P_NP = (a + b) u rho + A mu + B mu^2 for every rho (u < 0 < us is always the cold region). Before,
+ * w0 reached 0 at u = -u0 eta^2 (division by zero) and became negative below (Gamma = a + b/w0 < a).
+ */
+static void testNegativeU(TILLMATERIAL *material)
+{
+    const double rho0 = material->rho0, A = material->A, B = material->B, ab = material->a + material->b;
+    int a, b;
+
+    for (a = 0; a < 40; a++) for (b = 0; b < 8; b++) {
+        static const double f[] = {1e-12, 1e-3, 0.5, 1.0 - 1e-12, 1.0, 1.0 + 1e-12, 2.0, 10.0};
+        double rho = rho0*pow(10.0, -2.0 + 2.5*a/39.0), eta = rho/rho0, mu = eta - 1.0;
+        double u = -f[b]*material->u0*eta*eta;   /* f = 1: the former singularity w0 = 0 */
+        double Gu = ab*u*rho, Pnp = tillPressureNP(material, rho, u), c, P = tillPressureSound(material, rho, u, &c);
+        double scale = fabs(Gu) + A*fabs(mu) + B*mu*mu;
+        CHECK(isfinite(Pnp) && fabs(Pnp - (Gu + A*mu + B*mu*mu)) <= 1e-12*scale, "u < 0: P_NP = (a+b) u rho + A mu + B mu^2 at rho= %g u= %g: %g", rho, u, Pnp);
+        CHECK(isfinite(P) && P >= 0.0 && isfinite(c) && c > 0.0, "u < 0: P= %g c= %g finite at rho= %g u= %g", P, c, rho, u);
+        CHECK(isfinite(tilldPdrho(material, rho, u)) && isfinite(tilldPdu(material, rho, u)), "u < 0: derivatives finite at rho= %g u= %g", rho, u);
+#ifdef TILL_PRESS_MELOSH
+        if (rho < 0.8*rho0) CHECK(P == 0.0, "u < 0, Melosh cut: P = 0 at rho= %g", rho); else
+#endif
+        CHECK(P == fmax(Pnp, 0.0), "u < 0: P == max(P_NP, 0) at rho= %g u= %g", rho, u);
+    }
+
+    /* Continuous at u = 0, and the derivatives are exact for u < 0 (compressed, P > 0, no cut). */
+    for (a = 0; a < 20; a++) {
+        double rho = rho0*(1.2 + 0.1*a), mu = rho/rho0 - 1.0;
+        double u = -0.01*(A*mu + B*mu*mu)/(ab*rho), du = 1e-6*fabs(u), dr = 1e-6*rho;
+        double P = tillPressure(material, rho, u);
+        CHECK(P > 0.0, "compressed state with u < 0 has P > 0 (rho= %g)", rho);
+        {
+            /* Continuity: the change over -eps is first order, bounded by eps*dP/du(u = 0) (+ roundoff). */
+            double eps = 1e-8*material->u0, P0 = tillPressure(material, rho, 0.0);
+            CHECK(fabs(tillPressure(material, rho, -eps) - P0) <= 1.01*eps*tilldPdu(material, rho, 0.0) + 1e-14*P0, "P continuous at u = 0, rho= %g", rho);
+        }
+        CHECK_REL((tillPressure(material, rho, u + du) - tillPressure(material, rho, u - du))/(2.0*du), tilldPdu(material, rho, u), 1e-6, "dP/du at u < 0, rho= %g", rho);
+        CHECK_REL((tillPressure(material, rho + dr, u) - tillPressure(material, rho - dr, u))/(2.0*dr), tilldPdrho(material, rho, u), 1e-6, "dP/drho at u < 0, rho= %g", rho);
+    }
+}
+
+/*
+ * Densities down to the smallest double, in the cold (u < 0, u = 0, 0 < u < us), intermediate and
+ * hot regions. Up to tillotson 4.0.0 three products of 0 and inf gave NaN there: P for u <= 0
+ * below ~1e-162 rho0 (0/0 in w0, u0 eta^2 underflows), dP/drho for 0 < u < us below ~1e-155 rho0
+ * (w0 = inf) and for intermediate and hot states below ~4e-103 rho0 (exp(...) = 0 times a factor
+ * growing like 1/eta^3), and c fell to the floor sqrt(A/rho0) because fmax dropped the NaN; P/rho^2
+ * overflowed in c below rho ~ 1e-154. Below eta ~ 1e-14 Pc of A == B materials cancels to exactly 0
+ * and escaped the cut (dP/drho < 0 at P = 0). In the hot region at eta < 1e-20 the exponentials are
+ * 0 and w0 = inf, so P = a u rho and c^2 = max(a (1 + a) u, A/rho0) exactly.
+ */
+static void testTinyDensity(TILLMATERIAL *material)
+{
+    const double rho0 = material->rho0, cmin2 = material->A/rho0, a = material->a;
+    const double us[5] = { -material->u0, 0.0, 0.5*material->us, 0.5*(material->us + material->us2), 3.0*material->us2 };
+    int k, q, nHot = 0;
+    const long nf = material->nLookupFail;
+
+    for (k = 0; k <= 330; k++) {
+        /* eta = 10^-(10 + k), and the smallest positive double as density. */
+        const double rho = (k < 330) ? rho0*pow(10.0, -10.0 - k) : 4.9406564584124654e-324;
+        /* Normal doubles only for the checks that need P = a u rho itself: below DBL_MIN P underflows to 0. */
+        const int bNormal = (rho >= DBL_MIN && a*us[4]*rho >= DBL_MIN);
+        if (!(rho > 0.0)) continue;   /* rho0*10^-k underflowed: not a valid density */
+        for (q = 0; q < 5; q++) {
+            const double u = us[q];
+            double c, cnp, dPdrho = tilldPdrho(material, rho, u), dPdu = tilldPdu(material, rho, u);
+            double P = tillPressureSound(material, rho, u, &c), Pnp = tillPressureSoundNP(material, rho, u, &cnp);
+            CHECK(isfinite(P) && P >= 0.0 && isfinite(Pnp), "P at rho/rho0= %g u= %g: %g (NP %g)", rho/rho0, u, P, Pnp);
+            CHECK(isfinite(c) && c*c >= cmin2*(1.0 - 1e-14) && isfinite(cnp) && cnp >= 0.0, "c at rho/rho0= %g u= %g: %g (NP %g)", rho/rho0, u, c, cnp);
+            CHECK(isfinite(dPdrho) && isfinite(dPdu), "derivatives at rho/rho0= %g u= %g: %g %g", rho/rho0, u, dPdrho, dPdu);
+            if (P == 0.0 && bNormal) CHECK(dPdrho == 0.0 && dPdu == 0.0, "P = 0 but derivatives %g %g at rho/rho0= %g u= %g", dPdrho, dPdu, rho/rho0, u);
+#ifndef TILL_PRESS_MELOSH
+            CHECK(P == fmax(Pnp, 0.0), "P == max(P_NP, 0) at rho/rho0= %g u= %g", rho/rho0, u);
+#endif
+            if (q == 4 && rho/rho0 < 1e-20 && bNormal) {
+                const double Pref = a*u*rho;
+                CHECK(fabs(P - Pref) <= 1e-14*Pref, "hot limit P = a u rho at rho/rho0= %g: %g vs %g", rho/rho0, P, Pref);
+                CHECK_REL(c*c, fmax(a*(1.0 + a)*u, cmin2), 1e-13, "hot limit c^2 = a (1 + a) u at rho/rho0= %g", rho/rho0);
+                nHot++;
+            }
+        }
+    }
+    CHECK(nHot > 200, "hot limit tested %d times", nHot);
+    CHECK(material->nLookupFail == nf, "valid tiny densities counted (%ld)", material->nLookupFail - nf);
+    /* A NaN u is NaN in P and c alike (c was the floor). */
+    {
+        double c = 1.0, P = tillPressureSound(material, 0.5*rho0, NAN, &c);
+        CHECK(isnan(P) && isnan(c), "NaN u: P= %g c= %g", P, c);
+        P = tillPressureSound(material, 2.0*rho0, NAN, &c);
+        CHECK(isnan(P) && isnan(c), "NaN u (condensed): P= %g c= %g", P, c);
+        CHECK(isnan(tillSoundSpeed(material, rho0, NAN)), "tillSoundSpeed for a NaN u");
+    }
 }
 
 static void testPressure(TILLMATERIAL *material)
@@ -97,9 +329,13 @@ static void testPressure(TILLMATERIAL *material)
         CHECK(c == tillSoundSpeed(material, rho, u), "tillSoundSpeed == tillPressureSound rho= %g u= %g", rho, u);
         CHECK(P >= 0.0 && isfinite(P), "P >= 0 rho= %g u= %g P= %g", rho, u, P);
         CHECK(c >= cmin*(1.0 - 1e-14) && isfinite(c), "c >= sqrt(A/rho0) rho= %g u= %g c= %g", rho, u, c);
-        CHECK(Pnp <= P*(1.0 + 1e-14) + 1e-300, "P_NP <= P rho= %g u= %g", rho, u);
+        /* The cut pressure is the raw one cut at zero; with TILL_PRESS_MELOSH expanded cold states below 0.8 rho0 have P = 0. */
+#ifdef TILL_PRESS_MELOSH
+        if (phase == TILL_PHASE_EXP_COLD && rho < 0.8*material->rho0) CHECK(P == 0.0, "Melosh cut: P = 0 rho= %g u= %g", rho, u);
+        else
+#endif
+        CHECK(P == fmax(Pnp, 0.0), "P == max(P_NP, 0) rho= %g u= %g: %g vs %g", rho, u, P, Pnp);
         if (phase == TILL_PHASE_CONDENSED) CHECK_REL(Pnp, P, 1e-14, "condensed: P_NP == P rho= %g u= %g", rho, u);
-        if (P > 0.0 && phase != TILL_PHASE_EXP_COLD) CHECK_REL(Pnp, P, 1e-14, "P > 0: P_NP == P rho= %g u= %g", rho, u);
         if (P == 0.0) CHECK(dPdrho == 0.0 && dPdu == 0.0, "cut: derivatives zero rho= %g u= %g", rho, u);
 
         /* Derivatives against central differences, away from the region boundaries and the cut. */
@@ -121,8 +357,9 @@ static void testPressure(TILLMATERIAL *material)
         double rho = material->rho0*lograndom(0.1, 0.999), eps = 1e-9;
         double Pa = tillPressure(material, rho, material->us*(1-eps)), Pb = tillPressure(material, rho, material->us*(1+eps));
         double Pc = tillPressure(material, rho, material->us2*(1-eps)), Pd = tillPressure(material, rho, material->us2*(1+eps));
-        CHECK(fabs(Pa - Pb) <= 1e-6*(Pa + Pb) + 1e-10*material->A, "P continuous at us, rho= %g: %g vs %g", rho, Pa, Pb);
-        CHECK(fabs(Pc - Pd) <= 1e-6*(Pc + Pd) + 1e-10*material->A, "P continuous at us2, rho= %g: %g vs %g", rho, Pc, Pd);
+        /* The blend weight changes by ~eps*us/(us2-us) across us, so the jump is of that order times P_e (<~ A). */
+        CHECK(fabs(Pa - Pb) <= 1e-6*(Pa + Pb) + 1e-8*material->A, "P continuous at us, rho= %g: %g vs %g", rho, Pa, Pb);
+        CHECK(fabs(Pc - Pd) <= 1e-6*(Pc + Pd) + 1e-8*material->A, "P continuous at us2, rho= %g: %g vs %g", rho, Pc, Pd);
     }
 }
 
@@ -162,12 +399,38 @@ static void testTable(TILLMATERIAL *material)
         i = (int) (urand()*N); j = (int) (urand()*M);
         if (i == N) i--;
         if (j == M) j--;
-        if (i == 0) continue;   /* u1(0) is copied from u1(1) by construction */
         {
             double rho = tillLookupRho(material, i), u = material->Lookup[TILL_INDEX(material, i, j)].u;
+            /* Where the downward integration clamps u at 0 the stored slope is 0 (flat curve). */
+            double u1ref = (i < material->n && u == 0.0) ? 0.0 : tillPressure(material, rho, u)/rho;
             /* P/rho is a difference of large terms at high compression (100 rho0): roundoff ~1e-11. */
-            CHECK_REL(material->Lookup[TILL_INDEX(material, i, j)].u1 + 1e-300, tillPressure(material, rho, u)/rho + 1e-300, 1e-10, "u1 = P/rho at i= %d j= %d", i, j);
+            CHECK_REL(material->Lookup[TILL_INDEX(material, i, j)].u1 + 1e-300, u1ref + 1e-300, 1e-10, "u1 = P/rho at i= %d j= %d", i, j);
         }
+    }
+    /* Node 0 (rhomin) has its own slope on every isentrope, not a copy of node 1. */
+    for (j = 0; j < M; j++) {
+        double rho = tillLookupRho(material, 0), u = material->Lookup[TILL_INDEX(material, 0, j)].u;
+        double u1ref = (u == 0.0) ? 0.0 : tillPressure(material, rho, u)/rho;
+        CHECK(isfinite(material->Lookup[TILL_INDEX(material, 0, j)].u1), "u1 finite at rhomin, j= %d", j);
+        CHECK_REL(material->Lookup[TILL_INDEX(material, 0, j)].u1 + 1e-300, u1ref + 1e-300, 1e-10, "u1 = P/rho at rhomin, j= %d", j);
+    }
+    /*
+     * The first interval [rhomin, rhomin e^dlogrho] interpolates the isentrope as well as any other:
+     * against the ODE from node 1 to within 3e-6 (|u| + vmin). With u1(0) copied from node 1 the
+     * error was up to ~1e-5 for the built-in materials (2e-7 to 7e-7 with the own slope).
+     */
+    if (N == TILL_TABLE_NRHO && M == TILL_TABLE_NV) {
+        const double lr0 = log(tillLookupRho(material, 0));
+        double maxerr = 0.0;
+        for (j = 0; j < M; j += 3) for (k = 1; k < 10; k++) {
+            double s = tillLookupS(material, j), u1n = material->Lookup[TILL_INDEX(material, 1, j)].u;
+            double rho = exp(lr0 + 0.1*k*material->dlogrho);
+            double ref = refU(material, tillLookupRho(material, 1), u1n, rho, 1000);
+            double err = fabs(tillCubicInt(material, rho, s) - ref)/(fabs(ref) + material->vmin);
+            if (err > maxerr) maxerr = err;
+            CHECK(err <= 3e-6, "first interval rho= %g j= %d: %g vs %g", rho, j, tillCubicInt(material, rho, s), ref);
+        }
+        fprintf(stdout, "  %s: first rho interval max rel err %.2e\n", MatName, maxerr);
     }
 
     /*
@@ -215,8 +478,69 @@ static void testTable(TILLMATERIAL *material)
         CHECK(tillIsInTable(material, material->rho0, material->vmax*(1.0 + 1e-6)) == TILL_LOOKUP_OUTSIDE_VMAX, "(rho0, >vmax) outside");
         CHECK(tillIsInTable(material, 2.0*material->rho0, 0.5*tillColdULookup(material, 2.0*material->rho0)) == TILL_LOOKUP_OUTSIDE_VMIN, "below cold curve");
         CHECK(tillIsInTable(material, NAN, 1.0) == TILL_LOOKUP_OUTSIDE_RHOMIN, "NaN rho");
-        CHECK(tillIsInTable(material, material->rho0, NAN) == TILL_LOOKUP_OUTSIDE_VMAX, "NaN u");
+        /* A non-finite u is no state at all (TILL_FAIL), not "above the table": EOSIsUsable tolerates OUTSIDE_VMAX. */
+        CHECK(tillIsInTable(material, material->rho0, NAN) == TILL_FAIL, "NaN u");
+        CHECK(tillIsInTable(material, material->rho0, INFINITY) == TILL_FAIL, "+inf u");
+        CHECK(tillIsInTable(material, material->rho0, -INFINITY) == TILL_FAIL, "-inf u");
     }
+}
+
+/*
+ * With TILL_PRESS_MELOSH the pressure jumps at 0.8 rho0 for expanded cold and intermediate states
+ * (the positive cold term is cut there), so the RK4 integration of the table and of the reference
+ * is only first order across the jump: the isentrope label and the lookup are then accurate to
+ * ~1e-4 and ~1e-3 instead of ~1e-5 and ~1e-4.
+ */
+#ifdef TILL_PRESS_MELOSH
+#define TILL_TEST_LABEL_TOL  3e-4
+#define TILL_TEST_LOOKUP_TOL 3e-3
+#else
+#define TILL_TEST_LABEL_TOL  1e-5
+#define TILL_TEST_LOOKUP_TOL 1e-3
+#endif
+
+/*
+ * The table nodes are integrated adaptively (TILL_ODE_RTOL). Against a fixed-step RK4 reference
+ * from rho0 with 2e5 steps and the same clamp u >= 0 (the reference converges to ~1e-7 relative
+ * across the kinks of P/rho; with 10 fixed substeps per interval the nodes were off by ~1e-4).
+ * With TILL_PRESS_MELOSH P/rho jumps at 0.8 rho0, where a fixed-step reference is only first
+ * order (it converges like 1/nsteps to the table value, 1e-6 at 2e5 steps for basalt), hence the
+ * wider tolerance there.
+ */
+#ifdef TILL_PRESS_MELOSH
+#define TILL_TEST_NODE_TOL 1e-5
+#else
+#define TILL_TEST_NODE_TOL 1e-6
+#endif
+static void testTableNodes(TILLMATERIAL *material)
+{
+    double maxerr = 0.0;
+    int k;
+
+    for (k = 0; k < 8; k++) {
+        int i = (int) (urand()*material->nTableRho), j = (int) (urand()*material->nTableV), n;
+        double v, rho, x, h, u, err;
+        if (i >= material->nTableRho) i = material->nTableRho - 1;
+        if (j >= material->nTableV) j = material->nTableV - 1;
+        v = tillLookupV(material, j);
+        rho = tillLookupRho(material, i);
+        x = log(material->rho0);
+        h = (log(rho) - x)/200000;
+        u = v;
+        for (n = 0; n < 200000; n++) {
+            double k1 = h*tilldudlogrho(material, x, u);
+            double k2 = h*tilldudlogrho(material, x + 0.5*h, u + 0.5*k1);
+            double k3 = h*tilldudlogrho(material, x + 0.5*h, u + 0.5*k2);
+            double k4 = h*tilldudlogrho(material, x + h, u + k3);
+            u += (k1 + 2.0*k2 + 2.0*k3 + k4)/6.0;
+            if (u < 0.0) u = 0.0;
+            x += h;
+        }
+        err = fabs(material->Lookup[TILL_INDEX(material, i, j)].u - u)/(fabs(u) + material->vmin);
+        if (err > maxerr) maxerr = err;
+        CHECK(err <= TILL_TEST_NODE_TOL, "table node i= %d (rho/rho0= %g) j= %d: %.12e vs %.12e", i, rho/material->rho0, j, material->Lookup[TILL_INDEX(material, i, j)].u, u);
+    }
+    fprintf(stdout, "  %s: table nodes vs ODE max rel err %.2e\n", MatName, maxerr);
 }
 
 static void testIsentropes(TILLMATERIAL *material)
@@ -236,14 +560,14 @@ static void testIsentropes(TILLMATERIAL *material)
         /* The isentrope label is recovered. */
         s = tillFindEntropyCurve(material, rho1, u1, k);
         CHECK(!tillFailed(s), "entropy curve found rho= %g u= %g", rho1, u1);
-        CHECK_REL(tillVofS(material, s) + 1e-3*material->vmax, v + 1e-3*material->vmax, 1e-5, "isentrope label rho1= %g v= %g", rho1, v);
+        CHECK_REL(tillVofS(material, s) + 1e-3*material->vmax, v + 1e-3*material->vmax, TILL_TEST_LABEL_TOL, "isentrope label rho1= %g v= %g", rho1, v);
 
         /* Lookup against the ODE, compression and expansion. */
         rho2 = (k % 4 < 2) ? 2.0*rho1 : 0.5*rho1;
         ref = refU(material, rho1, u1, rho2, 2000);
         lk = tillLookupU(material, rho1, u1, rho2, k);
         CHECK(!tillFailed(lk), "lookup rho1= %g u1= %g rho2= %g", rho1, u1, rho2);
-        CHECK(fabs(lk - ref) <= 1e-3*fabs(ref) + 1e-6*v, "lookup vs ODE rho1= %g v= %g rho2= %g: %g vs %g", rho1, v, rho2, lk, ref);
+        CHECK(fabs(lk - ref) <= TILL_TEST_LOOKUP_TOL*fabs(ref) + 1e-6*v, "lookup vs ODE rho1= %g v= %g rho2= %g: %g vs %g", rho1, v, rho2, lk, ref);
         if (fabs(lk - ref)/(fabs(ref) + 1e-300) > maxerr) maxerr = fabs(lk - ref)/(fabs(ref) + 1e-300);
 
         /* Round trip rho1 -> rho2 -> rho1. */
@@ -255,7 +579,7 @@ static void testIsentropes(TILLMATERIAL *material)
         /* Direct integration agrees with the ODE and with the lookup. */
         if (k % 8 == 0) {
             double d = tillCalcU(material, rho1, u1, rho2);
-            CHECK(fabs(d - ref) <= 1e-6*fabs(ref) + 1e-9*v, "tillCalcU vs ODE rho1= %g v= %g rho2= %g", rho1, v, rho2);
+            CHECK(fabs(d - ref) <= 1e-6*fabs(ref) + 1e-9*v, "tillCalcU vs ODE rho1= %g v= %g rho2= %g: %.10e vs %.10e (u1= %g, us= %g)", rho1, v, rho2, d, ref, u1, material->us);
         }
     }
     CHECK(n > 100, "enough in-table samples (%d)", n);
@@ -269,8 +593,39 @@ static void testIsentropes(TILLMATERIAL *material)
         {
             double u = tillCubicInt(material, rho, s1);
             if (tillIsInTable(material, rho, u) == TILL_LOOKUP_SUCCESS)
-                /* The entropy solver converges to TILL_EDGE_TOL*(|u| + 1): relative 1e-8 plus absolute 1e-10. */
-                CHECK_REL(tillLookupU(material, rho, u, rho, k) + 1e-2, u + 1e-2, 1e-8, "lookup identity rho= %g", rho);
+                /* The entropy solver converges to tillUTol = TILL_EDGE_TOL*(|u| + vmin): relative, with the floor vmin. */
+                CHECK_REL(tillLookupU(material, rho, u, rho, k) + material->vmin, u + material->vmin, 1e-8, "lookup identity rho= %g", rho);
+        }
+    }
+}
+
+/*
+ * tillCalcU is adaptive (step doubling, TILL_ODE_RTOL): long paths outside the table, where it is
+ * the fallback of tillLookupU, against a fixed-step RK4 reference with 10^6 steps. The paths cross
+ * the kinks of P/rho (pressure cut, us, us2) where the fixed-step reference itself converges only
+ * like h^2, so the tolerance is 1e-6 (the reference is good to ~1e-8). Round trips there and back.
+ */
+static void testCalcUOutside(TILLMATERIAL *material)
+{
+    const double v[] = {0.0, 1e2*material->vmin, 1e-2*material->vmax, 0.5*material->vmax};
+    int k;
+
+    for (k = 0; k < 4; k++) {
+        /* Expansion from rho0 far below the table, and compression from rhomax far above it. */
+        double rho2 = 1e-3*material->rhomin;
+        double u2 = tillCalcU(material, material->rho0, v[k], rho2);
+        double ref = refU(material, material->rho0, v[k], rho2, 1000000);
+        CHECK(!tillFailed(u2) && fabs(u2 - ref) <= 1e-6*fabs(ref) + 1e-6*material->vmin,
+              "tillCalcU expansion to %g rho0, v= %g: %.10e vs %.10e", rho2/material->rho0, v[k], u2, ref);
+
+        {
+            double u1 = tillColdULookup(material, material->rhomax) + v[k];
+            double rho3 = 10.0*material->rhomax;
+            double u3 = tillCalcU(material, material->rhomax, u1, rho3);
+            double ref3 = refU(material, material->rhomax, u1, rho3, 1000000);
+            double back = tillCalcU(material, rho3, u3, material->rhomax);
+            CHECK(!tillFailed(u3) && fabs(u3 - ref3) <= 1e-6*fabs(ref3), "tillCalcU compression to 10 rhomax, v= %g: %.10e vs %.10e", v[k], u3, ref3);
+            CHECK(fabs(back - u1) <= 1e-7*fabs(u1) + 1e-6*material->vmin, "tillCalcU round trip rhomax -> 10 rhomax -> rhomax, v= %g: %.10e vs %.10e", v[k], back, u1);
         }
     }
 }
@@ -303,12 +658,109 @@ static void testTemperature(TILLMATERIAL *material)
     if (nskip > 0) SKIP("rho(P, T) not unique or not bracketed for %d of %d states (non-monotonic P(rho, T))", nskip, nskip + n);
 }
 
+/*
+ * The table status of u(rho, T): wherever tillURhoTemp succeeds, (rho, u) is a state EOSIsUsable
+ * accepts, TILL_LOOKUP_SUCCESS or _OUTSIDE_VMAX in the table and, below rhomin, OUTSIDE_RHOMIN with
+ * u >= -tillUTol. EOSSolveBCEval in EOSlib relies on this and skips EOSIsUsable for Tillotson.
+ * u = u_cold + cv T with T >= 0 and the same u_cold as the status test, also in the cell just below
+ * rho0, where tillColdULookup returns 0 and the status interpolates row 0 of the table. T = 0 is
+ * the cold curve itself, the tightest case.
+ */
+static void testUofRhoTStatus(TILLMATERIAL *material)
+{
+    const double rhoLo = material->rhomin*(1.0 - TILL_EDGE_TOL);
+    const double Ts[6] = { 0.0, 1e-12, 1.0, 1e3, 1e5, 1e8 };
+    int k, j, n = 0;
+
+    for (k = 0; k < 1200; k++) {
+        double rho;
+        if (k < 600) rho = lograndom(0.1*material->rhomin, material->rhomax);
+        else if (k < 800) rho = material->rho0*exp(-material->dlogrho*(k - 600 + 0.5)/200.0);   /* the cell below rho0 */
+        else if (k < 1000) rho = material->rho0*exp(material->dlogrho*(k - 800 + 0.5)/200.0);   /* and above */
+        else if (k < 1100) rho = exp(material->logrhomin + (k - 1000)*material->dlogrho);       /* table nodes */
+        else rho = (k % 2) ? material->rhomin*(1.0 - 0.5*TILL_EDGE_TOL) : material->rhomax*(1.0 + 0.5*TILL_EDGE_TOL);
+        for (j = 0; j < 6; j++) {
+            const long nf = material->nLookupFail;
+            const double u = tillURhoTemp(material, rho, Ts[j]);
+            int st;
+            if (tillFailed(u)) { material->nLookupFail = nf; continue; }
+            st = tillIsInTable(material, rho, u);
+            n++;
+            if (rho >= rhoLo)
+                CHECK(st == TILL_LOOKUP_SUCCESS || (st == TILL_LOOKUP_OUTSIDE_VMAX && isfinite(u)),
+                      "u(rho= %.17g, T= %g) = %.17g has status %d", rho, Ts[j], u, st);
+            else
+                CHECK(st == TILL_LOOKUP_OUTSIDE_RHOMIN && u >= -tillUTol(material, u),
+                      "u(rho= %.17g, T= %g) = %.17g below rhomin has status %d", rho, Ts[j], u, st);
+            material->nLookupFail = nf;
+        }
+    }
+    CHECK(n > 6000, "only %d states checked", n);
+}
+
+/*
+ * An invalid density (rho <= 0, NaN, inf) fails in every analytic (rho, u) function: P, c and the
+ * derivatives are TILL_FAIL_VALUE, counted once per call (they returned NaN, uncounted; tilldudrho
+ * divided the result by rho^2). T(rho, u) falls back to 0, counted once.
+ */
+static void testInvalidDensity(TILLMATERIAL *material)
+{
+    const double bad[] = { 0.0, -1.0, -material->rho0, NAN, INFINITY, -INFINITY };
+    const double u = material->u0;
+    const long nf0 = material->nLookupFail;
+#define TILL_ONCE(expr, what) do { long n_ = material->nLookupFail; double v_ = (expr); \
+        CHECK(v_ == TILL_FAIL_VALUE, "%s at rho= %g: %g", what, r, v_); \
+        CHECK(material->nLookupFail == n_ + 1, "%s at rho= %g counted %ld times", what, r, material->nLookupFail - n_); } while (0)
+    for (size_t k = 0; k < sizeof(bad) / sizeof(bad[0]); k++) {
+        const double r = bad[k];
+        double c = 1.0;
+        TILL_ONCE(tillPressure(material, r, u), "tillPressure");
+        TILL_ONCE(tillPressureNP(material, r, u), "tillPressureNP");
+        TILL_ONCE(tillSoundSpeed(material, r, u), "tillSoundSpeed");
+        TILL_ONCE(tilldPdrho(material, r, u), "tilldPdrho");
+        TILL_ONCE(tilldPdu(material, r, u), "tilldPdu");
+        TILL_ONCE(tilldudrho(material, r, u), "tilldudrho");
+        TILL_ONCE(tillPressureSound(material, r, u, &c), "tillPressureSound");
+        CHECK(c == TILL_FAIL_VALUE, "tillPressureSound c at rho= %g: %g", r, c);
+        c = 1.0;
+        TILL_ONCE(tillPressureSoundNP(material, r, u, &c), "tillPressureSoundNP");
+        CHECK(c == TILL_FAIL_VALUE, "tillPressureSoundNP c at rho= %g: %g", r, c);
+        {
+            long n = material->nLookupFail;
+            CHECK(tillTempRhoU(material, r, u) == 0.0 && material->nLookupFail == n + 1, "T at rho= %g falls back to 0, counted once", r);
+        }
+    }
+    /* A valid density is unchanged and not counted, also far outside the table and below the cold curve. */
+    {
+        long n = material->nLookupFail;
+        CHECK(isfinite(tillPressure(material, 1e-3*material->rhomin, u)), "P below rhomin");
+        CHECK(isfinite(tillPressure(material, 10.0*material->rhomax, u)), "P above rhomax");
+        CHECK(isfinite(tillPressure(material, material->rho0, -u)), "P below the cold curve");
+        CHECK(isfinite(tilldudrho(material, 1e-3*material->rhomin, u)), "du/drho below rhomin");
+        /* A NaN u gives NaN in P and so in du/drho, not the sentinel (only an invalid rho does). */
+        CHECK(isnan(tillPressure(material, material->rho0, NAN)) && isnan(tilldudrho(material, material->rho0, NAN)), "NaN u: P and du/drho NaN");
+        CHECK(material->nLookupFail == n, "valid densities counted (%ld)", material->nLookupFail - n);
+    }
+#undef TILL_ONCE
+    material->nLookupFail = nf0;
+}
+
 static void testSentinels(TILLMATERIAL *material)
 {
     double ucold = tillColdULookup(material, 2.0*material->rho0);
     long nfail0 = material->nLookupFail;
 
-    CHECK(tillLookupU(material, 2.0*material->rho0, 0.5*ucold, material->rho0, 0) == TILL_FAIL_VALUE, "lookup below cold curve");
+    /* Below the cold curve the lookup follows the coldest isentrope: u2 = u_cold(rho2), counted. */
+    CHECK(tillLookupU(material, 2.0*material->rho0, 0.5*ucold, 3.0*material->rho0, 0) == tillColdULookup(material, 3.0*material->rho0), "lookup below cold curve clamps to u_cold(rho2) (compression)");
+    CHECK(tillLookupU(material, 2.0*material->rho0, 0.5*ucold, 0.5*material->rho0, 0) == 0.0, "lookup below cold curve clamps to u_cold(rho2) = 0 (expansion)");
+    CHECK(tillLookupU(material, 2.0*material->rho0, 0.5*ucold, 0.5*material->rhomin, 0) == 0.0, "lookup below cold curve, rho2 below rhomin");
+    {
+        /* rho2 above the table: the cold curve continued by integration from rhomax. */
+        double rho2 = 2.0*material->rhomax;
+        double ref = tillCalcU(material, material->rhomax, tillColdULookup(material, material->rhomax), rho2);
+        double lk = tillLookupU(material, 2.0*material->rho0, 0.5*ucold, rho2, 0);
+        CHECK(isfinite(lk) && lk == ref && lk > tillColdULookup(material, material->rhomax), "lookup below cold curve, rho2 above rhomax: %g vs %g", lk, ref);
+    }
     CHECK(tillFindEntropyCurve(material, 2.0*material->rho0, 0.5*ucold, 0) == TILL_FAIL_VALUE, "entropy curve below cold curve");
     CHECK(tillFindEntropyCurve(material, material->rho0, 2.0*material->vmax, 0) == TILL_FAIL_VALUE, "entropy curve above table");
     CHECK(tillColdULookup(material, 2.0*material->rhomax) == TILL_FAIL_VALUE, "cold curve above rhomax");
@@ -320,10 +772,345 @@ static void testSentinels(TILLMATERIAL *material)
     CHECK(tillIsBelowColdCurve(material, 2.0*material->rhomax, 1.0) == TILL_FAIL, "isbelow above rhomax");
     CHECK(tillIsBelowColdCurve(material, 2.0*material->rho0, 0.5*ucold) == 1, "isbelow true");
     CHECK(tillIsBelowColdCurve(material, 2.0*material->rho0, 2.0*ucold) == 0, "isbelow false");
-    CHECK(material->nLookupFail == nfail0 + 9, "every failure is counted (%ld)", material->nLookupFail - nfail0);
-    /* Outside the table in rho the lookup falls back to direct integration (and is finite, not a failure). */
+    /*
+     * Within roundoff below the cold curve the state is on it: not below, in the table, T = 0 without
+     * a fallback. Clearly below (10 tolerances) it is below, outside and a counted fallback. The same
+     * below rhomin, where the cold curve is 0. Up to 4.0.0 tillIsBelowColdCurve used u < u_cold.
+     */
+    {
+        const long nf = material->nLookupFail;
+        const double rhos[2] = { 2.0*material->rho0, 0.5*material->rhomin };
+        for (int q = 0; q < 2; q++) {
+            const double uc = tillColdULookup(material, rhos[q]);
+            const double uOn = uc - 0.1*tillUTol(material, uc), uOff = uc - 10.0*tillUTol(material, uc);
+            CHECK(tillIsBelowColdCurve(material, rhos[q], uOn) == 0, "isbelow within roundoff of the cold curve (rho= %g)", rhos[q]);
+            CHECK(tillTempRhoU(material, rhos[q], uOn) == 0.0, "T within roundoff of the cold curve (rho= %g)", rhos[q]);
+            CHECK(material->nLookupFail == nf, "state within roundoff of the cold curve counted (rho= %g)", rhos[q]);
+            CHECK(tillIsBelowColdCurve(material, rhos[q], uOff) == 1, "isbelow 10 tolerances below the cold curve (rho= %g)", rhos[q]);
+            if (q == 0) {
+                /* tillIsInTable is defined in [rhomin, rhomax] only. */
+                CHECK(tillIsInTable(material, rhos[q], uOn) == TILL_LOOKUP_SUCCESS, "in table within roundoff of the cold curve");
+                CHECK(tillIsInTable(material, rhos[q], uOff) == TILL_LOOKUP_OUTSIDE_VMIN, "outside 10 tolerances below the cold curve");
+            }
+        }
+        CHECK(material->nLookupFail == nf, "isbelow and isintable counted (%ld)", material->nLookupFail - nf);
+    }
+    /* A non-finite u is rejected by every function that takes one, never passed on as NaN. */
+    CHECK(tillIsBelowColdCurve(material, 2.0*material->rho0, NAN) == TILL_FAIL, "isbelow NaN u");
+    /*
+     * Below rhomin the cold curve is zero (tillColdULookup), so the status is u < 0 there, as in
+     * EOSisbelowColdCurve; it fails only where tillColdULookup fails (up to 4.0.0 it failed for every
+     * rho below rhomin). The failures are counted once each; nothing else is counted.
+     */
+    {
+        const long nf = material->nLookupFail;
+        CHECK(tillIsBelowColdCurve(material, 0.5*material->rhomin, -1.0) == 1, "isbelow below rhomin, u < 0");
+        CHECK(tillIsBelowColdCurve(material, 0.5*material->rhomin, 0.0) == 0, "isbelow below rhomin, u = 0");
+        CHECK(tillIsBelowColdCurve(material, 0.5*material->rhomin, 1.0) == 0, "isbelow below rhomin, u > 0");
+        /* Below rho0 the cold curve is 0: below it by more than the roundoff tolerance is below, -1e-30 is on it. */
+        CHECK(tillIsBelowColdCurve(material, 0.5*material->rho0, -10.0*tillUTol(material, 0.0)) == 1, "isbelow below rho0, u < 0");
+        CHECK(tillIsBelowColdCurve(material, 0.5*material->rho0, -1e-30) == 0, "isbelow below rho0, u = -1e-30 is on the cold curve");
+        CHECK(material->nLookupFail == nf, "isbelow below rhomin counted %ld times", material->nLookupFail - nf);
+        CHECK(tillIsBelowColdCurve(material, 0.0, 1.0) == TILL_FAIL, "isbelow at rho = 0");
+        CHECK(tillIsBelowColdCurve(material, -1.0, 1.0) == TILL_FAIL, "isbelow at rho < 0");
+        CHECK(tillIsBelowColdCurve(material, NAN, 1.0) == TILL_FAIL, "isbelow at a NaN rho");
+        CHECK(tillIsBelowColdCurve(material, 2.0*material->rhomax, NAN) == TILL_FAIL, "isbelow above rhomax, NaN u");
+        CHECK(material->nLookupFail == nf + 4, "isbelow failures counted %ld times (expected 4)", material->nLookupFail - nf);
+        material->nLookupFail = nf;
+    }
+    CHECK(tillFindEntropyCurve(material, 2.0*material->rho0, NAN, 0) == TILL_FAIL_VALUE, "entropy curve NaN u");
+    CHECK(tillLookupU(material, 2.0*material->rho0, NAN, material->rho0, 0) == TILL_FAIL_VALUE, "lookup NaN u");
+    CHECK(tillLookupU(material, 2.0*material->rho0, INFINITY, material->rho0, 0) == TILL_FAIL_VALUE, "lookup +inf u");
+    CHECK(material->nLookupFail == nfail0 + 16, "every failure and fallback is counted (%ld)", material->nLookupFail - nfail0);
+    /* Outside the table in rho the lookup falls back to direct integration: finite, and counted as a fallback. */
     CHECK(isfinite(tillLookupU(material, 0.5*material->rhomin, 1.0, material->rhomin, 0)), "lookup below rhomin integrates");
-    CHECK(material->nLookupFail == nfail0 + 9, "direct integration is not a failure");
+    CHECK(material->nLookupFail == nfail0 + 17, "direct integration is counted as a fallback (%ld)", material->nLookupFail - nfail0);
+    CHECK(isfinite(tillLookupU(material, material->rho0, 1.0, 2.0*material->rhomax, 0)), "lookup above rhomax integrates");
+    CHECK(material->nLookupFail == nfail0 + 18, "direct integration is counted as a fallback (%ld)", material->nLookupFail - nfail0);
+    /* An invalid end point is a failure in every path (also the clamp below the cold curve), counted once. */
+    CHECK(tillLookupU(material, 2.0*material->rho0, 2.0*ucold, NAN, 0) == TILL_FAIL_VALUE, "lookup to NaN rho2");
+    CHECK(tillLookupU(material, 2.0*material->rho0, 2.0*ucold, INFINITY, 0) == TILL_FAIL_VALUE, "lookup to +inf rho2");
+    CHECK(tillLookupU(material, 2.0*material->rho0, 2.0*ucold, 0.0, 0) == TILL_FAIL_VALUE, "lookup to rho2 = 0");
+    CHECK(tillLookupU(material, 2.0*material->rho0, 0.5*ucold, INFINITY, 0) == TILL_FAIL_VALUE, "lookup below cold curve to +inf rho2");
+    CHECK(tillLookupU(material, 2.0*material->rho0, 0.5*ucold, -1.0, 0) == TILL_FAIL_VALUE, "lookup below cold curve to rho2 < 0");
+    CHECK(tillLookupU(material, NAN, 1.0, material->rho0, 0) == TILL_FAIL_VALUE, "lookup from NaN rho1");
+    CHECK(tillLookupU(material, INFINITY, 1.0, material->rho0, 0) == TILL_FAIL_VALUE, "lookup from +inf rho1");
+    CHECK(material->nLookupFail == nfail0 + 25, "invalid rho counted once each (%ld)", material->nLookupFail - nfail0);
+    /* tillCalcU: invalid input fails (no undefined behaviour in the step count), counted; a valid integration is not. */
+    CHECK(tillCalcU(material, NAN, 1.0, material->rho0) == TILL_FAIL_VALUE, "tillCalcU NaN rho1");
+    CHECK(tillCalcU(material, material->rho0, 1.0, NAN) == TILL_FAIL_VALUE, "tillCalcU NaN rho2");
+    CHECK(tillCalcU(material, INFINITY, 1.0, material->rho0) == TILL_FAIL_VALUE, "tillCalcU +inf rho1");
+    CHECK(tillCalcU(material, material->rho0, 1.0, INFINITY) == TILL_FAIL_VALUE, "tillCalcU +inf rho2");
+    CHECK(tillCalcU(material, material->rho0, 1.0, 0.0) == TILL_FAIL_VALUE, "tillCalcU rho2 = 0");
+    CHECK(tillCalcU(material, -1.0, 1.0, material->rho0) == TILL_FAIL_VALUE, "tillCalcU rho1 < 0");
+    CHECK(tillCalcU(material, material->rho0, NAN, 2.0*material->rho0) == TILL_FAIL_VALUE, "tillCalcU NaN u1");
+    CHECK(tillCalcU(material, material->rho0, INFINITY, 2.0*material->rho0) == TILL_FAIL_VALUE, "tillCalcU +inf u1");
+    CHECK(tillCalcU(material, material->rho0, NAN, material->rho0) == TILL_FAIL_VALUE, "tillCalcU NaN u1, rho2 = rho1");
+    CHECK(material->nLookupFail == nfail0 + 34, "tillCalcU failures counted (%ld)", material->nLookupFail - nfail0);
+    CHECK(tillCalcU(material, material->rho0, 1.0, material->rho0) == 1.0, "tillCalcU identity");
+    CHECK(isfinite(tillCalcU(material, material->rho0, 1.0, 2.0*material->rho0)), "tillCalcU valid");
+    /* A state below the cold curve (u < 0 below rho0) is lifted to it by the clamp. */
+    CHECK(tillCalcU(material, 0.5*material->rho0, -material->vmin, 0.25*material->rho0) == 0.0, "tillCalcU clamps u >= 0");
+    CHECK(material->nLookupFail == nfail0 + 34, "a valid tillCalcU is not counted (%ld)", material->nLookupFail - nfail0);
+    /* rho <= 0 is invalid input for the cold curve (it returned 0, the expanded cold curve). */
+    CHECK(tillColdULookup(material, 0.0) == TILL_FAIL_VALUE, "cold curve at rho = 0");
+    CHECK(tillColdULookup(material, -1.0) == TILL_FAIL_VALUE, "cold curve at rho < 0");
+    CHECK(tillURhoTemp(material, -1.0, 300.0) == TILL_FAIL_VALUE, "u(rho < 0, T)");
+    CHECK(tillTempRhoU(material, 0.0, 1.0) == 0.0, "T(rho = 0, u) falls back to T = 0");
+    CHECK(tillColdULookup(material, 1e-3*material->rhomin) == 0.0, "cold curve below rhomin (rho > 0) is still zero");
+    CHECK(material->nLookupFail == nfail0 + 38, "rho <= 0 counted (%ld)", material->nLookupFail - nfail0);
+    /* T(rho, u) below the cold curve is T = 0 (the lowest temperature), counted, never negative. */
+    CHECK(tillTempRhoU(material, 2.0*material->rho0, 0.5*ucold) == 0.0, "T below the cold curve (compressed) is 0");
+    CHECK(tillTempRhoU(material, 0.5*material->rho0, -material->vmin) == 0.0, "T for u < 0 (expanded) is 0");
+    CHECK(tillTempRhoU(material, 2.0*material->rho0, -1e3*ucold) == 0.0, "T far below the cold curve is 0");
+    CHECK(tillTempRhoU(material, 2.0*material->rho0, NAN) == 0.0, "T for a NaN u is 0");
+    CHECK(tillTempRhoU(material, 2.0*material->rho0, INFINITY) == 0.0, "T for an infinite u is 0");
+    CHECK(material->nLookupFail == nfail0 + 43, "T below the cold curve counted (%ld)", material->nLookupFail - nfail0);
+    /* On the cold curve and within roundoff below it: T = 0 exactly, not counted; just above it: T > 0. */
+    CHECK(tillTempRhoU(material, 2.0*material->rho0, ucold) == 0.0, "T on the cold curve is 0");
+    CHECK(tillTempRhoU(material, 2.0*material->rho0, ucold - 0.1*tillUTol(material, ucold)) == 0.0, "T within roundoff below the cold curve is 0");
+    CHECK(tillTempRhoU(material, 0.5*material->rho0, 0.0) == 0.0, "T on the expanded cold curve is 0");
+    CHECK(tillTempRhoU(material, 2.0*material->rho0, ucold + material->cv) > 0.0, "T just above the cold curve");
+    CHECK(material->nLookupFail == nfail0 + 43, "T on the cold curve not counted (%ld)", material->nLookupFail - nfail0);
+    /* u(rho, T) and rho(P, T) below the lowest temperature T = 0 (or for a non-finite T): the sentinel, counted once each. */
+    {
+        const double Ts[4] = { -1.0, -1e-300, NAN, INFINITY };
+        const long nfT = material->nLookupFail;
+        for (int q = 0; q < 4; q++) {
+            long nf = material->nLookupFail;
+            CHECK(tillURhoTemp(material, 2.0*material->rho0, Ts[q]) == TILL_FAIL_VALUE, "u(rho, T= %g)", Ts[q]);
+            CHECK(material->nLookupFail == nf + 1, "u(rho, T= %g) counted %ld times", Ts[q], material->nLookupFail - nf);
+            nf = material->nLookupFail;
+            CHECK(tillRhoPTemp(material, material->A, Ts[q]) == TILL_FAIL_VALUE, "rho(P, T= %g)", Ts[q]);
+            CHECK(material->nLookupFail == nf + 1, "rho(P, T= %g) counted %ld times", Ts[q], material->nLookupFail - nf);
+        }
+        /* T = 0 is the cold curve: valid, not counted. */
+        const long nf = material->nLookupFail;
+        CHECK(tillURhoTemp(material, 2.0*material->rho0, 0.0) == tillColdULookup(material, 2.0*material->rho0), "u(rho, T = 0) is the cold curve");
+        CHECK(tillURhoTemp(material, 0.5*material->rho0, 0.0) == tillColdULookup(material, 0.5*material->rho0), "u(rho < rho0, T = 0) is the cold curve");
+        CHECK(material->nLookupFail == nf, "u(rho, T = 0) counted");
+        nfail0 += material->nLookupFail - nfT;   /* keep the running count of the checks below */
+    }
+    /* Just below the cold curve (roundoff in the hydro code): clamped, close to the in-table result. */
+    {
+        double rho1 = 2.0*material->rho0, rho2 = 1.5*material->rho0;
+        double ulo = ucold*(1.0 - 1e-6);
+        double lk = tillLookupU(material, rho1, ulo, rho2, 0);
+        CHECK(lk == tillColdULookup(material, rho2), "lookup just below cold curve clamps");
+        CHECK_REL(lk + 1.0, tillLookupU(material, rho1, ucold, rho2, 0) + 1.0, 1e-6, "clamp continuous with the cold isentrope");
+    }
+}
+
+/*
+ * Initialise a material with the unit pair (dKpcUnit, dMsolUnit) in a child process. Returns 0 if
+ * the library accepted it, 1 if it stopped the program (assert(0), or exit(1) with -DNDEBUG), -1
+ * for anything else.
+ */
+static int initUnitsRejected(int iMat, double dKpcUnit, double dMsolUnit)
+{
+    fflush(NULL);
+    pid_t pid = fork();
+    if (pid == 0) {
+        if (freopen("/dev/null", "w", stderr) == NULL) _exit(3);   /* the expected diagnostic */
+        TILLMATERIAL *m = tillInitMaterial(iMat, dKpcUnit, dMsolUnit);
+        tillFinalizeMaterial(m);
+        _exit(0);
+    }
+    int status = 0;
+    if (pid < 0 || waitpid(pid, &status, 0) != pid) return -1;
+    if (WIFEXITED(status) && WEXITSTATUS(status) == 0) return 0;
+    if ((WIFSIGNALED(status) && WTERMSIG(status) == SIGABRT) || (WIFEXITED(status) && WEXITSTATUS(status) == 1)) return 1;
+    return -1;
+}
+
+/*
+ * Call one of the lookups that need the full isentrope table in a child process on a material that
+ * has only the cold curve. Returns 1 if it stopped the program (assert(0), or exit(1) with
+ * -DNDEBUG), 0 if it returned, -1 otherwise.
+ */
+static int tableLookupFatal(TILLMATERIAL *m, int which)
+{
+    fflush(NULL);
+    pid_t pid = fork();
+    if (pid == 0) {
+        if (freopen("/dev/null", "w", stderr) == NULL) _exit(3);   /* the expected diagnostic */
+        const double rho = 1.5*m->rho0, u = tillURhoTemp(m, rho, 1000.0);
+        switch (which) {
+            case 0: (void) tillLookupU(m, rho, u, 2.0*rho, 0); break;
+            case 1: (void) tillLookupU(m, 1e-9*m->rho0, u, 2.0*rho, 0); break;   /* a path that would integrate directly */
+            case 2: (void) tillFindEntropyCurve(m, rho, u, 0); break;
+            case 3: (void) tillFindUonIsentrope(m, 1.0, rho); break;
+            case 4: (void) tillCubicInt(m, rho, 1.0); break;
+            case 5: { double e; int i; tillLocateRho(m, rho, &i, &e); (void) tillCubicIntGrid(m, i, e, m->nTableV/2); } break;
+        }
+        _exit(0);
+    }
+    int status = 0;
+    if (pid < 0 || waitpid(pid, &status, 0) != pid) return -1;
+    if (WIFEXITED(status) && WEXITSTATUS(status) == 0) return 0;
+    if ((WIFSIGNALED(status) && WTERMSIG(status) == SIGABRT) || (WIFEXITED(status) && WEXITSTATUS(status) == 1)) return 1;
+    return -1;
+}
+
+/*
+ * tillInitColdCurve builds the grid and the two edge isentropes only (what EOSinitMaterial does);
+ * the full table follows with tillInitLookup (EOSinitIsentropicLookup). The edge curves must be
+ * rows 0 and nTableV-1 of the full table bit for bit, everything that needs only them (temperature,
+ * u(rho, T), rho(P, T), cold curve, table status) must be bit-identical with and without the table,
+ * and the isentropic lookups must be fatal without it. tillInitColdCurve after tillInitLookup frees
+ * the table.
+ */
+static void testColdCurveOnly(int iMat)
+{
+    const double dKpcUnit = 6.371e8/3.085678e21, dMsolUnit = 5.972e27/1.99e33;
+    TILLMATERIAL *c = tillInitMaterial(iMat, dKpcUnit, dMsolUnit);
+    TILLMATERIAL *t = tillInitMaterial(iMat, dKpcUnit, dMsolUnit);
+    /* Own random states: the later tests keep the sequence they were written with. */
+    const unsigned long long rngSaved = rngState;
+    int k, nDiff = 0;
+
+    tillInitColdCurveDefault(c);
+    tillInitLookupDefault(t);
+    CHECK(c->Lookup == NULL && c->ColdCurve != NULL && c->TopCurve != NULL, "tillInitColdCurve builds the edge curves only");
+    CHECK(c->nTableRho == t->nTableRho && c->nTableV == t->nTableV && c->n == t->n && c->dlogrho == t->dlogrho && c->dv == t->dv &&
+          c->rhomin == t->rhomin && c->rhomax == t->rhomax && c->vmin == t->vmin && c->vmax == t->vmax &&
+          c->logrhomin == t->logrhomin && c->invdlogrho == t->invdlogrho && c->invdv == t->invdv, "same grid as the full table");
+    for (k = 0; k < t->nTableRho; k++) {
+        const TILL_LOOKUP_ENTRY *r0 = &t->Lookup[TILL_INDEX(t, k, 0)], *rn = &t->Lookup[TILL_INDEX(t, k, t->nTableV-1)];
+        if (c->ColdCurve[k].u != r0->u || c->ColdCurve[k].u1 != r0->u1 || c->TopCurve[k].u != rn->u || c->TopCurve[k].u1 != rn->u1) nDiff++;
+    }
+    CHECK(nDiff == 0, "edge curves differ from rows 0 and nTableV-1 of the table at %d densities", nDiff);
+
+    /* Same results and the same failure counts without and with the table. */
+    nDiff = 0;
+    for (k = 0; k < 20000; k++) {
+        double rho = lograndom(1e-6*c->rho0, 300.0*c->rho0), T = lograndom(1.0, 1e8);
+        double u = (k % 5 == 0) ? -lograndom(1e-6, 1.0)*c->cv*T : tillURhoTemp(t, rho, T);
+        if (tillFailed(u)) u = c->cv*T;
+        long nc = c->nLookupFail, nt = t->nLookupFail;
+        double a1 = tillTempRhoU(c, rho, u), b1 = tillTempRhoU(t, rho, u);
+        double a2 = tillURhoTemp(c, rho, T), b2 = tillURhoTemp(t, rho, T);
+        double a3 = tillColdULookup(c, rho), b3 = tillColdULookup(t, rho);
+        double a4 = tillRhoPTemp(c, 1e-3*c->A*(1 + k % 97), T), b4 = tillRhoPTemp(t, 1e-3*t->A*(1 + k % 97), T);
+        int a5 = tillIsInTable(c, rho, u), b5 = tillIsInTable(t, rho, u);
+        int a6 = tillIsBelowColdCurve(c, rho, u), b6 = tillIsBelowColdCurve(t, rho, u);
+#define SAME(x, y) ((x) == (y) || (tillFailed(x) && tillFailed(y)))
+        if (!SAME(a1, b1) || !SAME(a2, b2) || !SAME(a3, b3) || !SAME(a4, b4) || a5 != b5 || a6 != b6 ||
+            c->nLookupFail - nc != t->nLookupFail - nt) nDiff++;
+#undef SAME
+    }
+    CHECK(nDiff == 0, "%d of 20000 states differ between the cold curve only and the full table", nDiff);
+
+    /* The isentropic lookups need the table: fatal without it, on every path. */
+    for (k = 0; k <= 5; k++) CHECK(tableLookupFatal(c, k) == 1, "lookup %d without the table must be fatal", k);
+    CHECK(tableLookupFatal(t, 0) == 0 && tableLookupFatal(t, 2) == 0, "with the table the lookups return");
+
+    /* Building the table later on the cold-curve material gives the same table; tillInitColdCurve frees it again. */
+    tillInitLookupDefault(c);
+    nDiff = 0;
+    for (k = 0; k < c->nTableRho*c->nTableV; k++)
+        if (c->Lookup[k].u != t->Lookup[k].u || c->Lookup[k].u1 != t->Lookup[k].u1 || c->Lookup[k].udv2 != t->Lookup[k].udv2 || c->Lookup[k].u1dv2 != t->Lookup[k].u1dv2) nDiff++;
+    CHECK(nDiff == 0, "table built after tillInitColdCurve differs at %d entries", nDiff);
+    tillInitColdCurveDefault(c);
+    CHECK(c->Lookup == NULL && c->ColdCurve != NULL, "tillInitColdCurve frees the table");
+
+    tillFinalizeMaterial(c);
+    tillFinalizeMaterial(t);
+    rngState = rngSaved;
+}
+
+/*
+ * One rule for the unit pair in EOSlib and every sublibrary: both units > 0 (and finite) are code
+ * units, both <= 0 is cgs, anything else is fatal. (Before, exactly one unit <= 0 made igeos divide
+ * by zero, Tillotson assert, and ANEOS, SCvH and REOS3 silently use cgs.)
+ */
+static void testUnitPair(int iMat)
+{
+    MatName = "units";
+    static const struct { double dKpcUnit, dMsolUnit; int bRejected; const char *what; } cases[] = {
+        {2.06701e-13, 4.80438e-08, 0, "both > 0: code units"},
+        {0.0, 0.0, 0, "both 0: cgs"},
+        {-1.0, -1.0, 0, "both < 0: cgs"},
+        {0.0, -1.0, 0, "0 and < 0: cgs"},
+        {2.06701e-13, 0.0, 1, "dMsolUnit = 0 only"},
+        {0.0, 4.80438e-08, 1, "dKpcUnit = 0 only"},
+        {-1.0, 4.80438e-08, 1, "dKpcUnit < 0 only"},
+        {2.06701e-13, NAN, 1, "dMsolUnit NaN"},
+        {INFINITY, 4.80438e-08, 1, "dKpcUnit inf"},
+        {NAN, NAN, 1, "both NaN"},
+    };
+    for (size_t k = 0; k < sizeof(cases) / sizeof(cases[0]); k++) {
+        int r = initUnitsRejected(iMat, cases[k].dKpcUnit, cases[k].dMsolUnit);
+        CHECK(r == cases[k].bRejected, "%s: %s (got %d)", cases[k].what, cases[k].bRejected ? "must be fatal" : "must be accepted", r);
+    }
+
+}
+
+/*
+ * Build a grid (tillInitColdCurve if bColdOnly, else tillInitLookup) in a child process. Returns 0 if
+ * accepted, 1 if the program was stopped (assert(0), or exit(1) with -DNDEBUG), -1 otherwise.
+ */
+static int gridRejected(int iMat, int bColdOnly, int nRho, int nV, double fRhoMin, double fRhoMax, double fVMin, double fVMax)
+{
+    fflush(NULL);
+    pid_t pid = fork();
+    if (pid == 0) {
+        if (freopen("/dev/null", "w", stderr) == NULL) _exit(3);   /* the expected diagnostic */
+        TILLMATERIAL *m = tillInitMaterial(iMat, 0.0, 0.0);
+        const double rhomin = fRhoMin*m->rho0, rhomax = fRhoMax*m->rho0, vmin = fVMin*m->cv, vmax = fVMax*m->cv;
+        if (bColdOnly) tillInitColdCurve(m, nRho, nV, rhomin, rhomax, vmin, vmax);
+        else tillInitLookup(m, nRho, nV, rhomin, rhomax, vmin, vmax);
+        tillFinalizeMaterial(m);
+        _exit(0);
+    }
+    int status = 0;
+    if (pid < 0 || waitpid(pid, &status, 0) != pid) return -1;
+    if (WIFEXITED(status) && WEXITSTATUS(status) == 0) return 0;
+    if ((WIFSIGNALED(status) && WTERMSIG(status) == SIGABRT) || (WIFEXITED(status) && WEXITSTATUS(status) == 1)) return 1;
+    return -1;
+}
+
+/*
+ * The grid of tillInitLookup and tillInitColdCurve is checked before it is built, fatal also with
+ * -DNDEBUG (up to 4.0.0 only asserts: nTableV = 1 divided by zero in dv, nTableV = 2 was caught only
+ * by the spline, a bad rho0 index went through). Densities in units of rho0, energies in units of cv
+ * (i.e. temperatures).
+ */
+static void testGridRejected(int iMat)
+{
+    MatName = "grid";
+    static const struct { int nRho, nV; double fRhoMin, fRhoMax, fVMin, fVMax; int bRejected; const char *what; } cases[] = {
+        {100, 50, 1e-4, 100.0, 1.0, 1e7, 0, "a small standard-like grid"},
+        {3, 3, 0.5, 2.0, 1.0, 1e4, 0, "the smallest grid (3 x 3, rho0 on node 1)"},
+        {100, 2, 1e-4, 100.0, 1.0, 1e7, 1, "nTableV = 2 (no spline)"},
+        {100, 1, 1e-4, 100.0, 1.0, 1e7, 1, "nTableV = 1 (dv = x/0)"},
+        {100, 0, 1e-4, 100.0, 1.0, 1e7, 1, "nTableV = 0"},
+        {2, 50, 1e-4, 100.0, 1.0, 1e7, 1, "nTableRho = 2"},
+        {-5, 50, 1e-4, 100.0, 1.0, 1e7, 1, "nTableRho < 0"},
+        {100, 50, 0.0, 100.0, 1.0, 1e7, 1, "rhomin = 0"},
+        {100, 50, -1.0, 100.0, 1.0, 1e7, 1, "rhomin < 0"},
+        {100, 50, 2.0, 100.0, 1.0, 1e7, 1, "rhomin > rho0"},
+        {100, 50, 1.0, 100.0, 1.0, 1e7, 1, "rhomin = rho0"},
+        {100, 50, 1e-4, 0.5, 1.0, 1e7, 1, "rhomax < rho0"},
+        {100, 50, 1e-4, 1e-5, 1.0, 1e7, 1, "rhomax < rhomin"},
+        {100, 50, NAN, 100.0, 1.0, 1e7, 1, "rhomin NaN"},
+        {100, 50, 1e-4, INFINITY, 1.0, 1e7, 1, "rhomax inf"},
+        {100, 50, 1e-4, 100.0, 0.0, 1e7, 1, "vmin = 0"},
+        {100, 50, 1e-4, 100.0, -1.0, 1e7, 1, "vmin < 0"},
+        {100, 50, 1e-4, 100.0, 1e7, 1.0, 1, "vmin > vmax"},
+        {100, 50, 1e-4, 100.0, 1.0, NAN, 1, "vmax NaN"},
+        {100, 50, 1e-4, 100.0, 1.0, INFINITY, 1, "vmax inf"},
+        {10, 50, 0.999, 1e6, 1.0, 1e7, 1, "rho0 on node 0 (too close to rhomin)"},
+        /* With nTableRho-1 intervals rho0 reaches the last node only through the roundoff slack of the node index. */
+        {10, 50, 1e-6, 1.0 + 1e-12, 1.0, 1e7, 1, "rho0 on the last node (within roundoff of rhomax)"},
+        {10, 50, 1e-6, 1.001, 1.0, 1e7, 0, "rho0 one per mille below rhomax (rhomax moves up onto the grid)"},
+    };
+    for (int bCold = 0; bCold <= 1; bCold++)
+        for (size_t k = 0; k < sizeof(cases) / sizeof(cases[0]); k++) {
+            int r = gridRejected(iMat, bCold, cases[k].nRho, cases[k].nV, cases[k].fRhoMin, cases[k].fRhoMax, cases[k].fVMin, cases[k].fVMax);
+            CHECK(r == cases[k].bRejected, "%s: %s: %s (got %d)", bCold ? "tillInitColdCurve" : "tillInitLookup", cases[k].what,
+                  cases[k].bRejected ? "must be fatal" : "must be accepted", r);
+        }
 }
 
 static double fcube(TILLMATERIAL *m, double x, const void *ctx) { (void) m; (void) ctx; return x*x*x - 2.0; }
@@ -346,6 +1133,8 @@ int main(int argc, char **argv)
     static char name[256];
 
     testBrent();
+    testUnitPair(GRANITE);
+    testGridRejected(GRANITE);
 
     for (m = 0; m < (argc > 1 ? argc-1 : nMat); m++) {
         int iMat = (argc > 1) ? atoi(argv[m+1]) : allMat[m];
@@ -357,22 +1146,56 @@ int main(int argc, char **argv)
         fprintf(stdout, "Material %d (%s)\n", iMat, name);
 
         testUnits(iMat);
+        testUnitInvariance(iMat);
+        testColdCurveExpanded(iMat);
         testPressure(material);
+        testNegativeU(material);
+        testTinyDensity(material);
+        testColdCurveOnly(iMat);
 
         /* The standard table, as EOSlib initializes it. */
         tillInitLookupDefault(material);
         CHECK(material->nTableRho == TILL_TABLE_NRHO && material->nTableV == TILL_TABLE_NV, "standard table sizes");
         CHECK(material->vmin == material->cv*TILL_TABLE_TMIN && material->vmax == material->cv*TILL_TABLE_TMAX, "standard table v range");
         CHECK(material->rhomin == TILL_TABLE_RHOMIN_FAC*material->rho0, "standard table rhomin");
+        /*
+         * The table reaches the requested rhomax (it ended at 98.86 rho0 up to 4.0.0, the grid counted
+         * nTableRho intervals instead of nTableRho-1) and overshoots it by less than
+         * log(rhomax/rhomin)/log(rho0/rhomin) = 1.5 intervals. At 100 rho0 the cold-curve lookups work.
+         */
+        CHECK(material->rhomax >= TILL_TABLE_RHOMAX_FAC*material->rho0*(1.0 - 1e-9), "standard table rhomax= %g rho0, below %g rho0",
+              material->rhomax/material->rho0, TILL_TABLE_RHOMAX_FAC);
+        CHECK(material->rhomax <= TILL_TABLE_RHOMAX_FAC*material->rho0*exp(1.5*material->dlogrho), "standard table rhomax= %g rho0 overshoots",
+              material->rhomax/material->rho0);
+        {
+            const long nf = material->nLookupFail;
+            const double rho = TILL_TABLE_RHOMAX_FAC*material->rho0, u = tillURhoTemp(material, rho, 1000.0);
+            CHECK(!tillFailed(tillColdULookup(material, rho)) && !tillFailed(u), "cold curve and u(rho, T) at 100 rho0");
+            CHECK_REL(tillTempRhoU(material, rho, u), 1000.0, 1e-10, "T(rho, u) at 100 rho0");
+            CHECK(tillIsInTable(material, rho, u) == TILL_LOOKUP_SUCCESS, "(100 rho0, u(1000 K)) in the table");
+            CHECK(!tillFailed(tillRhoPTemp(material, tillPressure(material, rho, u), 1000.0)), "rho(P, T) at 100 rho0");
+            CHECK(material->nLookupFail == nf, "lookups at 100 rho0 counted (%ld)", material->nLookupFail - nf);
+        }
         testTable(material);
+        testTableNodes(material);
         testIsentropes(material);
         testTemperature(material);
+        testUofRhoTStatus(material);
         testSentinels(material);
+        testInvalidDensity(material);
+        testCalcUOutside(material);
+        /* Grid constants derived by tillInitLookup for the lookups. */
+        CHECK(material->logrhomin == log(material->rhomin), "logrhomin");
+        CHECK(material->invdlogrho == 1.0/material->dlogrho && material->invdv == 1.0/material->dv, "invdlogrho, invdv");
 
         /* Re-initialization with other parameters works (no leak, no stale state). */
         tillInitLookup(material, 300, 200, 1e-3, 50.0, 1e-4, 100.0);
         CHECK(material->nTableRho == 300 && material->nTableV == 200, "re-init sizes");
-        CHECK(material->rhomax >= 50.0*exp(-material->dlogrho) && material->rhomax <= 50.0*exp(material->dlogrho), "re-init rhomax= %g adjusted to the grid", material->rhomax);
+        /* At or above the requested 50, by fewer than log(50/1e-3)/log(rho0/1e-3) intervals (see tillInitGrid). */
+        CHECK(material->rhomax >= 50.0*(1.0 - 1e-9) &&
+              material->rhomax <= 50.0*exp(material->dlogrho*log(50.0/1e-3)/log(material->rho0/1e-3)),
+              "re-init rhomax= %g adjusted to the grid", material->rhomax);
+        CHECK(material->logrhomin == log(material->rhomin) && material->invdlogrho == 1.0/material->dlogrho && material->invdv == 1.0/material->dv, "re-init grid constants");
         testTable(material);
 
         tillFinalizeMaterial(material);

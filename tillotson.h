@@ -1,9 +1,10 @@
-#include <stdio.h>
 /*
  * The header file for the Tillotson EOS library.
  */
 #ifndef TILLOTSON_HINCLUDED
 #define TILLOTSON_HINCLUDED
+
+#include <stdio.h>   /* FILE in tillPrintMat */
 
 /*
  * Version history
@@ -25,14 +26,113 @@
  *          status codes TILL_SUCCESS 0 / TILL_FAIL -99 / TILL_LOOKUP_OUTSIDE_* -1..-4;
  *          3-argument TILL_INDEX; ideal gas removed (igeos); tillinitlookup.h, tillsplint.h and
  *          interpol/brent.c removed; test suite testtillotson.c.
+ *          tillIsInTable returns TILL_FAIL for a non-finite u (NaN was reported as
+ *          OUTSIDE_VMAX, which EOSIsUsable accepts for Tillotson); tillLookupU,
+ *          tillFindEntropyCurve and tillIsBelowColdCurve reject a non-finite u as well.
+ *          tillLookupU clamps a state below the cold curve to u_cold(rho2) (counted in
+ *          nLookupFail) instead of returning TILL_FAIL_VALUE, like ANEOSisentropicU.
+ *          No tolerance depends on the unit system: the energy tolerance of tillIsInTable and
+ *          tillFindEntropyCurve is TILL_EDGE_TOL*(|u| + vmin) (was |u| + 1 in code units), the
+ *          lower bracket of tillRhoPTemp is TILL_RHOPT_RHOMIN_FAC*rho0 (was 1e-10 code units), and
+ *          the index of rho0 in the rho grid no longer depends on roundoff in the unit conversion
+ *          (it was 799 instead of 800 in some unit systems, which changed the whole grid).
+ *          Documented why the cold curve is zero below rho0 in both pressure modes
+ *          (TILL_PRESS_MELOSH included), and that the total pressure is cut at zero in both.
+ *          tillCalcU rejects a non-positive or non-finite rho1, rho2 and a non-finite u1 with
+ *          TILL_FAIL_VALUE (a NaN or infinite rho was undefined behaviour in the step count) and
+ *          clamps u >= 0 after every step like the table integration; tillLookupU rejects an
+ *          invalid rho2 and counts its direct-integration fallback in nLookupFail.
+ *          The table keeps u1 = P/rho at node 0 (rhomin) instead of copying u1 from node 1, so the
+ *          first Hermite interval in log(rho) is consistent with the data.
+ *          tillPressureCore evaluates w0 = u/(u0 eta^2) + 1 with max(u, 0), so a negative u no
+ *          longer divides by zero at u = -u0 eta^2 (the pressure of a state with u < 0, below
+ *          the cold curve, uses Gamma = a + b instead of a growing b/w0). dGasConst is k_B/m_H in
+ *          cgs as well (was k_B). tillColdULookup fails for rho <= 0 (returned 0, the expanded
+ *          cold curve), so u(rho, T) fails and T(rho, u) falls back to 0 there.
+ *          Documentation: the unused V_EPS and the MIN/MAX macros are gone from this public
+ *          header (MAX was used once, now fmax), <stdio.h> is included inside the include
+ *          guard, the spline and index routines say s where they said v, and
+ *          tillPrintMat prints nLookupFail.
+ *          tillTempRhoU returns T = 0 (counted) below the cold curve and for a non-finite u
+ *          instead of the negative (u - u_cold)/cv; within tillUTol of the cold curve T = 0,
+ *          not counted. An inconsistent unit pair (exactly one of dKpcUnit, dMsolUnit <= 0, NaN,
+ *          inf) is fatal with a message also under -DNDEBUG (it was only an assert).
+ *          Hot path: tillInitLookup stores logrhomin, 1/dlogrho and 1/dv, so the index and
+ *          spline routines need no log(rhomin) and no division per lookup; the Newton iteration of
+ *          tillFindEntropyCurve reuses the location of rho (one log() per call, not one per
+ *          iteration); tillPressureCore skips the derivatives when only P is wanted (P is
+ *          bit-identical) and evaluates exp(-beta z^2) once.
+ *          Isentrope integration: one adaptive RK4 integrator (step doubling, local tolerance
+ *          TILL_ODE_RTOL = 1e-11 relative to |u| + vmin) for the table and for tillCalcU, instead
+ *          of TILL_ISENTROPE_NSUB = 10 fixed substeps per table interval (table) and fixed steps of
+ *          dlogrho/100 (tillCalcU, ~1e5 steps for a long expansion). The table nodes are ~1e4x
+ *          more accurate (1e-8 instead of 1e-4 relative) and the table builds in 0.6 s instead
+ *          of 2 s per material; TILL_ISENTROPE_NSUB is gone. The remaining lookup error is the
+ *          interpolation across the kinks of P/rho (see the standard table below).
+ *          tillInitColdCurve(Default) builds only the grid and the two edge isentropes of the
+ *          table (cold curve and top isentrope, 77 kB and two integrations instead of 46 MB and
+ *          ~0.6 s), which is all T(rho, u), u(rho, T), rho(P, T), the cold curve and tillIsInTable
+ *          need; results are bit-identical to the full table. The isentropic lookups need the full
+ *          table (tillInitLookup) and are fatal without it (tillRequireLookup). New members
+ *          ColdCurve and TopCurve of TILLMATERIAL. EOSlib builds the edge curves in EOSinitMaterial
+ *          and the table in EOSinitIsentropicLookup (it built the table in EOSinitMaterial: with one
+ *          instance per thread 6 GB and over a minute of startup for 64 threads x 2 materials).
+ *          tillURhoTemp returns TILL_FAIL_VALUE (counted) for T < 0 or a non-finite T, like u(rho, T)
+ *          of the other libraries below T_min; it returned u_cold + cv T, a state below the cold
+ *          curve, which P(rho, T) in EOSlib then evaluated. tillRhoPTemp fails for such a T at once,
+ *          counted once (the bracket evaluations would have counted it three times).
+ *          tillIsBelowColdCurve fails exactly where tillColdULookup does (rho > rhomax, rho <= 0,
+ *          NaN); below rhomin, where the cold curve is zero, it returns u < 0. It failed for every
+ *          rho below rhomin, while tillColdULookup and EOSisbelowColdCurve gave a valid answer there.
+ *          tillIsBelowColdCurve uses the roundoff tolerance of tillIsInTable and tillTempRhoU,
+ *          u < u_cold - tillUTol(u): a state within roundoff below the cold curve was "below" there
+ *          while tillIsInTable reported it inside and tillTempRhoU inverted it without a fallback.
+ *          The failure contract says what P, c and the derivatives do below the cold curve and
+ *          outside the table: they are evaluated at the given (rho, u), uncounted (it said only
+ *          that they never fail). No change in behaviour.
+ *          P, c and the derivatives (tillPressureCore, tilldudrho, tilldudlogrho) return
+ *          TILL_FAIL_VALUE, counted once, for an invalid density (rho <= 0, NaN, inf); they returned
+ *          NaN or inf, uncounted. A NaN u still gives NaN in all of them (tilldudrho passes on only
+ *          the sentinel of an invalid rho; the sound speed was the floor, see below).
+ *          tillPrintMat prints the dimensional parameters (A, B, rho0, u0, us, us2, cv) and the table
+ *          range in cgs with the unit, and the unit pair, like the tabulated libraries (it printed
+ *          them in code units without a label).
+ *          tillInitLookup and tillInitColdCurve check the grid before changing anything and stop the
+ *          program with a message (also with -DNDEBUG) for non-finite bounds, rhomin <= 0, rhomin >=
+ *          rho0 or rho0 >= rhomax, vmin <= 0 or vmin >= vmax, nTableRho < 3 or nTableV < 3, and rho0
+ *          not on an interior node; they were asserts, so a release build went on with a bad grid
+ *          (nTableV = 1 divided by zero in dv, nTableV = 2 was caught only by tillInitSplineField).
+ *          A failed allocation of the table or of an isentrope is fatal with a message, too.
+ *          The rho grid counts nTableRho-1 intervals (it divided by nTableRho), so the last node is
+ *          at or above the requested rhomax (by half an interval for the standard table, which ends at
+ *          100.58 rho0; it ended at 98.86 rho0, short of the documented 100 rho0, and u(rho, T),
+ *          P(rho, T), the cold curve and T(rho, u) failed or fell back between the two). rho0 is on
+ *          node 799 instead of 800; dlogrho is 0.13% larger, so every table value between the nodes
+ *          changes at the level of the interpolation error.
+ *          tillPressureCore is finite down to the smallest double: products of 0 and inf gave NaN in
+ *          P for u <= 0 below rho ~ 1e-162 rho0 (0/0 in w0), in dP/drho for 0 < u < us below
+ *          ~1e-155 rho0 (w0 = inf) and for intermediate and hot states below ~4e-103 rho0 (an
+ *          underflowed exponential times a factor ~ 1/eta^3), where c silently fell to its floor
+ *          sqrt(A/rho0) (fmax drops a NaN; c of hot granite was 2.6 instead of 6.4 in code units);
+ *          P/rho^2 in c overflowed below rho ~ 1e-154 in code units. Below eta ~ 1e-14 the cold term
+ *          of the materials with A == B (granite, basalt, ice, dunite, forsterite) cancels to exactly
+ *          0 and escaped the cut, so dP/drho was (A - 2B)/rho0 + a u < 0 at P = 0; Pc == 0 below rho0
+ *          is cut now. P and P_NP are bit-identical everywhere; the derivatives and c wherever they
+ *          were finite, except for that cut (eta < 1.2e-14, A == B only). A NaN u gives a NaN c (it
+ *          gave the floor), as in P and the derivatives.
+ *   4.0.1  Documentation and test only, no change in code: the comments of tillIsInTable say how
+ *          EOSlib 1.3.0 reports a non-finite u (EOS_OUTSIDE_VMIN for NaN and -inf, EOS_OUTSIDE_VMAX
+ *          for +inf, it was EOS_FAIL). testtillotson checks that every u(rho, T) is a state
+ *          EOSIsUsable accepts (EOSlib 1.3.0 relies on it in EOSSolveBC).
  */
-#define TILL_VERSION_TEXT    "4.0.0"
+#define TILL_VERSION_TEXT    "4.0.1"
 #define TILL_VERSION_MAJOR   4
 #define TILL_VERSION_MINOR   0
-#define TILL_VERSION_PATCH   0
+#define TILL_VERSION_PATCH   1
 
 #include <stdlib.h>
 #include <assert.h>
+#include <math.h>
 
 /*
  * Status codes (EOSlib convention: 0 is success, -99 a generic failure; the values -1..-4 are
@@ -46,11 +146,26 @@
  *
  * A failed evaluation never exits. Every function returning a double returns exactly
  * TILL_FAIL_VALUE (-1e50), in any unit system, when it cannot deliver a value (rho outside the
- * lookup table for the cold curve and u(rho, T); (rho, u) below the cold curve or above the table
- * for the isentrope lookups; rho(P, T) not bracketed); status functions return TILL_FAIL. The one
- * exception is tillTempRhoU, which never fails: outside the table it returns T = 0, the cold
- * curve, which is the "lowest tabulated temperature" of this EOS (same contract as ANEOSTofRhoU).
- * The pressure, sound speed and their derivatives are analytic and never fail.
+ * lookup table for the cold curve and u(rho, T); T < 0 or not finite for u(rho, T) and rho(P, T),
+ * below the lowest temperature T = 0 of this EOS; (rho, u) below the cold curve or above the table
+ * for tillFindEntropyCurve; rho(P, T) not bracketed); status functions return TILL_FAIL. Two
+ * functions fall back instead: tillTempRhoU never fails, outside the table in rho, below the cold
+ * curve and for a non-finite u it returns T = 0, the cold curve, which is the "lowest tabulated
+ * temperature" of this EOS (same contract as ANEOSTofRhoU), and it is never negative; tillLookupU clamps a state below the cold curve to u_cold(rho2), the end point of
+ * the coldest isentrope (same convention as ANEOSisentropicU), and integrates the ODE directly
+ * (tillCalcU) where the start or end point is outside the table. All of these count the fallback.
+ * tillCalcU itself counts only its failures (invalid rho1, rho2 or u1, non-finite result).
+ * The pressure, sound speed and their derivatives (tillPressure, tillPressureSound, tillSoundSpeed,
+ * tilldPdrho, tilldPdu, tilldudrho and the *NP variants) are analytic in (rho, u) and need no table:
+ * they are evaluated at the given (rho, u) for every valid density, also below the cold curve (a
+ * u < 0 enters the Grueneisen term as Gamma = a + b, see tillPressureCore) and outside [rhomin,
+ * rhomax]. There they never fail, never fall back and count nothing. An invalid density (rho <= 0,
+ * NaN, inf) fails like a density outside a table: TILL_FAIL_VALUE for P and every output (c, the
+ * derivatives), counted once. This is the one place where Tillotson differs
+ * from the tabulated libraries, which evaluate P and c of a state below the cold curve at
+ * (rho, T_min): here P(rho, u) below the cold curve is not P(rho, T(rho, u) = 0). EOSlib documents
+ * it as the Tillotson exception of its failure contract; EOSIsUsable tells the caller whether P,
+ * c and T of a state belong together.
  *
  * Every failure is counted in material->nLookupFail and reported on stderr only when the library
  * is compiled with -DEOSLIB_VERBOSE (TILL_WARN). Test a returned value with tillFailed(x) (true
@@ -84,7 +199,20 @@ static inline int tillFailed(double x) {
 #define TILL_EDGE_TOL 1e-10
 #endif
 
-/* Return codes of tillIsInTable (EOSlib maps them one by one). */
+/*
+ * Lower end of the density bracket of tillRhoPTemp in units of rho0 (the raw pressure diverges
+ * for rho -> 0 at u = 0). In units of rho0, so the inversion covers the same physical range in
+ * every unit system.
+ */
+#ifndef TILL_RHOPT_RHOMIN_FAC
+#define TILL_RHOPT_RHOMIN_FAC 1e-10
+#endif
+
+/*
+ * Return codes of tillIsInTable (EOSlib maps them one by one). Besides these, tillIsInTable
+ * returns TILL_FAIL for a non-finite u (no state at all; EOSlib reports it as EOS_OUTSIDE_VMIN for
+ * NaN and -inf and EOS_OUTSIDE_VMAX for +inf, like the other libraries, and EOSIsUsable rejects it).
+ */
 enum till_error_lookup
 {
     TILL_LOOKUP_SUCCESS        =  0,
@@ -124,17 +252,6 @@ enum till_error_lookup
 /* The look up table is a 1D array with Lookup(i, j) = Lookup[i*nTableV + j], i in rho, j in s. */
 #define TILL_INDEX(m, i, j) (((i)*(m)->nTableV) + (j))
 
-#ifndef MAX
-#define MAX(A,B) ((A) > (B) ? (A) : (B))
-#endif
-
-#ifndef MIN
-#define MIN(A,B) ((A) > (B) ? (B) : (A))
-#endif
-
-/* Define eps so that v <= v_max-eps. */
-#define V_EPS 1e-8
-
 /*
  * The isentropes are labelled by v = u(rho0). The table is uniform in the internal variable s,
  *
@@ -149,8 +266,19 @@ enum till_error_lookup
  * Standard table (tillInitLookupDefault, used by EOSlib): since u(rho0, T) = cv*T, the v range
  * is given as temperatures at rho0, vmin = cv*TILL_TABLE_TMIN and vmax = cv*TILL_TABLE_TMAX,
  * and the density range in units of rho0. The table is then the same physical table for every
- * material and unit system: 1200/ln(1e7) = 74 rows per decade in T and 1200/ln(1e6) = 87 per
- * decade in rho; 1200 x 1200 entries of 32 bytes = 46 MB per material. Override with -D.
+ * material and unit system: 1199/log10(1e7) = 171 rows per decade in T (above T_min) and
+ * 799/log10(1e4) = 200 per decade in rho; 1200 x 1200 entries of 32 bytes = 46 MB per material.
+ * The density axis runs from TILL_TABLE_RHOMIN_FAC rho0 to the first node at or above
+ * TILL_TABLE_RHOMAX_FAC rho0 (100.58 rho0), because rho0 must be a node. Override with -D.
+ *
+ * Accuracy: the nodes are integrated adaptively (TILL_ODE_RTOL in tillinitlookup.c) and agree with
+ * a converged ODE solution to ~1e-8 relative. The lookup error (tillLookupU against the ODE) is set
+ * by the interpolation, not by the integration: u(logrho) has a kink where P/rho has one inside an
+ * interval, i.e. where the cold term is cut at P = 0 (expanded states in tension, e.g. just below
+ * rho0 at low T) and, with TILL_PRESS_MELOSH, where P jumps at 0.8 rho0. There the cubic Hermite
+ * interpolation in logrho is only first/second order: the maximum lookup error is ~1e-4 (forsterite,
+ * granite 3e-5) in the default mode and ~1e-3 at the Melosh jump; the mean error is ~1e-7. Twice as
+ * many rho rows (TILL_TABLE_NRHO 2400, 92 MB) only reduce the maximum by ~1.6x.
  */
 #ifndef TILL_TABLE_NRHO
 #define TILL_TABLE_NRHO 1200
@@ -201,7 +329,7 @@ typedef struct tillMaterial
 	double dKpcUnit;
 	double dMsolUnit;
 	
-	double dGasConst;
+	double dGasConst;      /* k_B/m_H in code units (specific energy per K), as in igeos */
 	double dErgPerGmUnit;
 	double dGmPerCcUnit;
 	double dSecUnit;
@@ -226,13 +354,38 @@ typedef struct tillMaterial
 	/* Grid spacing of the lookup table */
 	double dlogrho;
 	double dv;		/* step in s (not in v!) */
+	/* Derived from the grid by tillInitLookup, so that a lookup needs no log() or division for it */
+	double logrhomin;	/* log(rhomin) */
+	double invdlogrho;	/* 1/dlogrho */
+	double invdv;		/* 1/dv */
 
 	/* The lookup table u(rho, s) along the isentropes, NULL until tillInitLookup */
 	TILL_LOOKUP_ENTRY *Lookup;
+	/*
+	 * The two edge isentropes of the table, nTableRho entries each: row j = 0 (the cold curve,
+	 * v = 0) and row j = nTableV-1 (the top isentrope, v = vmax). They are all that T(rho, u),
+	 * u(rho, T), rho(P, T), the cold curve and tillIsInTable need, so tillInitColdCurve builds only
+	 * these (77 kB, two isentrope integrations, instead of the 46 MB table) and the full table is
+	 * built on demand by tillInitLookup. Integrated by the same tillSolveIsentropeLogRho call as the
+	 * table rows, so they are bit-identical to rows 0 and nTableV-1 of the table. NULL before.
+	 */
+	TILL_LOOKUP_ENTRY *ColdCurve;
+	TILL_LOOKUP_ENTRY *TopCurve;
 
 	/* Diagnostics: number of failed evaluations since init (see TILL_FAIL_RETURN). */
 	long nLookupFail;
 } TILLMATERIAL;
+
+/*
+ * Roundoff tolerance on an internal energy u (code units) at the table edges and in the isentrope
+ * root finder: relative to |u|, with the floor vmin = cv*TILL_TABLE_TMIN (the energy scale of the
+ * table, 1 K at rho0 for the standard table) instead of an absolute constant, so that the
+ * tolerance is the same physical energy in every unit system. Needs the table (vmin > 0).
+ */
+static inline double tillUTol(const TILLMATERIAL *material, double u)
+{
+    return TILL_EDGE_TOL*(fabs(u) + material->vmin);
+}
 
 /*
  * tillotson.c
@@ -245,7 +398,11 @@ const char *tillLookupStatusString(int iError);
 void tillErrorString(int iError, char *ErrorString);   /* copies tillLookupStatusString into the buffer */
 void tillPrintMat(TILLMATERIAL *material, FILE *fp);
 
-/* Pressure, sound speed and derivatives of the cut EOS (negative pressures set to zero). */
+/*
+ * Pressure, sound speed and derivatives of the cut EOS (negative pressures set to zero). All of
+ * these, the *NP variants included, return TILL_FAIL_VALUE (and set every output to it), counted
+ * once, for rho <= 0, NaN or inf.
+ */
 double tillPressureSound(TILLMATERIAL *material, double rho, double u, double *pcSound);
 double tillPressure(TILLMATERIAL *material, double rho, double u);
 double tillSoundSpeed(TILLMATERIAL *material, double rho, double u);
@@ -257,10 +414,10 @@ double tillPressureNP(TILLMATERIAL *material, double rho, double u);
 double tilldudrho(TILLMATERIAL *material, double rho, double u);
 double tilldudlogrho(TILLMATERIAL *material, double logrho, double u);
 
-/* Temperature: u(rho, T) = u_cold(rho) + cv*T. These need the lookup table (cold curve). */
+/* Temperature: u(rho, T) = u_cold(rho) + cv*T. These need the cold curve (tillInitColdCurve or tillInitLookup). tillTempRhoU never fails and is >= 0; tillURhoTemp fails for T < 0 or a non-finite T. */
 double tillTempRhoU(TILLMATERIAL *material, double rho, double u);
 double tillURhoTemp(TILLMATERIAL *material, double rho, double T);
-/* rho(P, T) by root finding; TILL_FAIL_VALUE if P <= 0 or not bracketed. */
+/* rho(P, T) by root finding; TILL_FAIL_VALUE if P <= 0, T < 0 or not finite, or not bracketed. */
 double tillRhoPTemp(TILLMATERIAL *material, double P, double T);
 
 int tillPhase(TILLMATERIAL *material, double rho, double u);
@@ -278,17 +435,41 @@ int tillBrent(double (*f)(TILLMATERIAL *, double, const void *), TILLMATERIAL *m
  * tillinitlookup.c
  */
 /*
- * Build the isentrope table: nTableRho log-spaced densities in [rhomin, rhomax] (rhomax is moved
- * onto the grid so that rho0 is a grid point), nTableV isentropes with v = u(rho0) from 0 to
- * vmax, spaced in s = log(1 + v/vmin). All in code units. Replaces an existing table.
+ * Build the isentrope table: nTableRho log-spaced densities from rhomin to rhomax (rhomax is moved
+ * up onto the grid so that rho0 is a grid point; see tillInitGrid), nTableV isentropes with v = u(rho0) from 0 to
+ * vmax, spaced in s = log(1 + v/vmin). All in code units. Replaces an existing table and builds
+ * the edge curves (see tillInitColdCurve) as well. 46 MB and ~0.6 s for the standard table.
+ * Requires finite bounds with 0 < rhomin < rho0 < rhomax and 0 < vmin < vmax, nTableRho >= 3,
+ * nTableV >= 3 (the cubic splines in s) and rho0 on an interior node of the rho axis; anything
+ * else is fatal (message, assert(0), exit(1)), also with -DNDEBUG, before the material is changed.
  */
 void tillInitLookup(TILLMATERIAL *material, int nTableRho, int nTableV, double rhomin, double rhomax, double vmin, double vmax);
 /* The standard table TILL_TABLE_* (see above) for this material. */
 void tillInitLookupDefault(TILLMATERIAL *material);
+/*
+ * The grid of the table and its two edge isentropes only, the cold curve (row 0) and the top
+ * isentrope (row nTableV-1), with the same arguments as tillInitLookup and the same grid: enough
+ * for T(rho, u), u(rho, T), rho(P, T), tillColdULookup, tillIsInTable and tillIsBelowColdCurve,
+ * bit-identical to the full table. The isentropic lookups (tillLookupU, tillFindEntropyCurve,
+ * tillFindUonIsentrope, tillCubicInt*) need the full table and stop the program (fatal, with a
+ * message) until tillInitLookup is called. Frees an existing full table. The grid requirements
+ * (fatal otherwise) are those of tillInitLookup.
+ */
+void tillInitColdCurve(TILLMATERIAL *material, int nTableRho, int nTableV, double rhomin, double rhomax, double vmin, double vmax);
+/* The edge curves of the standard table TILL_TABLE_*. */
+void tillInitColdCurveDefault(TILLMATERIAL *material);
+/* Fatal (message, assert(0), exit(1)) if the full isentrope table of tillInitLookup is not built; chFunc names the caller. */
+void tillRequireLookup(const TILLMATERIAL *material, const char *chFunc);
 TILL_LOOKUP_ENTRY *tillSolveIsentropeLogRho(TILLMATERIAL *material, double v);
+/* RK4 integration of du/dlogrho = P/rho from (rho1, u1) to rho2, u >= 0; TILL_FAIL_VALUE for invalid input. */
 double tillCalcU(TILLMATERIAL *material,double rho1,double u1,double rho2);
+/* TILL_LOOKUP_SUCCESS, a TILL_LOOKUP_OUTSIDE_* code, or TILL_FAIL if u is not finite. */
 int tillIsInTable(TILLMATERIAL *material,double rho,double u);
-/* 1 if (rho, u) is below the cold curve, 0 if not, TILL_FAIL if rho is outside the table. */
+/*
+ * 1 if (rho, u) is below the cold curve, u < u_cold(rho) - tillUTol(u) (the tolerance of tillIsInTable
+ * and tillTempRhoU), 0 if not, TILL_FAIL where tillColdULookup fails (rho > rhomax, rho <= 0, NaN) or
+ * u is not finite; below rhomin the cold curve is 0.
+ */
 int tillIsBelowColdCurve(TILLMATERIAL *material,double rho,double u);
 
 /*
@@ -308,14 +489,15 @@ double tillCubicIntGrid(TILLMATERIAL *material, int i, double e, int j);
 void tillLocateRho(TILLMATERIAL *material, double rho, int *pi, double *pe);
 
 double tillFindUonIsentrope(TILLMATERIAL *material,double s,double rho);
-/* Returns the table variable s of the isentrope through (rho, u), or TILL_FAIL_VALUE. */
+/* Returns the table variable s of the isentrope through (rho, u), or TILL_FAIL_VALUE (also for a non-finite u). */
 double tillFindEntropyCurve(TILLMATERIAL *material,double rho,double u,int iOrder);
-/* Returns u2 on the isentrope through (rho1, u1) at rho2, or TILL_FAIL_VALUE. */
+/* Returns u2 on the isentrope through (rho1, u1) at rho2; u_cold(rho2) if (rho1, u1) is below the cold curve, TILL_FAIL_VALUE for a non-finite u1. */
 double tillLookupU(TILLMATERIAL *material,double rho1,double u1,double rho2,int iOrder);
-/* u_cold(rho) = u(rho, s=0), or TILL_FAIL_VALUE if rho is outside the table. */
+/* u_cold(rho) = u(rho, s=0); 0 for 0 < rho < rho0 (also below rhomin), TILL_FAIL_VALUE for rho > rhomax, rho <= 0 or NaN. */
 double tillColdULookup(TILLMATERIAL *material,double rho);
 
 int tillLookupIndexLogRho(TILLMATERIAL *material, double logrho);
+/* Index j with s_j <= s < s_j+1 (clamped to [0, nTableV-2]); the argument is s, not v (historical name). */
 int tillLookupIndexV(TILLMATERIAL *material, double s);
 
 double tillLookupRho(TILLMATERIAL *material, int i);
