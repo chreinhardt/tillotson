@@ -16,6 +16,8 @@
  *
  * tillRhoPTemp: invert P(rho, T) for rho.
  *
+ * tillReadStrengthParameters, tillReadMeltCurve: optional material strength (see tillotson.h).
+ *
  * tillFinalizeMaterial: free memory.
  */
 #include <stdlib.h>
@@ -23,8 +25,12 @@
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
+#include <ctype.h>   /* isspace, tolower in the strength readers */
 #include <float.h>   /* DBL_MIN in tillPressureCore */
 #include "tillotson.h"
+
+/* Initialisation errors (defective strength files): fatal, also with -DNDEBUG. */
+#define TILL_INIT_FATAL(...) do { fprintf(stderr, __VA_ARGS__); assert(0); exit(1); } while (0)
 
 /*
  * Compile with -DTILL_PRESS_MELOSH to cut the cold term for rho/rho0 < 0.8 (Melosh 1989) instead
@@ -41,8 +47,25 @@
  * Convert quantities to code units
  * The memory for the look up table is allocated in tillInitLookup() (the cold curve and the top
  * isentrope alone in tillInitColdCurve())
+ * Read the optional strength files <strengthBase>_strength and <strengthBase>_tmelt (none if
+ * strengthBase is NULL)
  */
 TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit)
+{
+    char base[256], name[64];
+    TILLMATERIAL tmp;
+    size_t k;
+
+    /* The lower-case material name; an unknown material is rejected by tillInitMaterialFromFile. */
+    tmp.iMaterial = iMaterial;
+    tilliMatString(&tmp, name);
+    for (k = 0; name[k] != '\0'; k++) name[k] = (char) tolower((unsigned char) name[k]);
+    snprintf(base, sizeof(base), "%s%s.in", TILL_STRENGTH_FILE_PREFIX, name);
+
+    return tillInitMaterialFromFile(iMaterial, base, dKpcUnit, dMsolUnit);
+}
+
+TILLMATERIAL *tillInitMaterialFromFile(int iMaterial, const char *strengthBase, double dKpcUnit, double dMsolUnit)
 {
     const double KBOLTZ = 1.38e-16;      /* bolzman constant in cgs */
     const double MHYDR = 1.67e-24;       /* mass of hydrogen atom in grams */
@@ -247,10 +270,32 @@ TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit)
  
     material->cv /= material->dErgPerGmUnit;
 
+    /*
+     * Optional material strength (see "Material strength" in tillotson.h): no strength file means
+     * no yield stress (model -1). Models 1 and 2 soften the strength with T/T_melt, so a strength
+     * file that asks for them without a melt curve is a misconfigured material and stops the run
+     * here, as in ANEOSmaterial. Model 0 (no limiter) needs no melt curve.
+     */
+    material->yieldStrengthModel = -1;
+    material->mud = -1.0;
+    if (strengthBase != NULL) {
+        char file[512];
+
+        snprintf(file, sizeof(file), "%s_tmelt", strengthBase);
+        (void) tillReadMeltCurve(material, file);
+
+        snprintf(file, sizeof(file), "%s_strength", strengthBase);
+        (void) tillReadStrengthParameters(material, file);
+
+        if (material->yieldStrengthModel >= 1 && material->TMelt == NULL)
+            TILL_INIT_FATAL("tillInitMaterial: %s_strength sets yieldStrengthModel = %d, which needs the melt curve "
+                            "%s_tmelt, but that file was not found.\n", strengthBase, material->yieldStrengthModel, strengthBase);
+    }
+
     return material;
 }
 
-/* 
+/*
  * Free the memory.
  */
 void tillFinalizeMaterial(TILLMATERIAL *material)
@@ -259,8 +304,280 @@ void tillFinalizeMaterial(TILLMATERIAL *material)
     if (material->Lookup != NULL) free(material->Lookup);
     if (material->ColdCurve != NULL) free(material->ColdCurve);
     if (material->TopCurve != NULL) free(material->TopCurve);
+    if (material->rhoMelt != NULL) free(material->rhoMelt);
+    if (material->TMelt != NULL) free(material->TMelt);
 
     free(material);
+}
+
+#define TILL_STRENGTH_LINE_MAX 256
+
+/*
+ * Read the strength parameters (text, the format of ANEOSReadStrengthParameters; see "Material
+ * strength" in tillotson.h). Returns 1 if the file does not exist (model -1), 0 on success. A
+ * malformed file or parameters the yield model cannot use are fatal, so that a bad file stops the
+ * run at initialisation and not at the first strength evaluation:
+ *   - every value finite (strtod accepts "nan" and "inf"), one value per line;
+ *   - yieldStrengthModel 0, 1 or 2;
+ *   - Y0 >= 0, YM >= 0, mui >= 0, xi >= 0, Gamma >= 0 (or the sentinel -1);
+ *   - for models 1 and 2: YM > Y0 (otherwise the intact strength has a pole at
+ *     P = (Y0 - YM)/mui), mui > 0, xi > 0 (xi = 0 means no strength at all) and a fixed Gamma > 0;
+ *   - for model 2: mud >= 0.
+ */
+int tillReadStrengthParameters(TILLMATERIAL *material, const char *inputfile)
+{
+    FILE *file;
+    char buffer[TILL_STRENGTH_LINE_MAX];
+    char key[TILL_STRENGTH_LINE_MAX];
+    char value[TILL_STRENGTH_LINE_MAX];
+    int iLine = 0;
+
+    if (material == NULL) TILL_INIT_FATAL("tillReadStrengthParameters: material not initialized.\n");
+
+    if ((file = fopen(inputfile, "r")) == NULL) {
+        material->yieldStrengthModel = -1;   /* no yield strength available */
+        return 1;
+    }
+
+    material->yieldStrengthModel = -1;
+    material->Y0 = -1.0;
+    material->YM = -1.0;
+    material->mui = -1.0;
+    material->mud = -1.0;
+    material->xi = -1.0;
+    material->Gamma = -2.0;
+    material->fixedGamma = 1;
+
+    while (fgets(buffer, sizeof(buffer), file)) {
+        int nUsed = 0, bLineComplete;
+        char *hash, *end = NULL;
+
+        iLine++;
+
+        /*
+         * Reject lines longer than the buffer. A line without '\n' is complete only at the end of
+         * the file; feof is not yet set when the last line exactly fills the buffer, so the next
+         * character decides.
+         */
+        bLineComplete = (strchr(buffer, '\n') != NULL) || feof(file);
+        if (!bLineComplete) {
+            int c = fgetc(file);
+            if (c == EOF) bLineComplete = 1;
+            else ungetc(c, file);
+        }
+        if (!bLineComplete) {
+            fclose(file);
+            TILL_INIT_FATAL("tillReadStrengthParameters: %s line %d exceeds %d characters.\n", inputfile, iLine, TILL_STRENGTH_LINE_MAX - 1);
+        }
+
+        hash = strchr(buffer, '#');
+        if (hash) *hash = '\0';
+
+        if (sscanf(buffer, " %255s", key) != 1) continue;   /* blank line */
+
+        /* key = value; nothing but whitespace may follow the value. */
+        if (sscanf(buffer, " %255[^= \t\r\n] = %255s%n", key, value, &nUsed) != 2) {
+            fclose(file);
+            TILL_INIT_FATAL("tillReadStrengthParameters: cannot parse %s line %d: '%s'\n", inputfile, iLine, buffer);
+        }
+        {
+            const char *rest = buffer + nUsed;
+            while (*rest != '\0' && isspace((unsigned char) *rest)) rest++;
+            if (*rest != '\0') {
+                fclose(file);
+                TILL_INIT_FATAL("tillReadStrengthParameters: %s line %d: unexpected '%s' after the value of '%s'.\n",
+                                inputfile, iLine, rest, key);
+            }
+        }
+
+        if (strcmp(key, "yieldStrengthModel") == 0) {
+            material->yieldStrengthModel = (int) strtol(value, &end, 10);
+        } else {
+            double v = strtod(value, &end);
+            if      (strcmp(key, "Y0")  == 0) material->Y0  = v;
+            else if (strcmp(key, "YM")  == 0) material->YM  = v;
+            else if (strcmp(key, "mui") == 0) material->mui = v;
+            else if (strcmp(key, "mud") == 0) material->mud = v;
+            else if (strcmp(key, "xi")  == 0) material->xi  = v;
+            else if (strcmp(key, "Gamma") == 0) {
+                if (v == -1.0) {
+                    /* Sentinel: shear modulus from the bulk modulus (tillGammaofRhoT). */
+                    material->fixedGamma = 0;
+                    material->Gamma = 0.0;
+                } else {
+                    material->fixedGamma = 1;
+                    material->Gamma = v;
+                }
+            } else {
+                fclose(file);
+                TILL_INIT_FATAL("tillReadStrengthParameters: unknown parameter '%s' in %s line %d\n", key, inputfile, iLine);
+            }
+        }
+
+        if (end == value || *end != '\0') {
+            fclose(file);
+            TILL_INIT_FATAL("tillReadStrengthParameters: invalid value '%s' for '%s' in %s line %d\n", value, key, inputfile, iLine);
+        }
+    }
+
+    fclose(file);
+
+    /* Missing parameters keep their negative initial values. NaN fails every comparison. */
+    if ((material->yieldStrengthModel < 0) || (material->yieldStrengthModel > 2) ||
+        !(material->Y0 >= 0.0) || !(material->YM >= 0.0) || !(material->mui >= 0.0) ||
+        !(material->xi >= 0.0) || !(material->Gamma >= 0.0) ||
+        !isfinite(material->Y0) || !isfinite(material->YM) || !isfinite(material->mui) ||
+        !isfinite(material->xi) || !isfinite(material->Gamma) || !isfinite(material->mud))
+        TILL_INIT_FATAL("tillReadStrengthParameters: missing or invalid parameter in %s "
+                        "(yieldStrengthModel = %d (0, 1 or 2) Y0 = %g YM = %g mui = %g xi = %g Gamma = %g mud = %g)\n",
+                        inputfile, material->yieldStrengthModel, material->Y0, material->YM,
+                        material->mui, material->xi, material->Gamma, material->mud);
+
+    if (material->yieldStrengthModel >= 1) {
+        if (!(material->YM > material->Y0) || !(material->mui > 0.0) || !(material->xi > 0.0) ||
+            (material->fixedGamma && !(material->Gamma > 0.0)))
+            TILL_INIT_FATAL("tillReadStrengthParameters: yieldStrengthModel = %d in %s needs YM > Y0, "
+                            "mui > 0, xi > 0 and a positive fixed Gamma (Y0 = %g YM = %g mui = %g xi = %g Gamma = %g)\n",
+                            material->yieldStrengthModel, inputfile, material->Y0, material->YM,
+                            material->mui, material->xi, material->Gamma);
+        if (material->yieldStrengthModel == 2 && !(material->mud >= 0.0))
+            TILL_INIT_FATAL("tillReadStrengthParameters: yieldStrengthModel = 2 in %s needs mud >= 0 "
+                            "(damaged material), got mud = %g (missing?)\n", inputfile, material->mud);
+    }
+
+    return 0;
+}
+
+/*
+ * Read the melt curve (binary: int n, double rho[n] in g/cc, double T_melt[n] in K; see "Material
+ * strength" in tillotson.h). Returns 1 if the file does not exist, 0 on success. A short read,
+ * trailing data, n < 2, a density that is not positive, finite and strictly increasing, or a melt
+ * temperature that is negative or not finite are fatal. Replaces a curve read before.
+ */
+int tillReadMeltCurve(TILLMATERIAL *material, const char *inputfile)
+{
+    FILE *file;
+    double *rho, *T;
+    int n, i;
+
+    if (material == NULL) TILL_INIT_FATAL("tillReadMeltCurve: material not initialized.\n");
+
+    if ((file = fopen(inputfile, "rb")) == NULL) return 1;   /* optional file */
+
+    if (fread(&n, sizeof(n), 1, file) != 1) {
+        fclose(file);
+        TILL_INIT_FATAL("tillReadMeltCurve: failed to read the number of nodes from %s.\n", inputfile);
+    }
+    if (n < 2 || n > 100000000) {
+        fclose(file);
+        TILL_INIT_FATAL("tillReadMeltCurve: invalid number of nodes n = %d in %s (need n >= 2).\n", n, inputfile);
+    }
+
+    rho = (double *) malloc((size_t) n*sizeof(double));
+    T = (double *) malloc((size_t) n*sizeof(double));
+    if (rho == NULL || T == NULL) TILL_INIT_FATAL("tillReadMeltCurve: could not allocate %d nodes for %s.\n", n, inputfile);
+
+    if (fread(rho, sizeof(double), (size_t) n, file) != (size_t) n || fread(T, sizeof(double), (size_t) n, file) != (size_t) n) {
+        fclose(file);
+        TILL_INIT_FATAL("tillReadMeltCurve: %s is too short for n = %d nodes (int n, double rho[n], double T_melt[n]).\n", inputfile, n);
+    }
+    /* Nothing may follow: catches a file in another format (e.g. an ANEOS _tmelt file, which has no density axis). */
+    if (fgetc(file) != EOF) {
+        fclose(file);
+        TILL_INIT_FATAL("tillReadMeltCurve: %s has data after the %d nodes (int n, double rho[n], double T_melt[n]).\n", inputfile, n);
+    }
+    fclose(file);
+
+    for (i = 0; i < n; i++) {
+        if (!isfinite(rho[i]) || !(rho[i] > 0.0))
+            TILL_INIT_FATAL("tillReadMeltCurve: rho[%d] = %g g/cc in %s is not positive and finite.\n", i, rho[i], inputfile);
+        if (i > 0 && !(rho[i] > rho[i-1]))
+            TILL_INIT_FATAL("tillReadMeltCurve: rho in %s is not strictly increasing at %d (%.15e <= %.15e).\n", inputfile, i, rho[i], rho[i-1]);
+        /* 0 where there is no condensed phase; negative or non-finite is a defect. */
+        if (!isfinite(T[i]) || !(T[i] >= 0.0))
+            TILL_INIT_FATAL("tillReadMeltCurve: T_melt[%d] = %g K in %s is negative or not finite.\n", i, T[i], inputfile);
+    }
+
+    if (material->rhoMelt != NULL) free(material->rhoMelt);
+    if (material->TMelt != NULL) free(material->TMelt);
+    material->nMelt = n;
+    material->rhoMelt = rho;
+    material->TMelt = T;
+
+    return 0;
+}
+
+/*
+ * Return the yield strength model and its parameters in code units (any pointer may be NULL).
+ */
+int tillYieldParameters(TILLMATERIAL *material, double *Y0, double *YM, double *mui, double *mud, double *xi)
+{
+    const double dPUnit = material->dErgPerGmUnit*material->dGmPerCcUnit;   /* code pressure -> erg/cm^3 */
+
+    if (Y0) *Y0 = material->Y0/dPUnit;
+    if (YM) *YM = material->YM/dPUnit;
+    if (mui) *mui = material->mui;
+    if (mud) *mud = material->mud;
+    if (xi) *xi = material->xi;
+    return material->yieldStrengthModel;
+}
+
+/*
+ * The melt temperature T_melt(rho) in K (rho in code units), linear in rho between the nodes and
+ * constant at the end values outside them (conservative for the strength: T_melt increases with
+ * compression, so clamping above the curve underestimates it). Fatal without a melt curve (a
+ * strength model was requested without its melt curve); TILL_FAIL_VALUE (counted) for a rho that
+ * is not positive and finite.
+ */
+double tillTmeltofRho(TILLMATERIAL *material, double rho)
+{
+    const double rho_cgs = rho*material->dGmPerCcUnit;
+    const int n = material->nMelt;
+    int lo = 0, hi = n - 1;
+
+    if (material->TMelt == NULL) {
+        fprintf(stderr, "tillTmeltofRho: the melt curve of Tillotson material %i was not loaded.\n", material->iMaterial);
+        assert(0);
+        exit(1);
+    }
+
+    if (!(rho_cgs > 0.0) || !isfinite(rho_cgs))
+        TILL_FAIL_RETURN(material, TILL_FAIL_VALUE, "tillTmeltofRho: invalid rho= %g (iMat= %i).\n", rho, material->iMaterial);
+
+    if (rho_cgs <= material->rhoMelt[0]) return material->TMelt[0];
+    if (rho_cgs >= material->rhoMelt[n-1]) return material->TMelt[n-1];
+
+    /* Bisection: rhoMelt[lo] <= rho_cgs < rhoMelt[hi]. */
+    while (hi - lo > 1) {
+        int mid = lo + (hi - lo)/2;
+        if (material->rhoMelt[mid] <= rho_cgs) lo = mid; else hi = mid;
+    }
+    {
+        const double x = (rho_cgs - material->rhoMelt[lo])/(material->rhoMelt[hi] - material->rhoMelt[lo]);
+        return material->TMelt[lo] + x*(material->TMelt[hi] - material->TMelt[lo]);
+    }
+}
+
+/*
+ * Shear modulus in code units: the fixed Gamma of the strength file, or (Gamma = -1 there) the
+ * bulk modulus K = rho c^2 times 3(1 - 2 nu)/(2(1 + nu)) with a guessed Poisson ratio nu = 0.25
+ * ("normal" materials have nu in [0.2, 0.3]; the shear modulus changes by less than 25%), as in
+ * ANEOSGammaofRhoT. c = c(rho, u(rho, T)) of the cut EOS, floored at sqrt(A/rho0). Returns
+ * TILL_FAIL_VALUE (counted once, by u(rho, T) or the pressure) where u(rho, T) fails (T < 0 or not
+ * finite, rho above the table or invalid).
+ */
+double tillGammaofRhoT(TILLMATERIAL *material, double rho, double T)
+{
+    const double nu = 0.25;
+    double u, c;
+
+    if (material->fixedGamma) return material->Gamma/(material->dErgPerGmUnit*material->dGmPerCcUnit);
+
+    u = tillURhoTemp(material, rho, T);
+    if (tillFailed(u)) return TILL_FAIL_VALUE;
+    tillPressureSound(material, rho, u, &c);
+    if (tillFailed(c)) return TILL_FAIL_VALUE;
+    return rho*c*c*3.0*(1.0 - 2.0*nu)/(2.0*(1.0 + nu));
 }
 
 /*
@@ -361,6 +678,23 @@ void tillPrintMat(TILLMATERIAL *material, FILE *fp)
                 material->vmax*material->dErgPerGmUnit, material->vmin*material->dErgPerGmUnit);
     } else {
         fprintf(fp,"# Lookup table: not initialized\n");
+    }
+    /* Strength (as read, cgs). */
+    if (material->yieldStrengthModel < 0) {
+        fprintf(fp,"# Yield strength model: %d (no strength file)\n", material->yieldStrengthModel);
+    } else {
+        fprintf(fp,"# Yield strength model: %d, mui= %g mud= %g xi= %g\n", material->yieldStrengthModel,
+                material->mui, material->mud, material->xi);
+        fprintf(fp,"# Yield strength Y0, YM (cgs units): %g, %g erg/cm^3\n", material->Y0, material->YM);
+        if (material->fixedGamma) fprintf(fp,"# Shear modulus Gamma (cgs units): %g erg/cm^3\n", material->Gamma);
+        else fprintf(fp,"# Shear modulus: from the bulk modulus (nu = 0.25)\n");
+    }
+    if (material->TMelt != NULL) {
+        fprintf(fp,"# Melt curve (cgs units): %d nodes, rho in [%g, %g] g/cc, T_melt in [%g, %g] K at the ends\n",
+                material->nMelt, material->rhoMelt[0], material->rhoMelt[material->nMelt-1],
+                material->TMelt[0], material->TMelt[material->nMelt-1]);
+    } else {
+        fprintf(fp,"# Melt curve: none\n");
     }
     fprintf(fp,"# Failed lookups and fallbacks (nLookupFail): %ld\n", material->nLookupFail);
 }

@@ -124,11 +124,21 @@
  *          EOSlib 1.3.0 reports a non-finite u (EOS_OUTSIDE_VMIN for NaN and -inf, EOS_OUTSIDE_VMAX
  *          for +inf, it was EOS_FAIL). testtillotson checks that every u(rho, T) is a state
  *          EOSIsUsable accepts (EOSlib 1.3.0 relies on it in EOSSolveBC).
+ *   4.1.0  Material strength, as in ANEOSmaterial: two optional companion files per material,
+ *          <base>_strength (yield model and parameters, the text format of ANEOSmaterial) and
+ *          <base>_tmelt (melt curve T_melt(rho), binary, see "Material strength" below), with
+ *          <base> = tillotson_<name>.in (tillotson_granite.in, ...) in the working directory for
+ *          tillInitMaterial, or any base name with tillInitMaterialFromFile (NULL: no files).
+ *          New tillReadStrengthParameters, tillReadMeltCurve, tillYieldParameters, tillTmeltofRho
+ *          and tillGammaofRhoT; tillPrintMat prints the strength model and the melt curve range.
+ *          Both files are validated at load (fatal); models 1 and 2 need the melt curve (fatal
+ *          without it). Without a strength file the model is -1 (no yield stress). Everything
+ *          else bit-identical.
  */
-#define TILL_VERSION_TEXT    "4.0.1"
+#define TILL_VERSION_TEXT    "4.1.0"
 #define TILL_VERSION_MAJOR   4
-#define TILL_VERSION_MINOR   0
-#define TILL_VERSION_PATCH   1
+#define TILL_VERSION_MINOR   1
+#define TILL_VERSION_PATCH   0
 
 #include <stdlib.h>
 #include <assert.h>
@@ -244,6 +254,46 @@ enum till_error_lookup
 #define FORSTERITE  7
 
 #define TILL_N_MATERIAL_MAX 10
+
+/*
+ * Material strength (optional, as in ANEOSmaterial).
+ *
+ * tillInitMaterial looks for two companion files in the working directory, named after the
+ * material: <base>_strength and <base>_tmelt with <base> = TILL_STRENGTH_FILE_PREFIX<name>.in and
+ * <name> the lower-case material name (tillotson_granite.in_strength, tillotson_iron.in_tmelt, ...).
+ * tillInitMaterialFromFile takes the base name instead (NULL: no strength files are read).
+ *
+ * <base>_strength is the text file of ANEOSmaterial ("key = value" per line, '#' comments):
+ *
+ *   yieldStrengthModel = 1     # 0 no limiter, 1 intact, 2 damaged material
+ *   Y0    = 1e8                # yield strength at P = 0 (erg/cm^3)
+ *   YM    = 3.5e10             # yield strength at P -> inf (erg/cm^3)
+ *   mui   = 1.5                # coefficient of internal friction, intact
+ *   mud   = 0.6                # coefficient of internal friction, damaged (model 2 only)
+ *   xi    = 1.2                # thermal softening parameter
+ *   Gamma = -1                 # shear modulus (erg/cm^3); -1: from the bulk modulus, nu = 0.25
+ *
+ * with the same validation (fatal): finite values, model 0, 1 or 2, and for models 1/2 YM > Y0,
+ * mui > 0, xi > 0, a positive fixed Gamma, and mud >= 0 for model 2.
+ *
+ * <base>_tmelt is binary (native byte order), like the ANEOS melt curve, but with its own
+ * density axis because a Tillotson material has no table axis to share:
+ *
+ *   int    n                   number of nodes, n >= 2
+ *   double rho[n]              densities in g/cc, positive, finite and strictly increasing
+ *   double T_melt[n]           melt temperatures in K, finite and >= 0 (0: no condensed phase)
+ *
+ * and nothing after it. T_melt(rho) is interpolated linearly in rho and held constant at the end
+ * values outside [rho[0], rho[n-1]] (as ANEOSTmeltofRho). Models 1 and 2 soften the strength with
+ * T/T_melt and need the melt curve; a strength file for them without a _tmelt file is fatal.
+ * Without a strength file the model is -1 (no yield stress).
+ *
+ * The parameters are stored as read (cgs); tillYieldParameters and tillGammaofRhoT return code
+ * units, like ANEOSYieldParameters and ANEOSGammaofRhoT.
+ */
+#ifndef TILL_STRENGTH_FILE_PREFIX
+#define TILL_STRENGTH_FILE_PREFIX "tillotson_"
+#endif
 
 /*
  * Negative pressures are cut to zero in tillPressure, tillPressureSound and the derivatives (see
@@ -372,6 +422,21 @@ typedef struct tillMaterial
 	TILL_LOOKUP_ENTRY *ColdCurve;
 	TILL_LOOKUP_ENTRY *TopCurve;
 
+	/* Melt curve (optional, see "Material strength"): nMelt nodes, rho in g/cc, T in K; NULL without. */
+	int nMelt;
+	double *rhoMelt;
+	double *TMelt;
+
+	/* Yield parameters (optional, cgs as read; see "Material strength") */
+	int yieldStrengthModel;   /* -1 no strength file, 0 no limiter, 1 intact, 2 damaged (1, 2 need the melt curve) */
+	double Y0;      /* yield strength at P = 0 */
+	double YM;      /* yield strength at P -> inf */
+	double mui;     /* coefficient of internal friction, intact */
+	double mud;     /* coefficient of internal friction, damaged (-1: not given) */
+	double xi;      /* thermal softening parameter */
+	double Gamma;   /* shear modulus (fixedGamma), 0 otherwise */
+	int fixedGamma;
+
 	/* Diagnostics: number of failed evaluations since init (see TILL_FAIL_RETURN). */
 	long nLookupFail;
 } TILLMATERIAL;
@@ -390,8 +455,25 @@ static inline double tillUTol(const TILLMATERIAL *material, double u)
 /*
  * tillotson.c
  */
+/* Reads the strength files <TILL_STRENGTH_FILE_PREFIX><name>.in_strength/_tmelt if present. */
 TILLMATERIAL *tillInitMaterial(int iMaterial, double dKpcUnit, double dMsolUnit);
+/* The same with the base name of the strength files given (NULL: none are read, model -1). */
+TILLMATERIAL *tillInitMaterialFromFile(int iMaterial, const char *strengthBase, double dKpcUnit, double dMsolUnit);
 void tillFinalizeMaterial(TILLMATERIAL *material);
+
+/*
+ * Material strength (see "Material strength" above). The readers return 1 if the file does not
+ * exist, 0 on success; a defective file is fatal. tillYieldParameters returns the model and the
+ * parameters in code units (any pointer may be NULL). tillTmeltofRho is fatal without a melt
+ * curve and returns TILL_FAIL_VALUE (counted) for a rho that is not positive and finite.
+ * tillGammaofRhoT is the shear modulus in code units: the fixed Gamma, or 3(1 - 2 nu)/(2(1 + nu))
+ * rho c^2 with nu = 0.25 and c = c(rho, u(rho, T)); TILL_FAIL_VALUE where u(rho, T) fails.
+ */
+int tillReadStrengthParameters(TILLMATERIAL *material, const char *inputfile);
+int tillReadMeltCurve(TILLMATERIAL *material, const char *inputfile);
+int tillYieldParameters(TILLMATERIAL *material, double *Y0, double *YM, double *mui, double *mud, double *xi);
+double tillTmeltofRho(TILLMATERIAL *material, double rho);
+double tillGammaofRhoT(TILLMATERIAL *material, double rho, double T);
 
 void tilliMatString(TILLMATERIAL *material, char *MatName);
 const char *tillLookupStatusString(int iError);

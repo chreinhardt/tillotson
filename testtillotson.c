@@ -11,6 +11,9 @@
  *
  * Build it with -DTILL_PRESS_MELOSH as well to test that pressure mode (same invariants; the
  * isentrope accuracy is lower there, see TILL_TEST_LABEL_TOL).
+ *
+ * The strength tests write temporary strength and melt-curve files (testtillotson_strength.tmp_*)
+ * in the working directory and a temporary directory testtillotson_XXXXXX, and remove them.
  */
 /* fork() and waitpid() for the fatal paths (POSIX). */
 #define _POSIX_C_SOURCE 200809L
@@ -1113,6 +1116,296 @@ static void testGridRejected(int iMat)
         }
 }
 
+/* ------------------------------------------------------------------------- material strength */
+
+/*
+ * Material strength (tillotson 4.1.0): the optional files <base>_strength (text, the format of
+ * ANEOSmaterial) and <base>_tmelt (binary: int n, double rho[n] in g/cc, double T_melt[n] in K).
+ * The test writes them under a temporary base name in the working directory and removes them.
+ */
+#define TILL_TEST_BASE "testtillotson_strength.tmp"
+
+static void writeText(const char *path, const char *text)
+{
+    FILE *fp = fopen(path, "w");
+    if (fp == NULL) { perror(path); exit(1); }
+    fputs(text, fp);
+    fclose(fp);
+}
+
+/* A melt curve file; nRhoWrite/nTWrite values of the arrays are written (fewer: a short file), extra bytes after them. */
+static void writeMelt(const char *path, int n, const double *rho, int nRhoWrite, const double *T, int nTWrite, int nExtra)
+{
+    FILE *fp = fopen(path, "wb");
+    if (fp == NULL) { perror(path); exit(1); }
+    fwrite(&n, sizeof(int), 1, fp);
+    if (nRhoWrite > 0) fwrite(rho, sizeof(double), (size_t) nRhoWrite, fp);
+    if (nTWrite > 0) fwrite(T, sizeof(double), (size_t) nTWrite, fp);
+    for (int k = 0; k < nExtra; k++) fputc(0, fp);
+    fclose(fp);
+}
+
+/* Initialise with the strength files of base in a child process: 0 accepted, 1 stopped, -1 otherwise. */
+static int strengthInitRejected(int iMat, const char *base)
+{
+    fflush(NULL);
+    pid_t pid = fork();
+    if (pid == 0) {
+        if (freopen("/dev/null", "w", stderr) == NULL) _exit(3);   /* the expected diagnostic */
+        TILLMATERIAL *m = tillInitMaterialFromFile(iMat, base, 0.0, 0.0);
+        tillFinalizeMaterial(m);
+        _exit(0);
+    }
+    int status = 0;
+    if (pid < 0 || waitpid(pid, &status, 0) != pid) return -1;
+    if (WIFEXITED(status) && WEXITSTATUS(status) == 0) return 0;
+    if ((WIFSIGNALED(status) && WTERMSIG(status) == SIGABRT) || (WIFEXITED(status) && WEXITSTATUS(status) == 1)) return 1;
+    return -1;
+}
+
+/* tillTmeltofRho on a material without a melt curve, in a child process: 1 if fatal. */
+static int tmeltFatal(TILLMATERIAL *m)
+{
+    fflush(NULL);
+    pid_t pid = fork();
+    if (pid == 0) {
+        if (freopen("/dev/null", "w", stderr) == NULL) _exit(3);
+        (void) tillTmeltofRho(m, m->rho0);
+        _exit(0);
+    }
+    int status = 0;
+    if (pid < 0 || waitpid(pid, &status, 0) != pid) return -1;
+    if (WIFEXITED(status) && WEXITSTATUS(status) == 0) return 0;
+    if ((WIFSIGNALED(status) && WTERMSIG(status) == SIGABRT) || (WIFEXITED(status) && WEXITSTATUS(status) == 1)) return 1;
+    return -1;
+}
+
+static const double meltRho[4] = { 0.27, 2.7, 10.0, 30.0 };     /* g/cc */
+static const double meltT[4]   = { 0.0, 1500.0, 3000.0, 6000.0 }; /* K */
+
+/* The melt curve file: validation at load. */
+static void testMeltCurveFile(void)
+{
+    MatName = "strength";
+    const char *melt = TILL_TEST_BASE "_tmelt", *strength = TILL_TEST_BASE "_strength";
+    double rho[4], T[4];
+    remove(strength);
+
+    writeMelt(melt, 4, meltRho, 4, meltT, 4, 0);
+    CHECK(strengthInitRejected(GRANITE, TILL_TEST_BASE) == 0, "valid melt curve must be accepted");
+    for (int k = 0; k < 13; k++) {
+        const char *what = "";
+        int n = 4, nR = 4, nT = 4, nExtra = 0;
+        memcpy(rho, meltRho, sizeof(rho));
+        memcpy(T, meltT, sizeof(T));
+        switch (k) {
+            case 0:  n = 1; nR = 1; nT = 1;   what = "n = 1"; break;
+            case 1:  n = 0; nR = 0; nT = 0;   what = "n = 0"; break;
+            case 2:  n = -3; nR = 0; nT = 0;  what = "n < 0"; break;
+            case 3:  rho[2] = rho[1];         what = "rho not strictly increasing"; break;
+            case 4:  rho[3] = 1.0;            what = "rho decreasing at the end"; break;
+            case 5:  rho[0] = 0.0;            what = "rho = 0"; break;
+            case 6:  rho[1] = NAN;            what = "rho NaN"; break;
+            case 7:  rho[3] = INFINITY;       what = "rho inf"; break;
+            case 8:  T[2] = -1.0;             what = "T_melt < 0"; break;
+            case 9:  T[1] = NAN;              what = "T_melt NaN"; break;
+            case 10: nT = 3;                  what = "short file"; break;
+            case 11: nExtra = 1;              what = "a trailing byte"; break;
+            case 12: nR = 0;                  what = "ANEOS format (no density axis)"; break;
+        }
+        writeMelt(melt, n, rho, nR, T, nT, nExtra);
+        CHECK(strengthInitRejected(GRANITE, TILL_TEST_BASE) == 1, "%s: melt curve must be rejected", what);
+    }
+    /* T_melt = 0 everywhere (no condensed phase) is a valid curve. */
+    {
+        const double Tz[4] = { 0.0, 0.0, 0.0, 0.0 };
+        writeMelt(melt, 4, meltRho, 4, Tz, 4, 0);
+        CHECK(strengthInitRejected(GRANITE, TILL_TEST_BASE) == 0, "melt curve T_melt = 0 must be accepted");
+    }
+    remove(melt);
+}
+
+/* The strength file: validation at load, the model and the melt curve requirement. */
+static void testStrengthFile(void)
+{
+    MatName = "strength";
+    const char *melt = TILL_TEST_BASE "_tmelt", *strength = TILL_TEST_BASE "_strength";
+    static const struct { const char *text; int bRejected; const char *what; } cases[] = {
+        {"yieldStrengthModel = 1\nY0 = 1e8\nYM = 3.5e10\nmui = 1.5\nxi = 1.2\nGamma = -1\n", 0, "model 1, no mud"},
+        {"yieldStrengthModel = 2\nY0 = 1e8\nYM = 3.5e10\nmui = 1.5\nmud = 0.6\nxi = 1.2\nGamma = 3e11\n", 0, "model 2, fixed Gamma"},
+        {"yieldStrengthModel = 0\nY0 = 1e8\nYM = 1e8\nmui = 0\nxi = 0\nGamma = 0\n", 0, "model 0: relations not needed"},
+        {"# comment\nyieldStrengthModel = 1   \nY0 = 1e8\t \nYM=3.5e10 # comment\r\nmui = 1.5\r\nxi = 1.2\nGamma = -1", 0, "whitespace, comments, CRLF, no final newline"},
+        {"yieldStrengthModel = 1\nY0 = 3.5e10\nYM = 3.5e10\nmui = 1.5\nxi = 1.2\nGamma = -1\n", 1, "YM == Y0"},
+        {"yieldStrengthModel = 1\nY0 = 1e8\nYM = 3.5e10\nmui = 0\nxi = 1.2\nGamma = -1\n", 1, "mui = 0"},
+        {"yieldStrengthModel = 1\nY0 = 1e8\nYM = 3.5e10\nmui = 1.5\nxi = 0\nGamma = -1\n", 1, "xi = 0"},
+        {"yieldStrengthModel = 1\nY0 = 1e8\nYM = 3.5e10\nmui = 1.5\nxi = 1.2\nGamma = 0\n", 1, "fixed Gamma = 0"},
+        {"yieldStrengthModel = 2\nY0 = 1e8\nYM = 3.5e10\nmui = 1.5\nxi = 1.2\nGamma = -1\n", 1, "model 2 without mud"},
+        {"yieldStrengthModel = 3\nY0 = 1e8\nYM = 3.5e10\nmui = 1.5\nxi = 1.2\nGamma = -1\n", 1, "unknown model 3"},
+        {"yieldStrengthModel = 1\nY0 = nan\nYM = 3.5e10\nmui = 1.5\nxi = 1.2\nGamma = -1\n", 1, "Y0 = nan"},
+        {"yieldStrengthModel = 1\nY0 = 1e8\nYM = 3.5e10\nmui = 1.5\nxi = 1.2\n", 1, "Gamma missing"},
+        {"yieldStrengthModel = 1\nY0 = 1e8 1e9\nYM = 3.5e10\nmui = 1.5\nxi = 1.2\nGamma = -1\n", 1, "two values for Y0"},
+        {"yieldStrengthModel = 1\nY0 = 1e8\nYM = 3.5e10\nmui = 1.5\nxi = 1.2\nGamma = -1\nfoo = 1\n", 1, "unknown parameter"},
+    };
+
+    writeMelt(melt, 4, meltRho, 4, meltT, 4, 0);
+    for (size_t k = 0; k < sizeof(cases)/sizeof(cases[0]); k++) {
+        writeText(strength, cases[k].text);
+        CHECK(strengthInitRejected(GRANITE, TILL_TEST_BASE) == cases[k].bRejected, "%s: %s", cases[k].what,
+              cases[k].bRejected ? "must be rejected" : "must be accepted");
+    }
+
+    /* Models 1 and 2 need the melt curve, model 0 does not (and stays 0); no strength file: -1. */
+    {
+        static const struct { const char *text; int model; } st[3] = {
+            {"yieldStrengthModel = 0\nY0 = 1e8\nYM = 1e8\nmui = 0\nxi = 0\nGamma = 0\n", 0},
+            {"yieldStrengthModel = 1\nY0 = 1e8\nYM = 3.5e10\nmui = 1.5\nxi = 1.2\nGamma = -1\n", 1},
+            {"yieldStrengthModel = 2\nY0 = 1e8\nYM = 3.5e10\nmui = 1.5\nmud = 0.6\nxi = 1.2\nGamma = -1\n", 2},
+        };
+        for (int k = 0; k < 3; k++) {
+            TILLMATERIAL *m;
+            writeText(strength, st[k].text);
+            writeMelt(melt, 4, meltRho, 4, meltT, 4, 0);
+            m = tillInitMaterialFromFile(GRANITE, TILL_TEST_BASE, 0.0, 0.0);
+            CHECK(m->yieldStrengthModel == st[k].model && m->TMelt != NULL, "model %d with melt curve read as %d", st[k].model, m->yieldStrengthModel);
+            tillFinalizeMaterial(m);
+            remove(melt);
+            if (st[k].model >= 1) {
+                CHECK(strengthInitRejected(GRANITE, TILL_TEST_BASE) == 1, "model %d without melt curve must be rejected", st[k].model);
+            } else {
+                m = tillInitMaterialFromFile(GRANITE, TILL_TEST_BASE, 0.0, 0.0);
+                CHECK(m->yieldStrengthModel == 0 && m->TMelt == NULL, "model 0 without melt curve read as %d", m->yieldStrengthModel);
+                tillFinalizeMaterial(m);
+            }
+        }
+        remove(strength);
+        writeMelt(melt, 4, meltRho, 4, meltT, 4, 0);
+        {
+            TILLMATERIAL *m = tillInitMaterialFromFile(GRANITE, TILL_TEST_BASE, 0.0, 0.0);
+            CHECK(m->yieldStrengthModel == -1 && m->TMelt != NULL, "melt curve without strength file: model %d", m->yieldStrengthModel);
+            tillFinalizeMaterial(m);
+            m = tillInitMaterialFromFile(GRANITE, NULL, 0.0, 0.0);
+            CHECK(m->yieldStrengthModel == -1 && m->TMelt == NULL && m->nLookupFail == 0, "no base name: no strength, model %d", m->yieldStrengthModel);
+            CHECK(tmeltFatal(m) == 1, "tillTmeltofRho without a melt curve must be fatal");
+            tillFinalizeMaterial(m);
+        }
+    }
+    remove(melt);
+    remove(strength);
+}
+
+/*
+ * The values: the parameters in code units, T_melt(rho) linear between the nodes and constant
+ * outside, the shear modulus, all the same physical values in every unit system.
+ */
+static void testStrengthValues(int iMat)
+{
+    const char *melt = TILL_TEST_BASE "_tmelt", *strength = TILL_TEST_BASE "_strength";
+    const double units[3][2] = { {0.0, 0.0}, {2.06701e-13, 4.80438e-08}, {6.371e8/3.085678e21, 5.972e27/1.99e33} };
+    static char name[64];
+
+    writeMelt(melt, 4, meltRho, 4, meltT, 4, 0);
+    for (int q = 0; q < 2; q++) {
+        writeText(strength, q ? "yieldStrengthModel = 2\nY0 = 1e8\nYM = 2.5e10\nmui = 2\nmud = 0.6\nxi = 1.2\nGamma = -1\n"
+                              : "yieldStrengthModel = 1\nY0 = 1e8\nYM = 3.5e10\nmui = 1.5\nxi = 1.2\nGamma = 3e11\n");
+        for (int iu = 0; iu < 3; iu++) {
+            TILLMATERIAL *m = tillInitMaterialFromFile(iMat, TILL_TEST_BASE, units[iu][0], units[iu][1]);
+            const double dPUnit = m->dErgPerGmUnit*m->dGmPerCcUnit, rhoUnit = m->dGmPerCcUnit;
+            double Y0, YM, mui, mud, xi;
+            int model = tillYieldParameters(m, &Y0, &YM, &mui, &mud, &xi);
+
+            tilliMatString(m, name);
+            MatName = name;
+            tillInitColdCurveDefault(m);
+            CHECK(model == (q ? 2 : 1) && model == m->yieldStrengthModel, "model %d", model);
+            CHECK_REL(Y0*dPUnit, 1e8, 1e-14, "Y0 in code units (units %d)", iu);
+            CHECK_REL(YM*dPUnit, q ? 2.5e10 : 3.5e10, 1e-14, "YM in code units (units %d)", iu);
+            CHECK(mui == (q ? 2.0 : 1.5) && xi == 1.2 && mud == (q ? 0.6 : -1.0), "mui, mud, xi");
+            CHECK(tillYieldParameters(m, NULL, NULL, NULL, NULL, NULL) == model, "NULL pointers");
+
+            /* Melt curve: the nodes, linear in between, the end values outside, invalid rho fails (counted once). */
+            {
+                const long nf = m->nLookupFail;
+                for (int k = 0; k < 4; k++) CHECK_REL(tillTmeltofRho(m, meltRho[k]/rhoUnit) + 1.0, meltT[k] + 1.0, 1e-13, "T_melt at node %d", k);
+                for (int k = 0; k < 3; k++) {
+                    const double x = 0.37, r = meltRho[k] + x*(meltRho[k+1] - meltRho[k]);
+                    CHECK_REL(tillTmeltofRho(m, r/rhoUnit), meltT[k] + x*(meltT[k+1] - meltT[k]), 1e-12, "T_melt linear in cell %d", k);
+                }
+                CHECK(tillTmeltofRho(m, 0.01/rhoUnit) == meltT[0] && tillTmeltofRho(m, 1e3/rhoUnit) == meltT[3], "T_melt constant outside the curve");
+                CHECK(m->nLookupFail == nf, "valid T_melt lookups counted");
+                const double bad[4] = { 0.0, -1.0, NAN, INFINITY };
+                for (int k = 0; k < 4; k++) {
+                    long n = m->nLookupFail;
+                    CHECK(tillTmeltofRho(m, bad[k]) == TILL_FAIL_VALUE && m->nLookupFail == n + 1, "T_melt at rho= %g", bad[k]);
+                }
+                m->nLookupFail = nf;
+            }
+
+            /* Shear modulus: fixed, or 3(1-2nu)/(2(1+nu)) rho c^2 = 0.6 rho c^2 with c = c(rho, u(rho, T)). */
+            {
+                const long nf = m->nLookupFail;
+                for (int k = 0; k < 20; k++) {
+                    double rho = m->rho0*pow(10.0, -0.5 + 0.06*k), T = 10.0*pow(10.0, 0.2*k), c;
+                    double G = tillGammaofRhoT(m, rho, T);
+                    if (q == 0) {
+                        CHECK_REL(G*dPUnit, 3e11, 1e-14, "fixed Gamma (units %d)", iu);
+                    } else {
+                        tillPressureSound(m, rho, tillURhoTemp(m, rho, T), &c);
+                        CHECK_REL(G, 0.6*rho*c*c, 1e-14, "Gamma from the bulk modulus at rho= %g T= %g", rho, T);
+                        CHECK(G > 0.0 && isfinite(G), "Gamma= %g", G);
+                    }
+                }
+                CHECK(m->nLookupFail == nf, "valid Gamma lookups counted");
+                if (q == 1) {
+                    long n = m->nLookupFail;
+                    CHECK(tillGammaofRhoT(m, m->rho0, -1.0) == TILL_FAIL_VALUE && m->nLookupFail == n + 1, "Gamma at T < 0, counted once");
+                    n = m->nLookupFail;
+                    CHECK(tillGammaofRhoT(m, 2.0*m->rhomax, 300.0) == TILL_FAIL_VALUE && m->nLookupFail == n + 1, "Gamma above rhomax, counted once");
+                    m->nLookupFail = nf;
+                }
+            }
+
+            /* tillPrintMat names the model and the melt curve. */
+            {
+                FILE *fp = tmpfile();
+                char line[512];
+                int bModel = 0, bMelt = 0;
+                tillPrintMat(m, fp);
+                rewind(fp);
+                while (fgets(line, sizeof(line), fp) != NULL) {
+                    if (strstr(line, "Yield strength model: ") != NULL) bModel = (atoi(strstr(line, "model: ") + 7) == model);
+                    if (strstr(line, "Melt curve (cgs units): 4 nodes") != NULL) bMelt = 1;
+                }
+                fclose(fp);
+                CHECK(bModel && bMelt, "tillPrintMat: model line %d, melt curve line %d", bModel, bMelt);
+            }
+            tillFinalizeMaterial(m);
+        }
+    }
+    remove(melt);
+    remove(strength);
+}
+
+/* tillInitMaterial reads tillotson_<name>.in_strength/_tmelt from the working directory (here a temporary one). */
+static void testStrengthDefaultNames(void)
+{
+    char cwd[4096], dir[] = "testtillotson_XXXXXX";
+    MatName = "strength";
+    if (getcwd(cwd, sizeof(cwd)) == NULL || mkdtemp(dir) == NULL || chdir(dir) != 0) { CHECK(0, "temporary directory"); return; }
+    writeText("tillotson_granite.in_strength", "yieldStrengthModel = 1\nY0 = 1e8\nYM = 3.5e10\nmui = 1.5\nxi = 1.2\nGamma = -1\n");
+    writeMelt("tillotson_granite.in_tmelt", 4, meltRho, 4, meltT, 4, 0);
+    {
+        TILLMATERIAL *g = tillInitMaterial(GRANITE, 0.0, 0.0), *i = tillInitMaterial(IRON, 0.0, 0.0);
+        CHECK(g->yieldStrengthModel == 1 && g->TMelt != NULL, "granite reads tillotson_granite.in_*: model %d", g->yieldStrengthModel);
+        CHECK(i->yieldStrengthModel == -1 && i->TMelt == NULL, "iron has no files: model %d", i->yieldStrengthModel);
+        tillFinalizeMaterial(g);
+        tillFinalizeMaterial(i);
+    }
+    remove("tillotson_granite.in_strength");
+    remove("tillotson_granite.in_tmelt");
+    if (chdir(cwd) != 0) CHECK(0, "chdir back");
+    rmdir(dir);
+}
+
 static double fcube(TILLMATERIAL *m, double x, const void *ctx) { (void) m; (void) ctx; return x*x*x - 2.0; }
 
 static void testBrent(void)
@@ -1135,6 +1428,11 @@ int main(int argc, char **argv)
     testBrent();
     testUnitPair(GRANITE);
     testGridRejected(GRANITE);
+    testMeltCurveFile();
+    testStrengthFile();
+    testStrengthValues(GRANITE);
+    testStrengthValues(IRON);
+    testStrengthDefaultNames();
 
     for (m = 0; m < (argc > 1 ? argc-1 : nMat); m++) {
         int iMat = (argc > 1) ? atoi(argv[m+1]) : allMat[m];
