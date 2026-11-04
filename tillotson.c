@@ -1057,13 +1057,17 @@ double tillRhoPTemp(TILLMATERIAL *material, double P, double T)
     double fa, fb, rho;
 
     /* For P <= 0 the inversion is not defined (pressure cutoff). */
-    if (P <= 0.0)
+    if (P < 0.0)
         TILL_FAIL_RETURN(material, TILL_FAIL_VALUE, "tillRhoPTemp: Called for negative pressure (P= %g).\n", P);
 
     /* T < 0 (or not finite): u(rho, T) fails at every density. Checked here, so that it is counted
      * once and not by each of the bracket evaluations and the bracket failure. */
     if (!(T >= 0.0) || !isfinite(T))
         TILL_FAIL_RETURN(material, TILL_FAIL_VALUE, "tillRhoPTemp: T= %g is negative or not finite (P= %g).\n", T, P);
+
+    /* P = 0: return the reference density. */
+    if (P == 0.0)
+        return material->rho0;
 
     ctx.P = P;
     ctx.T = T;
