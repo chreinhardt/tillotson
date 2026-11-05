@@ -14,7 +14,7 @@
  *
  * tillPressure, tillSoundSpeed: wrappers of tillPressureSound.
  *
- * tillRhoPTemp: invert P(rho, T) for rho.
+ * tillRhoPTemp: invert P(rho, T) for rho (P = 0 gives the zero-pressure density at T).
  *
  * tillReadStrengthParameters, tillReadMeltCurve: optional material strength (see tillotson.h).
  *
@@ -1045,9 +1045,22 @@ static double tillRhoPTempFunc(TILLMATERIAL *material, double rho, const void *c
  * Calculate rho(P,T) for a material by root finding on the uncut pressure (tillPressureSoundNP),
  * which is monotonic in rho at fixed T where (dP/drho)_T > 0.
  *
- * Returns TILL_FAIL_VALUE if P <= 0, T < 0 or not finite, or the root is not bracketed by
- * [rho_min, 0.999*rhomax], with rho_min = TILL_RHOPT_RHOMIN_FAC*rho0 (the same physical bracket in
- * every unit system). Counted once per call.
+ * P > 0: the root is bracketed by [rho_min, 0.999*rhomax], with rho_min = TILL_RHOPT_RHOMIN_FAC*rho0
+ * (the same physical bracket in every unit system).
+ *
+ * P = 0: the zero-pressure density at T, i.e. the root of the uncut P(rho, T) = 0. For T = 0 this
+ * is rho0 (the reference state, P(rho0, u = 0) = 0). For T > 0 the thermal term makes
+ * P(rho0, T) > 0, so the root lies below rho0, where the uncut cold term is in tension and
+ * balances the thermal pressure. For A >= B (all materials above) this root is unique in
+ * (0, rho0]: below it P < 0, above it P > 0. The bracket is searched downward from rho0 by halving
+ * rho until P < 0 (at most down to rho_min), not taken from rho_min: there the uncut P -> 0 from
+ * below, and below rho ~ 1e-16 rho0 A mu + B mu^2 cancels for A == B (see tillPressureCore), so
+ * P(rho_min) can round to zero or become positive and the bracket check would reject a valid root.
+ * If P stays positive down to rho_min (hot expanded states, where the thermal pressure is not
+ * balanced by tension at any density) there is no zero-pressure density and the call fails.
+ *
+ * Returns TILL_FAIL_VALUE if P < 0, T < 0 or not finite, or no root is bracketed. Counted once per
+ * call.
  */
 double tillRhoPTemp(TILLMATERIAL *material, double P, double T)
 {
@@ -1056,7 +1069,7 @@ double tillRhoPTemp(TILLMATERIAL *material, double P, double T)
     const double rho_max = 0.999*material->rhomax;
     double fa, fb, rho;
 
-    /* For P <= 0 the inversion is not defined (pressure cutoff). */
+    /* For P < 0 the inversion is not defined (pressure cutoff). */
     if (P < 0.0)
         TILL_FAIL_RETURN(material, TILL_FAIL_VALUE, "tillRhoPTemp: Called for negative pressure (P= %g).\n", P);
 
@@ -1065,12 +1078,38 @@ double tillRhoPTemp(TILLMATERIAL *material, double P, double T)
     if (!(T >= 0.0) || !isfinite(T))
         TILL_FAIL_RETURN(material, TILL_FAIL_VALUE, "tillRhoPTemp: T= %g is negative or not finite (P= %g).\n", T, P);
 
-    /* P = 0: return the reference density. */
-    if (P == 0.0)
-        return material->rho0;
-
     ctx.P = P;
     ctx.T = T;
+
+    if (P == 0.0) {
+        /* Zero-pressure density at T: bracket [rho_lo, rho_hi] with f(rho_lo) < 0 < f(rho_hi). */
+        double rho_hi = material->rho0, rho_lo, flo, fhi;
+
+        if (T == 0.0) return material->rho0;   /* reference state, exact */
+
+        fhi = tillRhoPTempFunc(material, rho_hi, &ctx);
+        if (fhi == 0.0) return rho_hi;
+        if (!(fhi > 0.0))
+            TILL_FAIL_RETURN(material, TILL_FAIL_VALUE, "tillRhoPTemp: P(rho0, T) <= 0 for P = 0 (P(rho0)= %g, T= %g).\n", fhi, T);
+
+        rho_lo = 0.9*rho_hi;
+        flo = tillRhoPTempFunc(material, rho_lo, &ctx);
+        while (flo > 0.0 && rho_lo > rho_min) {
+            rho_hi = rho_lo;
+            fhi = flo;
+            rho_lo = fmax(0.9*rho_lo, rho_min);
+            flo = tillRhoPTempFunc(material, rho_lo, &ctx);
+        }
+        if (flo == 0.0) return rho_lo;
+        if (!(flo < 0.0))
+            TILL_FAIL_RETURN(material, TILL_FAIL_VALUE, "tillRhoPTemp: no zero-pressure density at T= %g (P(rho, T) > 0 down to rho= %g, P= %g).\n",
+                             T, rho_lo, flo);
+
+        if (tillBrent(tillRhoPTempFunc, material, &ctx, rho_lo, rho_hi, flo, fhi, 0.0, 1e-10, 1000, &rho) != TILL_SUCCESS)
+            TILL_FAIL_RETURN(material, TILL_FAIL_VALUE, "tillRhoPTemp: root finder did not converge (P= %g, T= %g).\n", P, T);
+
+        return rho;
+    }
 
     fa = tillRhoPTempFunc(material, rho_min, &ctx);
     fb = tillRhoPTempFunc(material, rho_max, &ctx);
