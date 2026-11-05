@@ -662,6 +662,113 @@ static void testTemperature(TILLMATERIAL *material)
 }
 
 /*
+ * rho(P = 0, T): the zero-pressure density at T, the upper edge of the plateau P(rho, T) = 0 of the
+ * cut EOS (the root of the uncut P_NP(rho, T) = 0 below rho0). Invariants:
+ *  - T = 0 is the reference state: exactly rho0, not counted.
+ *  - Cold branch (cv T < us, i.e. the whole expanded side is in the cold region): the call succeeds
+ *    and is not counted; rho0 > rho* > 0, decreasing with T; P_NP(rho*) = 0 to the root tolerance;
+ *    the cut pressure is 0 everywhere below rho* (down to 1e-6 rho0) and positive everywhere above it
+ *    up to rho0, so rho* is the highest zero-pressure density and the only edge; it agrees with the
+ *    inversion of a tiny positive pressure (the workaround P = 1e-12 A); the same physical value in
+ *    cgs and code units.
+ *  - Intermediate and hot states (cv T >= us): if the call succeeds, rho* is still the upper edge
+ *    (P = 0 just below, P > 0 everywhere above up to rho0); the plateau need not extend down to 0
+ *    there (P -> a u rho > 0 for rho -> 0). If it fails (no tension balances the thermal pressure),
+ *    it is counted exactly once.
+ */
+/*
+ * Default mode: the cut pressure is max(P_NP, 0), so rho* (the root of P_NP) is also the upper edge
+ * of the plateau of the cut P. With TILL_PRESS_MELOSH the cut P is 0 for every cold expanded state
+ * below 0.8 rho0, also where P_NP > 0: for rho* < 0.8 rho0 the plateau of the cut P reaches up to
+ * 0.8 rho0 (where P jumps), above rho*. tillRhoPTemp inverts P_NP, so that is reported, not counted.
+ */
+#ifdef TILL_PRESS_MELOSH
+#define TILL_TEST_EDGE_CUT(n, T, r) do { if ((n) > 0) SKIP("TILL_PRESS_MELOSH: T= %g: rho(P = 0)= %g rho0 is the root of P_NP; the cut P is still 0 at %d of 200 densities above it (Melosh cut at 0.8 rho0)", (T), (r)/rho0, (n)); } while (0)
+#else
+#define TILL_TEST_EDGE_CUT(n, T, r) CHECK((n) == 0, "T= %g: cut P <= 0 at %d of 200 densities above rho*= %g rho0 (not the upper edge)", (T), (n), (r)/rho0)
+#endif
+static void testRhoPZero(TILLMATERIAL *material)
+{
+    const double rho0 = material->rho0, A = material->A;
+    const double Tcold = material->us/material->cv;     /* cv T = us: upper end of the cold branch below rho0 */
+    const double fCold[8] = { 1e-4, 1e-3, 1e-2, 0.1, 0.3, 0.5, 0.7, 0.9 };
+    const double fHot[4] = { 1.1, 2.0, 0.5*(1.0 + material->us2/material->us), 3.0*material->us2/material->us };
+    TILLMATERIAL *cgs = tillInitMaterial(material->iMaterial, 0.0, 0.0);
+    double rPrev = rho0;
+    int k, j, nHot = 0;
+
+    tillInitColdCurveDefault(cgs);
+    {
+        const long nf = material->nLookupFail;
+        CHECK(tillRhoPTemp(material, 0.0, 0.0) == rho0, "rho(P = 0, T = 0) = rho0 exactly");
+        CHECK(material->nLookupFail == nf, "rho(P = 0, T = 0) counted");
+    }
+
+    /* Cold branch. */
+    for (k = 0; k < 8; k++) {
+        const double T = fCold[k]*Tcold;
+        const long nf = material->nLookupFail;
+        const double r = tillRhoPTemp(material, 0.0, T);
+        int nBelow = 0, nAbove = 0, nAboveCut = 0;
+
+        CHECK(!tillFailed(r) && material->nLookupFail == nf, "rho(P = 0, T= %g) failed or counted (cold branch, T_cold= %g)", T, Tcold);
+        if (tillFailed(r)) continue;
+        CHECK(r > 0.0 && r < rho0 && r < rPrev, "rho(P = 0, T= %g)/rho0 = %.12g not in (0, previous %.12g)", T, r/rho0, rPrev/rho0);
+        rPrev = r;
+        CHECK(fabs(tillPressureNP(material, r, tillURhoTemp(material, r, T))) <= 1e-8*A, "P_NP(rho*, T= %g) not zero", T);
+        /* The plateau below rho* (cut pressure exactly 0) and P > 0 above it. */
+        for (j = 0; j < 200; j++) {
+            const double rlo = r*(1.0 - 1e-6)*pow(1e-6*rho0/r, j/199.0);
+            const double rhi = r*(1.0 + 1e-6) + (rho0 - r*(1.0 + 1e-6))*j/199.0;
+            if (tillPressure(material, rlo, tillURhoTemp(material, rlo, T)) != 0.0) nBelow++;
+            const double uhi = tillURhoTemp(material, rhi, T);
+            if (!(tillPressureNP(material, rhi, uhi) > 0.0)) nAbove++;
+            if (!(tillPressure(material, rhi, uhi) > 0.0)) nAboveCut++;
+        }
+        CHECK(nBelow == 0, "T= %g: cut P != 0 at %d of 200 densities below rho*= %g rho0", T, nBelow, r/rho0);
+        CHECK(nAbove == 0, "T= %g: P_NP <= 0 at %d of 200 densities between rho*= %g rho0 and rho0", T, nAbove, r/rho0);
+        TILL_TEST_EDGE_CUT(nAboveCut, T, r);
+        /* The same edge as the inversion of a tiny positive pressure. */
+        CHECK_REL(tillRhoPTemp(material, 1e-12*A, T), r, 1e-8, "rho(P = 0) vs rho(P = 1e-12 A) at T= %g", T);
+        /* The same physical value in cgs. */
+        {
+            const double rc = tillRhoPTemp(cgs, 0.0, T);
+            CHECK(!tillFailed(rc), "rho(P = 0, T= %g) fails in cgs", T);
+            if (!tillFailed(rc)) CHECK_REL(rc, r*material->dGmPerCcUnit, 1e-8, "rho(P = 0, T= %g) in cgs vs code units", T);
+        }
+        material->nLookupFail = nf;
+    }
+
+    /* Intermediate and hot states: the upper edge if found, otherwise one counted failure. */
+    for (k = 0; k < 4; k++) {
+        const double T = fHot[k]*Tcold;
+        const long nf = material->nLookupFail;
+        const double r = tillRhoPTemp(material, 0.0, T);
+        int nAbove = 0, nAboveCut = 0;
+
+        if (tillFailed(r)) {
+            CHECK(r == TILL_FAIL_VALUE && material->nLookupFail == nf + 1, "rho(P = 0, T= %g) failure counted %ld times", T, material->nLookupFail - nf);
+            material->nLookupFail = nf;
+            continue;
+        }
+        nHot++;
+        CHECK(material->nLookupFail == nf && r > 0.0 && r < rho0, "rho(P = 0, T= %g)/rho0 = %g (counted %ld)", T, r/rho0, material->nLookupFail - nf);
+        CHECK(tillPressure(material, r*(1.0 - 1e-6), tillURhoTemp(material, r*(1.0 - 1e-6), T)) == 0.0, "T= %g: cut P != 0 just below rho*", T);
+        for (j = 0; j < 200; j++) {
+            const double rhi = r*(1.0 + 1e-6) + (rho0 - r*(1.0 + 1e-6))*j/199.0;
+            const double uhi = tillURhoTemp(material, rhi, T);
+            if (!(tillPressureNP(material, rhi, uhi) > 0.0)) nAbove++;
+            if (!(tillPressure(material, rhi, uhi) > 0.0)) nAboveCut++;
+        }
+        CHECK(nAbove == 0, "T= %g: P_NP <= 0 at %d of 200 densities above rho*= %g rho0 (not the upper edge)", T, nAbove, r/rho0);
+        TILL_TEST_EDGE_CUT(nAboveCut, T, r);
+        material->nLookupFail = nf;
+    }
+    fprintf(stdout, "  %s: rho(P = 0, T) cold branch up to %g K, edge found in %d of 4 hotter states\n", MatName, 0.9*Tcold, nHot);
+    tillFinalizeMaterial(cgs);
+}
+
+/*
  * The table status of u(rho, T): wherever tillURhoTemp succeeds, (rho, u) is a state EOSIsUsable
  * accepts, TILL_LOOKUP_SUCCESS or _OUTSIDE_VMAX in the table and, below rhomin, OUTSIDE_RHOMIN with
  * u >= -tillUTol. EOSSolveBCEval in EOSlib relies on this and skips EOSIsUsable for Tillotson.
@@ -771,7 +878,9 @@ static void testSentinels(TILLMATERIAL *material)
     CHECK(tillTempRhoU(material, 2.0*material->rhomax, 1.0) == 0.0, "T above rhomax falls back to T = 0 (cold curve)");
     CHECK(tillURhoTemp(material, 2.0*material->rhomax, 1.0) == TILL_FAIL_VALUE, "u(T) above rhomax");
     CHECK(tillRhoPTemp(material, -1.0, 300.0) == TILL_FAIL_VALUE, "rho(P<0, T)");
-    CHECK(tillRhoPTemp(material, 0.0, 300.0) == TILL_FAIL_VALUE, "rho(P=0, T)");
+    /* P = 0 is the zero-pressure density (testRhoPZero); it fails only for an invalid T (counted once), and T = 0 is rho0 (not counted). */
+    CHECK(tillRhoPTemp(material, 0.0, -1.0) == TILL_FAIL_VALUE, "rho(P=0, T<0)");
+    CHECK(tillRhoPTemp(material, 0.0, 0.0) == material->rho0, "rho(P=0, T=0) = rho0");
     CHECK(tillIsBelowColdCurve(material, 2.0*material->rhomax, 1.0) == TILL_FAIL, "isbelow above rhomax");
     CHECK(tillIsBelowColdCurve(material, 2.0*material->rho0, 0.5*ucold) == 1, "isbelow true");
     CHECK(tillIsBelowColdCurve(material, 2.0*material->rho0, 2.0*ucold) == 0, "isbelow false");
@@ -1478,6 +1587,7 @@ int main(int argc, char **argv)
         testTableNodes(material);
         testIsentropes(material);
         testTemperature(material);
+        testRhoPZero(material);
         testUofRhoTStatus(material);
         testSentinels(material);
         testInvalidDensity(material);
