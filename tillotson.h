@@ -499,7 +499,7 @@ double tilldudlogrho(TILLMATERIAL *material, double logrho, double u);
 /* Temperature: u(rho, T) = u_cold(rho) + cv*T. These need the cold curve (tillInitColdCurve or tillInitLookup). tillTempRhoU never fails and is >= 0; tillURhoTemp fails for T < 0 or a non-finite T. */
 double tillTempRhoU(TILLMATERIAL *material, double rho, double u);
 double tillURhoTemp(TILLMATERIAL *material, double rho, double T);
-/* rho(P, T) by root finding; TILL_FAIL_VALUE if P <= 0, T < 0 or not finite, or not bracketed. */
+/* rho(P, T) by root finding; TILL_FAIL_VALUE if P < 0, T < 0 or not finite, or not bracketed. */
 double tillRhoPTemp(TILLMATERIAL *material, double P, double T);
 
 int tillPhase(TILLMATERIAL *material, double rho, double u);

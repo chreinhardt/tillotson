@@ -1052,7 +1052,7 @@ static double tillRhoPTempFunc(TILLMATERIAL *material, double rho, const void *c
  * is rho0 (the reference state, P(rho0, u = 0) = 0). For T > 0 the thermal term makes
  * P(rho0, T) > 0, so the root lies below rho0, where the uncut cold term is in tension and
  * balances the thermal pressure. For A >= B (all materials above) this root is unique in
- * (0, rho0]: below it P < 0, above it P > 0. The bracket is searched downward from rho0 by halving
+ * (0, rho0]: below it P < 0, above it P > 0. The bracket is searched downward from rho0 by reducing
  * rho until P < 0 (at most down to rho_min), not taken from rho_min: there the uncut P -> 0 from
  * below, and below rho ~ 1e-16 rho0 A mu + B mu^2 cancels for A == B (see tillPressureCore), so
  * P(rho_min) can round to zero or become positive and the bracket check would reject a valid root.
